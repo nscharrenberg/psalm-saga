@@ -1,14 +1,20 @@
+from __future__ import annotations
+
 import json
 
 import pytest
 from pydantic import ValidationError
 
 from psalm_saga.dimensions import (  # type: ignore[import-untyped]
+    PSALM_DIMENSIONS,
     Character,
+    DivergenceIntensity,
     DivergencePlan,
     GenerationMode,
     OriginalityFinding,
-    StoryBible, DivergenceIntensity, evaluate_fidelity, PSALM_DIMENSIONS,
+    StoryBible,
+    build_isolation_matrix,
+    evaluate_fidelity,
 )
 
 
@@ -63,6 +69,7 @@ def test_divergence_plan_and_findings_serialize() -> None:
     assert restored.divergence_plan.per_dimension["plot"] is DivergenceIntensity.DIVERGENT
     assert restored.originality_findings[0].category == "resemblance"
 
+
 def test_divergence_plan_isolate_covers_all_dimensions() -> None:
     plan = DivergencePlan.isolate("plot")
     assert plan.is_complete()
@@ -112,3 +119,61 @@ def test_evaluate_fidelity_flags_minor_and_major_mismatches() -> None:
     assert by_dim["characters"].severity == "major"
     assert "plot" not in by_dim
 
+
+def test_build_isolation_matrix_default_covers_every_dimension_plus_baselines() -> None:
+    matrix = build_isolation_matrix()
+    # one isolate_<dim> variant per PSALM dimension, plus two baselines
+    assert len(matrix) == len(PSALM_DIMENSIONS) + 2
+    for dim in PSALM_DIMENSIONS:
+        assert f"isolate_{dim}" in matrix
+    assert "baseline_all_close" in matrix
+    assert "baseline_all_divergent" in matrix
+
+    for dim in PSALM_DIMENSIONS:
+        variant = matrix[f"isolate_{dim}"]
+        assert variant.is_complete()
+        assert variant.per_dimension[dim] is DivergenceIntensity.CLOSE
+        others = [variant.per_dimension[d] for d in PSALM_DIMENSIONS if d != dim]
+        assert all(level is DivergenceIntensity.DIVERGENT for level in others)
+
+    assert set(matrix["baseline_all_close"].per_dimension.values()) == {DivergenceIntensity.CLOSE}
+    assert set(matrix["baseline_all_divergent"].per_dimension.values()) == {DivergenceIntensity.DIVERGENT}
+
+
+def test_build_isolation_matrix_isolate_vary_inverts_near_and_far() -> None:
+    matrix = build_isolation_matrix(
+        dimensions=["characters"], strategy="isolate_vary", include_baselines=False
+    )
+    assert list(matrix.keys()) == ["vary_only_characters"]
+    variant = matrix["vary_only_characters"]
+    assert variant.per_dimension["characters"] is DivergenceIntensity.DIVERGENT
+    others = [variant.per_dimension[d] for d in PSALM_DIMENSIONS if d != "characters"]
+    assert all(level is DivergenceIntensity.CLOSE for level in others)
+
+
+def test_build_isolation_matrix_subset_of_dimensions_without_baselines() -> None:
+    matrix = build_isolation_matrix(dimensions=["plot", "scenes"], include_baselines=False)
+    assert set(matrix.keys()) == {"isolate_plot", "isolate_scenes"}
+
+
+def test_build_isolation_matrix_custom_near_far_levels() -> None:
+    matrix = build_isolation_matrix(
+        dimensions=["plot"],
+        near=DivergenceIntensity.IDENTICAL,
+        far=DivergenceIntensity.LOOSE,
+        include_baselines=False,
+    )
+    variant = matrix["isolate_plot"]
+    assert variant.per_dimension["plot"] is DivergenceIntensity.IDENTICAL
+    assert variant.per_dimension["characters"] is DivergenceIntensity.LOOSE
+
+
+def test_build_isolation_matrix_rejects_unknown_dimension() -> None:
+    with pytest.raises(ValueError):
+        build_isolation_matrix(dimensions=["not_a_real_dimension"])
+
+
+def test_build_isolation_matrix_rejects_unknown_strategy() -> None:
+    with pytest.raises(ValueError):
+        build_isolation_matrix(dimensions=["plot"],
+                               strategy="not_a_real_strategy")  # type: ignore[arg-type,unused-ignore]
