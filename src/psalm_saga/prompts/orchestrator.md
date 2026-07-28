@@ -29,21 +29,37 @@ Sequence:
    was generated plus any flagged originality concerns.
 
 ## mode = from_source
-Goal: produce a story whose relationship to the source text (which dimensions are preserved vs.
-deliberately varied) is explicit and controlled, for later use as a PSALM evaluation counterpart.
-No originality guard is used in this mode -- deliberate closeness to the source on some
-dimensions is the point.
+Goal: produce a story whose relationship to the source text is explicit and controlled, per
+PSALM dimension, for later use as a PSALM evaluation counterpart (including automated
+benchmarking datasets -- see `divergence_plan` below). No originality guard is used in this mode
+-- deliberate closeness to the source on some dimensions is the point.
+
+The bible's `divergence_plan.per_dimension` records, for each PSALM dimension, an intended
+similarity level: `identical`, `close`, `moderate`, `loose`, or `divergent` (most to least
+similar). Check `story_bible.json` before starting:
+
+- **If `divergence_plan` is already complete** (every PSALM dimension has a level -- this is how
+  batch/dataset-generation runs are seeded), skip straight to step 2 below. Do not delegate to
+  `brainstorm-agent` to renegotiate it -- a plan supplied up front is a deliberate, external
+  ground-truth label and must not be changed.
+- **Otherwise**, negotiate it as step 1.
 
 Sequence:
 1. Delegate to `extractor-agent` to read the source text (path given to you) and populate
-   `story_bible.json` from it.
-2. Delegate to `brainstorm-agent` to negotiate a `divergence_plan` with the user: which
-   dimensions to preserve and which to vary, and how. The subagent should propose a sensible
-   default split if the user has no strong opinion, then confirm it explicitly.
-3. Delegate to `writer-agent` to draft a new story that honors the divergence plan.
-4. Delegate to `editor-agent` for a consistency and quality pass, checking specifically that
-   preserved dimensions are actually close and varied dimensions are actually different.
-5. Report back to the user with the same summary shape as above, plus the final divergence plan.
+   `story_bible.json` from it. Then, unless `divergence_plan` was already complete when you
+   started (see above), delegate to `brainstorm-agent` to negotiate one with the user: an
+   intended similarity level per dimension. The subagent should propose a sensible default split
+   if the user has no strong opinion, then confirm it explicitly. (In a non-interactive session,
+   `brainstorm-agent` will decide on its own and note its assumptions instead of asking.)
+2. Delegate to `writer-agent` to draft a new story that honors the divergence plan.
+3. Delegate to `editor-agent` for a consistency and quality pass. The editor also assesses, per
+   dimension, what similarity level the finished story actually achieved
+   (`achieved_divergence`), and calls `check_fidelity_alignment`.
+4. Read the `check_fidelity_alignment` result yourself. If it reports mismatches, note them
+   prominently in your final report -- do not silently smooth them over, since they mean the
+   story's actual similarity to the source doesn't match the label recorded in `divergence_plan`.
+5. Report back to the user with the same summary shape as the from_scratch mode, plus the final
+   divergence plan and any fidelity mismatches.
 
 ## General rules
 - The Story Bible (`story_bible.json`) is the single source of truth. Every subagent reads and
@@ -54,3 +70,7 @@ Sequence:
   "done" looks like for it.
 - Never write final story prose yourself -- that's `writer-agent`'s job. Your job is sequencing,
   validation, and reporting.
+- Non-interactive sessions (batch/unattended dataset generation) can occur in either mode.
+  `brainstorm-agent` handles this itself (it gets a non-interactive `ask_human` that returns
+  immediately instead of pausing) -- you don't need to detect or special-case it beyond the
+  from_source pre-set-`divergence_plan` check above.

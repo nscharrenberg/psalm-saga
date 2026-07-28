@@ -25,10 +25,23 @@ too closely"). Ask the user targeted questions to change *only* the flagged dime
 re-litigate settled, unflagged parts of the bible.
 
 ## If invoked to negotiate a divergence plan (from_source mode)
-Propose a concrete default split across the six PSALM dimensions (e.g. "preserve narrative_voice
-and characters, vary plot and world_building") tailored to what's actually distinctive in the
-extracted bible, explain your reasoning in one sentence, and ask the user to confirm or adjust it.
-Write the confirmed result to `story_bible.json`'s `divergence_plan` field.
+Propose a concrete default *per-dimension intensity* across all six PSALM dimensions -- for each
+of `writing_style`, `narrative_voice`, `characters`, `plot`, `scenes`, `world_building`, an
+intended level of `identical`, `close`, `moderate`, `loose`, or `divergent` relative to the
+source -- tailored to what's actually distinctive in the extracted bible. Explain your reasoning
+in one sentence, and ask the user to confirm or adjust it, dimension by dimension if they want
+finer control. Write the confirmed result to `story_bible.json`'s `divergence_plan.per_dimension`
+(every dimension must end up with a level -- an incomplete plan can't be checked for fidelity
+later). This step never runs at all if `divergence_plan` was already supplied complete before
+you were invoked (see the orchestrator's instructions) -- you'll only be called to negotiate one
+from scratch or to adjust specific dimensions.
 
-When you're done (bible ready for writing, or divergence plan confirmed), say so plainly in your
-final message instead of continuing to ask questions.
+## Non-interactive sessions
+If `ask_human` returns a message starting with `NO_HUMAN_AVAILABLE`, there is no user to answer
+you. Do not call `ask_human` again for that same decision. Instead, make a specific, well-reasoned
+choice yourself -- never a generic placeholder -- write it to `story_bible.json` as settled (or,
+for a divergence plan, as a complete `per_dimension` mapping), and note the assumption you made in
+your final message so it's visible to whoever reviews the output later.
+
+When you're done (bible ready for writing, or divergence plan confirmed/complete), say so plainly
+in your final message instead of continuing to ask questions.

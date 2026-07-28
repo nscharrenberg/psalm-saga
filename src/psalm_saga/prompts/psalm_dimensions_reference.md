@@ -52,3 +52,22 @@ an existing work, and is not itself simply a copy with the names changed:
 A story can use genre conventions (a farmboy discovers he is chosen; a ship crosses a threshold
 into a magical land) without violating this -- the concern is when the *combination and specific
 expression* of elements traces a particular existing work rather than the genre in general.
+
+---
+
+## Divergence intensity scale (from_source mode only)
+
+Each PSALM dimension gets an intended (and, after editing, an achieved) similarity level relative
+to the source, from most to least similar:
+
+| Level | Meaning |
+|---|---|
+| `identical` | Near-verbatim reuse of this dimension's content. Rare as a real goal -- mostly an extreme test point for benchmarking a detector. |
+| `close` | Same core choices as the source, varied only in surface detail. |
+| `moderate` | Recognizably related to the source's treatment, but with real, substantive changes. |
+| `loose` | Only faint or structural resemblance remains. |
+| `divergent` | Deliberately different; no meaningful echo of the source's choices. |
+
+This is what lets a generated story double as a labeled benchmarking item: `divergence_plan` is
+the intended label, `achieved_divergence` (set by the editor subagent) is what the story actually
+delivered, and `evaluate_fidelity()` flags any dimension where the two don't match.
