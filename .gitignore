@@ -325,3 +325,4 @@ pip-selfcheck.json
 /.claude/
 
 .worktrees/
+psalm-saga-sessions/

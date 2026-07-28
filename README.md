@@ -14,7 +14,7 @@ PSALM-SAGA generates stories in two modes:
   produce texts for evaluating a source against a generated counterpart — e.g. with
   [PSALM](https://github.com/nscharrenberg/psalm), whose narratological dimension taxonomy
   (writing style, narrative voice, characterisation, plot architecture, scene, world-building)
-  this library reuses generatively rather than for similarity scoring. `saga batch` (below) uses
+  this library reuses generatively rather than for similarity scoring. `psalm-saga batch` (below) uses
   this mode non-interactively to generate labeled benchmarking datasets at scale.
 
 Both modes converge on the same shared artifact, the **Story Bible** (`story_bible.json`), and
@@ -29,7 +29,7 @@ bible-validation tool). The agent graph itself (`agents/orchestrator.py`, the fi
 the `ask_human` interrupt/resume flow) is implemented against the documented `deepagents` /
 `langgraph` APIs but has **not** been exercised end-to-end against a live model in this
 environment (no network access here to install `deepagents`/`langchain`/etc. or call a
-provider). Before relying on it: `uv sync`, set a model, and run a `saga new` session yourself.
+provider). Before relying on it: `uv sync`, set a model, and run a `psalm-saga new` session yourself.
 
 ## Install
 
@@ -77,14 +77,14 @@ uv run psalm-saga resume 20260727-141203-a1b2c3
 
 ### Generating a PSALM benchmarking dataset
 
-`saga batch` runs the from_source pipeline non-interactively over a whole directory of source
+`psalm-saga batch` runs the from_source pipeline non-interactively over a whole directory of source
 texts, generating one story per (source, dimension) pair with a *graded, pre-set* divergence
 plan — no questions asked, so it can run unattended. The default strategy,
 `isolate_preserve`, holds **one** PSALM dimension `close` to the source while holding every other
 dimension `divergent`, per variant:
 
 ```bash
-uv run saga batch ./source-texts/ --output ./dataset/manifest.json
+uv run psalm-saga batch ./source-texts/ --output ./dataset/manifest.json
 ```
 
 For each `my-story.txt` in `./source-texts/`, this produces one session per dimension
@@ -102,10 +102,10 @@ deliberately varied.
 Preview a matrix without generating anything:
 
 ```bash
-uv run saga isolation-matrix --dimensions characters,plot
+uv run psalm-saga isolation-matrix --dimensions characters,plot
 ```
 
-Other options worth knowing about (`uv run saga batch --help` for the rest):
+Other options worth knowing about (`uv run psalm-saga batch --help` for the rest):
 - `--strategy isolate_vary` inverts the test: vary **one** dimension, hold the rest close --
   useful for checking whether a detector still fires when only one thing changed, rather than
   testing per-dimension sensitivity.
@@ -113,7 +113,7 @@ Other options worth knowing about (`uv run saga batch --help` for the rest):
   `--near identical` for an even harder positive-control point).
 - `--overwrite` regenerates items whose session directory already exists; without it, a batch
   run is safe to re-invoke after a partial failure -- already-generated items are reused.
-- A single one-off variant (rather than the whole matrix) can be run through `saga new` directly
+- A single one-off variant (rather than the whole matrix) can be run through `psalm-saga new` directly
   with `--divergence-plan path/to/plan.json` (a `{"characters": "close", "plot": "divergent",
   ...}` file covering all six dimensions) — this implies `--non-interactive`.
 

@@ -1,9 +1,11 @@
 from enum import StrEnum
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+load_dotenv()
 
 class GuardStrictness(StrEnum):
     """What the originality guard does when it cannot resolve a concern within budget."""
