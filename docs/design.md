@@ -72,6 +72,16 @@ question often makes several other planned questions moot. `psalm_dimensions_ref
 (copied into every session directory) is the shared checklist all agents work from, but it's a
 reference, not a script.
 
+That checklist is also explicitly internal: the dimension vocabulary (`narrative_voice`,
+`world_building`, `settled`, ...) is for bookkeeping, and `brainstorm.md` is deliberately
+prescriptive about never surfacing it to the user. Early prompt drafts asked literally
+dimension-shaped questions ("What writing style do you envision? Describe tone, sentence rhythm,
+...") which read as a form, not a creative conversation. The fix wasn't a tooling change but a
+prompting one: `brainstorm.md` now requires translating each dimension into a concrete,
+story-native proposal grounded in what's already established ("I'm picturing this in short,
+salt-cracked sentences... does that match, or something warmer?") rather than naming the
+dimension and asking the user to fill it in abstractly.
+
 ## Known limitations
 
 - The originality guard is a diligence aid, not a legal compliance guarantee (see README).

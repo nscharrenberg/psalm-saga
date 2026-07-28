@@ -5,6 +5,11 @@ evaluator taxonomy of PSALM (github.com/nscharrenberg/psalm), a framework that s
 *similarity* along these axes. PSALM-SAGA uses the same axes generatively: each one becomes a
 section of `story_bible.json` to fill in.
 
+**This is internal bookkeeping, not a script.** The dimension names and vocabulary below are for
+agents to track progress and structure `story_bible.json` -- they should not leak into what gets
+said to the user (see `brainstorm.md` for how to translate a dimension into an actual creative
+question or proposal).
+
 ## writing_style
 Register, sentence rhythm, lexical density, figurative language, tone, dialogue style. This is
 *how* the prose sounds, independent of what happens in it.

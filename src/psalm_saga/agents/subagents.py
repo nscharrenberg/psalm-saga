@@ -47,9 +47,10 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
     brainstorm: SubAgent = {
         "name": "brainstorm-agent",
         "description": (
-            "Converses with the user, one question at a time, to fill in or refine "
-            "story_bible.json, or to negotiate a divergence_plan in from_source mode, or to "
-            "resolve specific originality-guard findings in from_scratch mode. In "
+            "Brainstorms the story with the user as a creative collaborator -- proposing "
+            "concrete ideas and building on their answers, one question at a time -- to fill in "
+            "or refine story_bible.json, or to negotiate a divergence_plan in from_source mode, "
+            "or to resolve specific originality-guard findings in from_scratch mode. In "
             "non-interactive sessions, makes autonomous decisions instead of asking."
         ),
         "system_prompt": load_prompt("brainstorm"),
