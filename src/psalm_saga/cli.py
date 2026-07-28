@@ -1,3 +1,5 @@
+import json
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Annotated
 
@@ -11,8 +13,9 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 
 from psalm_saga.agents import build_orchestrator
+from psalm_saga.batch import run_batch, write_manifest, build_isolation_matrix
 from psalm_saga.config import Settings
-from psalm_saga.dimensions import GenerationMode
+from psalm_saga.dimensions import GenerationMode, DivergencePlan, DivergenceIntensity, PSALM_DIMENSIONS
 from psalm_saga.session import init_session, checkpoint_db_path, SessionConfig, load_session_config
 
 app = typer.Typer(
@@ -154,6 +157,25 @@ def new(
         session_name: Annotated[
             str | None, typer.Option("--session-name", help="Custom session id instead of a generated one.")
         ] = None,
+        divergence_plan_file: Annotated[
+            Path | None,
+            typer.Option(
+                "--divergence-plan",
+                help=(
+                        "JSON file with a per-dimension divergence plan, e.g. "
+                        '{"characters": "close", "plot": "divergent", ...} (from_source mode only). '
+                        "Must cover all six PSALM dimensions. Skips the brainstorm negotiation step."
+                ),
+            ),
+        ] = None,
+        non_interactive: Annotated[
+            bool,
+            typer.Option(
+                "--non-interactive",
+                help="Never pause for questions -- the agent makes its own decisions instead. "
+                     "Implied by --divergence-plan. For batch/scripted use, see `saga batch`.",
+            ),
+        ] = False,
 ) -> None:
     """
     Start a new story-generation session. The session can be
@@ -182,17 +204,30 @@ def new(
     settings = _build_settings(model, subagent_model, sessions_root, guard_strictness)
     mode = GenerationMode.FROM_SOURCE if source is not None else GenerationMode.FROM_SCRATCH
 
+    divergence_plan: DivergencePlan | None = None
+    if divergence_plan_file is not None:
+        if mode is not GenerationMode.FROM_SOURCE:
+            console.print("[red]--divergence-plan only applies to from_source mode (pass --source).[/red]")
+            raise typer.Exit(code=1)
+        raw = json.loads(divergence_plan_file.read_text(encoding="utf-8"))
+        divergence_plan = DivergencePlan(
+            per_dimension={dim: DivergenceIntensity(level) for dim, level in raw.items()}
+        )
+        non_interactive = True
+
     session_dir = init_session(
         settings,
         mode,
         source_path=source,
         initial_context=context,
         session_id=session_name,
+        divergence_plan=divergence_plan,
+        non_interactive=non_interactive,
     )
     console.print(f"[green]Session created:[/green] \"{session_dir}\"")
 
     with SqliteSaver.from_conn_string(str(checkpoint_db_path(session_dir))) as checkpointer:
-        orchestrator = build_orchestrator(settings, session_dir, checkpointer)
+        orchestrator = build_orchestrator(settings, session_dir, checkpointer, non_interactive=non_interactive)
         thread_config = {
             "configurable": {
                 "thread_id": session_dir.name
@@ -205,9 +240,16 @@ def new(
                 f"Initial context from the user: \"{context or '(none provided)'}\""
             )
         else:
+            plan_note = (
+                " A divergence_plan has already been set on story_bible.json -- it is final; do "
+                "not renegotiate it."
+                if divergence_plan is not None
+                else ""
+            )
             kickoff = (
                 "Begin a from_source session. The source text is at source.txt in the working "
-                f"directory. Initial context/instructions from the user: \"{context or '(none provided)'}\""
+                f"directory.{plan_note} Initial context/instructions from the user: "
+                f"{context or '(none provided)'}"
             )
 
         _run_until_done(
@@ -245,7 +287,9 @@ def resume(
     )
 
     with SqliteSaver.from_conn_string(str(checkpoint_db_path(session_dir))) as checkpointer:
-        orchestrator = build_orchestrator(settings, session_dir, checkpointer)
+        orchestrator = build_orchestrator(
+            settings, session_dir, checkpointer, non_interactive=saved.non_interactive
+        )
         thread_config = {
             "configurable": {
                 "thread_id": session_id
@@ -266,13 +310,147 @@ def resume(
 
 
 @app.command()
-def batch() -> None:
-    """Generate a labeled dataset for PSALM benchmarking: one story per (source, dimension) pair.
-
-    Every session runs non-interactively -- no questions are asked -- with a pre-set
-    divergence plan, so this can run unattended over many source files.
+def batch(
+        sources_dir: Annotated[Path, typer.Argument(help="Directory of source text files.")],
+        model: Annotated[
+            str | None, typer.Option("--model", "-m", help="provider:model string.")
+        ] = None,
+        subagent_model: Annotated[
+            str | None, typer.Option("--subagent-model", help="Override model for subagents.")
+        ] = None,
+        sessions_root: Annotated[
+            Path | None, typer.Option("--sessions-root", help="Where session directories live.")
+        ] = None,
+        dimensions: Annotated[
+            str,
+            typer.Option(
+                "--dimensions",
+                help="Comma-separated PSALM dimensions to generate isolation variants for.",
+            ),
+        ] = ",".join(PSALM_DIMENSIONS),
+        strategy: Annotated[
+            str,
+            typer.Option(
+                "--strategy",
+                help="'isolate_preserve' (hold one dimension close, vary the rest -- default) or "
+                     "'isolate_vary' (vary one dimension, hold the rest close).",
+            ),
+        ] = "isolate_preserve",
+        include_baselines: Annotated[
+            bool,
+            typer.Option(
+                "--include-baselines/--no-include-baselines",
+                help="Also generate an all-close and an all-divergent baseline per source.",
+            ),
+        ] = True,
+        near: Annotated[
+            str, typer.Option("--near", help="Intensity level used for the 'similar' side.")
+        ] = "close",
+        far: Annotated[
+            str, typer.Option("--far", help="Intensity level used for the 'different' side.")
+        ] = "divergent",
+        context: Annotated[
+            str, typer.Option("--context", "-c", help="Extra context/instructions applied to every item.")
+        ] = "",
+        overwrite: Annotated[
+            bool,
+            typer.Option("--overwrite", help="Regenerate items whose session directory already exists."),
+        ] = False,
+        output: Annotated[
+            Path | None,
+            typer.Option("--output", "-o", help="Manifest path (.json; a sibling .csv is also written)."),
+        ] = None,
+) -> None:
     """
-    pass
+    Batch processes a directory of source text files to generate isolation variants and save the results.
+
+    This command takes a directory of source text files and applies the specified processing strategy
+    to generate varying isolation variants of the source data. Additional context and specific
+    parameters can be included to modify the output behavior. A manifest file summarizing the batch
+    operation is created upon completion.
+
+    :param sources_dir: Directory of source text files.
+    :param model: Provider:model string (optional). Overrides the default model setting.
+    :param subagent_model: Model string for subagents (optional). Overrides model for subagents.
+    :param sessions_root: Path to the sessions root directory (optional). Determines where session
+        directories are stored.
+    :param dimensions: Comma-separated PSALM dimensions for generating isolation variants.
+    :param strategy: Processing strategy to use. 'isolate_preserve' (default) holds one dimension
+        close and varies the rest, while 'isolate_vary' varies one dimension and holds the rest close.
+    :param include_baselines: Whether to include an all-close and all-divergent baseline per source.
+    :param near: Intensity level used for the 'similar' side.
+    :param far: Intensity level used for the 'different' side.
+    :param context: Additional context or instructions applied to each item.
+    :param overwrite: Whether to regenerate items whose session directory already exists.
+    :param output: Path to save the manifest (.json file along with a sibling .csv file). If not
+        provided, a default path based on timestamp is used.
+
+    :return: None
+    """
+    settings = _build_settings(model, subagent_model, sessions_root, None)
+    dim_list = [d.strip() for d in dimensions.split(",") if d.strip()]
+
+    def _on_progress(source_name: str, variant_name: str, done: int, total: int) -> None:
+        console.print(f"[cyan]({done}/{total})[/cyan] {source_name} :: {variant_name}")
+
+    items = run_batch(
+        settings,
+        sources_dir,
+        dimensions=dim_list,
+        strategy=strategy,  # type: ignore[arg-type]
+        include_baselines=include_baselines,
+        near=DivergenceIntensity(near),
+        far=DivergenceIntensity(far),
+        context=context,
+        overwrite=overwrite,
+        progress_callback=_on_progress,
+    )
+
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    manifest_path = output or (settings.sessions_root / f"batch-manifest-{stamp}.json")
+    write_manifest(items, manifest_path)
+
+    ok = sum(1 for i in items if i.status == "ok")
+    skipped = sum(1 for i in items if i.status == "skipped_existing")
+    failed = sum(1 for i in items if i.status == "failed")
+    total_mismatches = sum(len(i.mismatches) for i in items)
+
+    console.print(
+        f"[green]Done:[/green] {ok} generated, {skipped} skipped (already existed), "
+        f"{failed} failed. {total_mismatches} fidelity mismatch(es) across all items."
+    )
+    console.print(f"Manifest: {manifest_path} (and {manifest_path.with_suffix('.csv')})")
+    if failed:
+        console.print("[yellow]Failed items (see manifest for details):[/yellow]")
+        for item in items:
+            if item.status == "failed":
+                console.print(f"  - {item.session_id}: {item.error}")
+
+
+@app.command()
+def isolation_matrix(
+        dimensions: Annotated[
+            str,
+            typer.Option("--dimensions", help="Comma-separated PSALM dimensions."),
+        ] = ",".join(PSALM_DIMENSIONS),
+        strategy: Annotated[str, typer.Option("--strategy")] = "isolate_preserve",
+        include_baselines: Annotated[bool, typer.Option("--include-baselines/--no-include-baselines")] = True,
+        near: Annotated[str, typer.Option("--near")] = "close",
+        far: Annotated[str, typer.Option("--far")] = "divergent",
+) -> None:
+    dim_list = [d.strip() for d in dimensions.split(",") if d.strip()]
+
+    variants = build_isolation_matrix(
+        dimensions=dim_list,
+        strategy=strategy,  # type: ignore[arg-type]
+        near=DivergenceIntensity(near),
+        far=DivergenceIntensity(far),
+        include_baselines=include_baselines,
+    )
+
+    payload = {name: {dim: level.value for dim, level in plan.per_dimension.items()} for name, plan in variants.items()}
+    console.print(Panel(json.dumps(payload, indent=2), title="Isolation matrix", border_style="cyan"))
+
 
 if __name__ == "__main__":
     app()
