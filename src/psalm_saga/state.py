@@ -3,7 +3,7 @@ from typing import NotRequired
 from deepagents.graph import DeepAgentState
 
 
-class SageState(DeepAgentState):
+class SagaState(DeepAgentState):
     """Extra, run-scoped fields available to every node in the graph."""
 
     mode: NotRequired[str]
