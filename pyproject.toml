@@ -4,6 +4,7 @@ version = "0.0.1"
 description = "Add your description here"
 requires-python = ">=3.14"
 dependencies = [
+    "deepagents>=0.6.12",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "rich>=15.0.0",
