@@ -57,7 +57,8 @@ export PSALM_SAGA_ORIGINALITY_GUARD_STRICTNESS="warn"           # or "block"
 export ANTHROPIC_API_KEY="..."                                  # or OPENAI_API_KEY, etc.
 ```
 
-(A `.env` file in the working directory is also picked up automatically.)
+(A `.env` file in the working directory is picked up automatically -- both the `PSALM_SAGA_*` settings above and provider keys like `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, via `python-dotenv`.)
+
 
 ## Use
 
