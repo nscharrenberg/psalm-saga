@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Self
+from typing import Self, Literal, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -19,6 +19,17 @@ class GrammaticalPerson(StrEnum):
     FIRST = "first"
     SECOND = "second"
     THIRD = "third"
+
+PSALM_DIMENSIONS: tuple[str, ...] = (
+    "writing_style",
+    "narrative_voice",
+    "characters",
+    "plot",
+    "scenes",
+    "world_building",
+)
+
+IsolationStrategy = Literal["isolate_preserve", "isolate_vary"]
 
 class DimensionField(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -264,6 +275,59 @@ def evaluate_fidelity(
 
     return mismatches
 
+def build_isolation_matrix(
+        *,
+        dimensions: Sequence[str] = PSALM_DIMENSIONS,
+        strategy: IsolationStrategy = "isolate_preserve",
+        near: DivergenceIntensity = DivergenceIntensity.CLOSE,
+        far: DivergenceIntensity = DivergenceIntensity.DIVERGENT,
+        include_baselines: bool = True,
+) -> dict[str, DivergencePlan]:
+    """
+    Builds an isolation matrix based on specified dimensions, strategy, and divergence intensities.
+    ``variant name -> DivergencePlan`` mapping: one variant per dimension, plus baselines
+
+    This function generates a dictionary of divergence plans for the given dimensions using the specified
+    strategy. It includes optional baseline divergence plans that apply uniform intensity across all
+    dimensions. The isolation strategy determines how intensities near or far are applied to the specified
+    dimensions.
+
+    :param dimensions: A sequence of strings representing the dimensions for which divergence plans will be
+        created. Each dimension must be a valid entry from `PSALM_DIMENSIONS`.
+    :type dimensions: Sequence[str]
+    :param strategy: Strategy to use for creating divergence plans. Valid strategies are
+        "isolate_preserve" or "isolate_vary".
+    :type strategy: IsolationStrategy
+    :param near: The divergence intensity level considered as "close" for dimensions.
+    :type near: DivergenceIntensity
+    :param far: The divergence intensity level considered as "divergent" for dimensions.
+    :type far: DivergenceIntensity
+    :param include_baselines: Flag indicating whether to include baseline divergence plans
+        (close and divergent variants for all dimensions uniformly).
+    :type include_baselines: bool
+    :return: A dictionary where keys are strings representing the divergence plan names, and values
+        are `DivergencePlan` objects corresponding to the generated isolation matrix.
+    :rtype: dict[str, DivergencePlan]
+    """
+    variants: dict[str, DivergencePlan] = {}
+
+    for dim in dimensions:
+        if dim not in PSALM_DIMENSIONS:
+            raise ValueError(f"Unknown PSALM dimension: \"{dim!r}\". Expected one of \"{PSALM_DIMENSIONS}\".")
+
+        if strategy == "isolate_preserve":
+            variants[f"isolate_{dim}"] = DivergencePlan.isolate(dim, near=near, far=far)
+        elif strategy == "isolate_vary":
+            variants[f"vary_only_{dim}"] = DivergencePlan.isolate(dim, near=far, far=near)
+        else:
+            raise ValueError(f"Unknown strategy: {strategy!r}")
+
+    if include_baselines:
+        variants["baseline_all_close"] = DivergencePlan.uniform(near)
+        variants["baseline_all_divergent"] = DivergencePlan.uniform(far)
+
+    return variants
+
 class StoryBible(BaseModel):
     """
     The complete, structured brief that drives prose generation.
@@ -359,12 +423,3 @@ class StoryBible(BaseModel):
             missing.append("plot.inciting_incident")
 
         return len(missing) == 0, missing
-
-PSALM_DIMENSIONS: tuple[str, ...] = (
-    "writing_style",
-    "narrative_voice",
-    "characters",
-    "plot",
-    "scenes",
-    "world_building",
-)

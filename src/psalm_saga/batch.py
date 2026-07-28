@@ -12,67 +12,11 @@ from langgraph.types import Command
 from psalm_saga import StoryBible, Settings
 from psalm_saga.agents import build_orchestrator
 from psalm_saga.dimensions import PSALM_DIMENSIONS, DivergenceIntensity, DivergencePlan, evaluate_fidelity, \
-    GenerationMode
+    GenerationMode, IsolationStrategy, build_isolation_matrix
 from psalm_saga.session import session_dir_for, init_session, checkpoint_db_path
-
-IsolationStrategy = Literal["isolate_preserve", "isolate_vary"]
 
 ProgressCallback = Callable[[str, str, int, int], None]
 """Called as (source_file_name, variant_name, items_done, items_total) after each item."""
-
-
-def build_isolation_matrix(
-        *,
-        dimensions: Sequence[str] = PSALM_DIMENSIONS,
-        strategy: IsolationStrategy = "isolate_preserve",
-        near: DivergenceIntensity = DivergenceIntensity.CLOSE,
-        far: DivergenceIntensity = DivergenceIntensity.DIVERGENT,
-        include_baselines: bool = True,
-) -> dict[str, DivergencePlan]:
-    """
-    Builds an isolation matrix based on specified dimensions, strategy, and divergence intensities.
-    ``variant name -> DivergencePlan`` mapping: one variant per dimension, plus baselines
-
-    This function generates a dictionary of divergence plans for the given dimensions using the specified
-    strategy. It includes optional baseline divergence plans that apply uniform intensity across all
-    dimensions. The isolation strategy determines how intensities near or far are applied to the specified
-    dimensions.
-
-    :param dimensions: A sequence of strings representing the dimensions for which divergence plans will be
-        created. Each dimension must be a valid entry from `PSALM_DIMENSIONS`.
-    :type dimensions: Sequence[str]
-    :param strategy: Strategy to use for creating divergence plans. Valid strategies are
-        "isolate_preserve" or "isolate_vary".
-    :type strategy: IsolationStrategy
-    :param near: The divergence intensity level considered as "close" for dimensions.
-    :type near: DivergenceIntensity
-    :param far: The divergence intensity level considered as "divergent" for dimensions.
-    :type far: DivergenceIntensity
-    :param include_baselines: Flag indicating whether to include baseline divergence plans
-        (close and divergent variants for all dimensions uniformly).
-    :type include_baselines: bool
-    :return: A dictionary where keys are strings representing the divergence plan names, and values
-        are `DivergencePlan` objects corresponding to the generated isolation matrix.
-    :rtype: dict[str, DivergencePlan]
-    """
-    variants: dict[str, DivergencePlan] = {}
-
-    for dim in dimensions:
-        if dim not in PSALM_DIMENSIONS:
-            raise ValueError(f"Unknown PSALM dimension: \"{dim!r}\". Expected one of \"{PSALM_DIMENSIONS}\".")
-
-        if strategy == "isolate_preserve":
-            variants[f"isolate_{dim}"] = DivergencePlan.isolate(dim, near=near, far=far)
-        elif strategy == "isolate_vary":
-            variants[f"vary_only_{dim}"] = DivergencePlan.isolate(dim, near=far, far=near)
-        else:
-            raise ValueError(f"Unknown strategy: {strategy!r}")
-
-    if include_baselines:
-        variants["baseline_all_close"] = DivergencePlan.uniform(near)
-        variants["baseline_all_divergent"] = DivergencePlan.uniform(far)
-
-    return variants
 
 
 @dataclass(frozen=True, slots=True)
