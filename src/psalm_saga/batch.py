@@ -11,6 +11,7 @@ from langgraph.types import Command
 
 from psalm_saga import StoryBible, Settings
 from psalm_saga.agents import build_orchestrator
+from psalm_saga.dataset_utils import decide_dataset_item_action
 from psalm_saga.dimensions import PSALM_DIMENSIONS, DivergenceIntensity, DivergencePlan, evaluate_fidelity, \
     GenerationMode, IsolationStrategy, build_isolation_matrix
 from psalm_saga.session import session_dir_for, init_session, checkpoint_db_path
@@ -167,7 +168,8 @@ def run_dataset_item(
     session_id = f"{source_path.stem}__{variant_name}"
     session_dir = session_dir_for(settings, session_id)
 
-    if session_dir.exists() and not overwrite:
+    decision = decide_dataset_item_action(session_dir, overwrite=overwrite)
+    if decision == "reuse_finished":
         return _dataset_item_from_session_dir(
             session_dir,
             source_path=source_path,
@@ -176,8 +178,8 @@ def run_dataset_item(
             status="skipped_existing"
         )
 
-    if session_dir.exists() and overwrite:
-        shutil.rmtree(session_dir)
+    if session_dir.exists():
+        shutil.rmtree(session_dir) # either overwrite=True, or a failed/partial leftover -- retry
 
     try:
         session_dir = init_session(
