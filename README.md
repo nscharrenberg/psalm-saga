@@ -76,6 +76,12 @@ uv run psalm-saga new --source ./my-novel-excerpt.txt --context "Keep the voice 
 uv run psalm-saga resume 20260727-141203-a1b2c3
 ```
 
+While a session runs, the CLI streams a live todo checklist (what's done, what's in progress,
+what's next -- the same `write_todos` mechanism Claude Code uses) plus a one-line activity log
+for every tool call and result along the way (delegating to a subagent, writing the bible,
+validating it, running the fidelity check, ...), instead of going quiet until the next question
+or the final result.
+
 ### Generating a PSALM benchmarking dataset
 
 `psalm-saga batch` runs the from_source pipeline non-interactively over a whole directory of source

@@ -12,6 +12,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 
+from psalm_saga.activity import describe_tool_call, describe_tool_result, namespace_label, format_todos
 from psalm_saga.agents import build_orchestrator
 from psalm_saga.batch import run_batch, write_manifest, build_isolation_matrix
 from psalm_saga.config import Settings
@@ -64,31 +65,93 @@ def _build_settings(
 
     return Settings(**overrides)  # type: ignore[arg-type]
 
+def _render_message(label: str, message: object) -> None:
+    """Render one message as an activity-log line: a tool call, or a tool result.
 
-def _print_final(result: dict) -> None:  # type: ignore[type-arg]
+    Best-effort by design (see activity.py) -- wrapped in try/except at the call site so a
+    rendering surprise (an unexpected message shape) never interrupts the actual session.
     """
-    Processes and displays the final content from the provided result dictionary. The method extracts
-    the last message from the "messages" list within the result, formats its content, and
-    prints it using a styled panel using the `rich` library.
+    tool_calls = getattr(message, "tool_calls", None)
+    if tool_calls:
+        for call in tool_calls:
+            desc = describe_tool_call(call.get("name", "tool"), call.get("args") or {})
+            console.print(f"{label}{desc}")
+        return
+    if getattr(message, "type", "") == "tool":
+        name = getattr(message, "name", "") or "tool"
+        console.print(f"{label}{describe_tool_result(name, message.content)}")  # type: ignore[attr-defined]
 
-    :param result: Dictionary containing a "messages" key with a list of message objects or strings.
-    :type result: dict
-    :return: None
+def _render_update(namespace: tuple[str, ...], update: object) -> None:
+    """Render one LangGraph state update: an updated todo list and/or new tool calls/results."""
+    if not isinstance(update, dict):
+        return
+    label = namespace_label(namespace)
+    for node_update in update.values():
+        if not isinstance(node_update, dict):
+            continue
+        try:
+            if node_update.get("todos"):
+                console.print(Panel(format_todos(node_update["todos"]), title="Plan", border_style="blue"))
+            for message in node_update.get("messages", []):
+                _render_message(label, message)
+        except Exception:  # noqa: BLE001 - activity rendering must never break a session
+            continue
+
+def _drive(orchestrator, config: dict, input_: object) -> None:  # type: ignore[no-untyped-def,type-arg]
+    """Stream the graph to completion or the next interrupt, rendering progress as it happens."""
+    for namespace, update in orchestrator.stream(
+        input_, config=config, stream_mode="updates", subgraphs=True
+    ):
+        _render_update(namespace, update)
+
+def _pending_interrupt(orchestrator, config: dict):  # type: ignore[no-untyped-def,type-arg]
+    """Return the first pending interrupt for this thread, if any, else None."""
+    state = orchestrator.get_state(config)
+    for task in state.tasks or ():
+        for pending in task.interrupts or ():
+            return pending
+    return None
+
+def _prompt_for_interrupt(pending) -> str:  # type: ignore[no-untyped-def]
+    """Show a pending ask_human interrupt and block for the user's reply."""
+    payload = pending.value if hasattr(pending, "value") else pending
+    if isinstance(payload, dict):
+        question = payload.get("question", str(payload))
+        why = payload.get("why")
+    else:
+        question, why = str(payload), None
+    body = question if not why else f"{question}\n\n[dim]{why}[/dim]"
+    console.print(Panel(body, title="PSALM-SAGA asks", border_style="cyan"))
+    return Prompt.ask("[bold cyan]Your answer[/bold cyan]")
+
+
+def _print_final(orchestrator, config: dict) -> None:  # type: ignore[no-untyped-def,type-arg]
     """
-    messages = result.get("messages", [])
+    Prints the final formatted content of messages retrieved from the orchestrator
+    state to the console. If there are no messages, the function returns immediately.
+    If the content of the last message is in a list format, it is processed and joined
+    into a string before being printed.
 
+    :param orchestrator: Orchestrator object that provides the `get_state` method
+        to retrieve the state.
+    :type orchestrator: Any
+    :param config: Configuration dictionary passed to retrieve the state and messages.
+    :type config: dict
+    :return: None. Outputs the final formatted content to the console.
+    :rtype: NoneType
+    """
+    state = orchestrator.get_state(config)
+    messages = state.values.get("messages", [])
     if not messages:
         return
-
     last = messages[-1]
     content = getattr(last, "content", str(last))
-
     if isinstance(content, list):
         content = "\n".join(
             part.get("text", "") if isinstance(part, dict) else str(part) for part in content
         )
-
     console.print(Panel(Markdown(content), title="PSALM-SAGA", border_style="green"))
+
 
 
 def _run_until_done(orchestrator, config: dict, initial_input: object) -> None:  # type: ignore[type-arg,no-untyped-def]
@@ -106,22 +169,13 @@ def _run_until_done(orchestrator, config: dict, initial_input: object) -> None: 
         begin the loop. Subsequent inputs are derived from user responses.
     :return: None
     """
-    result = orchestrator.invoke(initial_input, config=config)
+    _drive(orchestrator, config, initial_input)
 
-    while interrupts := result.get("__interrupt__"):
-        # deepagents' ask_human raises a single interrupt per pause; handle each in order in the
-        # (rare) case multiple are batched by the underlying runtime.
+    while (pending := _pending_interrupt(orchestrator, config)) is not None:
+        answer = _prompt_for_interrupt(pending)
+        _drive(orchestrator, config, Command(resume=answer))
 
-        for pending in interrupts:
-            payload = pending.value if hasattr(pending, "value") else pending
-            question = payload.get("question", str(payload))
-            why = payload.get("why")
-            body = question if not why else f"{question}\n\n[dim]{why}[/dim]"
-            console.print(Panel(body, title="PSALM-SAGA asks", border_style="cyan"))
-            answer = Prompt.ask("[bold cyan]Your answer[/bold cyan]")
-            result = orchestrator.invoke(Command(resume=answer), config=config)
-
-    _print_final(result)
+    _print_final(orchestrator, config)
 
 
 @app.command()
@@ -296,18 +350,16 @@ def resume(
             }
         }
 
-        state = orchestrator.get_state(thread_config)
-        has_pending_interrupt = bool(state.tasks and any(t.interrupts for t in state.tasks))
-
-        if has_pending_interrupt:
+        pending = _pending_interrupt(orchestrator, thread_config)
+        if pending is not None:
             console.print("[yellow]Resuming a pending question...[/yellow]")
-            _run_until_done(orchestrator, thread_config, None)
+            answer = _prompt_for_interrupt(pending)
+            _run_until_done(orchestrator, thread_config, Command(resume=answer))
         else:
             follow_up = Prompt.ask(
                 "[bold cyan]No pending question. What would you like to tell the agent?[/bold cyan]"
             )
             _run_until_done(orchestrator, thread_config, {"messages": [HumanMessage(follow_up)]})
-
 
 @app.command()
 def batch(

@@ -58,6 +58,7 @@ that knows which pipeline it's running; individual subagents don't need to.
 | Shared artifact | `story_bible.json` on a real filesystem backend rooted at the session dir |
 | Context isolation | Each pipeline stage is a declarative `SubAgent` (`agents/subagents.py`), invoked via deepagents' built-in `task` tool |
 | Forced reflection | A plain `think` tool (`tools/think.py`), à la `open_deep_research`'s `think_tool` |
+| Live progress | deepagents' default `TodoListMiddleware` (`write_todos`, the same mechanism Claude Code uses) plus `cli.py` streaming (`orchestrator.stream(..., stream_mode="updates", subgraphs=True)` instead of a single blocking `.invoke()`) so the todo checklist and every tool call/result render as they happen -- see `activity.py` for the rendering helpers and the note below |
 | Human-in-the-loop | `ask_human` (`tools/ask_human.py`) built on `langgraph.types.interrupt`; the CLI (`cli.py`) is the only piece that knows how to *drive* the interrupt (blocking prompt today, would be a websocket/store tomorrow). Built as a factory (`make_ask_human_tool(non_interactive=...)`) so batch/unattended sessions get a variant that never actually pauses -- see below. |
 | Self-correction | `validate_story_bible` (`tools/bible.py`), a deterministic (non-LLM) Pydantic-validation tool bound per-session |
 | Resumability | A `SqliteSaver` checkpointer per session, so a paused `ask_human` question survives the CLI process exiting |
@@ -99,10 +100,18 @@ dimension and asking the user to fill it in abstractly.
   gate itself.
 - No automated test exercises the live agent graph (would require a real or fake chat model and
   network access); `tests/` covers the schema, session lifecycle, both deterministic tools, the
-  dependency-light matrix-building logic in `dimensions.py`, and the batch reuse/regenerate
-  decision in `dataset_utils.py` -- the parts safe to unit test without a model in the loop.
-  `dataset_utils.py` is deliberately its own module (not folded into `batch.py`) purely so it can
-  be imported without `batch.py`'s heavy `deepagents`/`langgraph`/`langchain_core` imports.
+  dependency-light matrix-building logic in `dimensions.py`, the batch reuse/regenerate decision
+  in `dataset_utils.py`, and the pure rendering helpers in `activity.py` -- the parts safe to unit
+  test without a model in the loop. `dataset_utils.py` is deliberately its own module (not folded
+  into `batch.py`) purely so it can be imported without `batch.py`'s heavy
+  `deepagents`/`langgraph`/`langchain_core` imports.
+- The activity log's subagent-level detail (which specific tool a subagent is calling, not just
+  "delegating to writer-agent") relies on `stream(..., subgraphs=True)` surfacing updates from
+  inside deepagents' `task`-tool-invoked subagent graphs, and on parsing LangGraph's internal
+  namespace-tuple format in `activity.namespace_label()`. Neither is part of a documented, stable
+  public contract, so this is explicitly best-effort: `_render_update`/`_render_message` in
+  `cli.py` are wrapped to swallow any rendering surprise rather than crash a session, degrading
+  at worst to a missing `[subagent]` prefix on a log line, never a failed run.
 - `achieved_divergence` is still, ultimately, an LLM's self-assessment (the editor subagent's) --
   `evaluate_fidelity()` only catches disagreement between what was *intended* and what the editor
   *claims* was achieved, not a fully independent measurement of textual similarity. A rigorous
