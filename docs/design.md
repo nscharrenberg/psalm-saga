@@ -55,14 +55,21 @@ reference, not a script.
 ## Known limitations
 
 - The originality guard is a diligence aid, not a legal compliance guarantee (see README).
-- `warn` vs `block` strictness and the revision budget are enforced by the orchestrator's system
-  prompt, not by code — deepagents doesn't give us a clean way to hard-gate a subagent handoff
-  from outside the graph without more invasive middleware. If this needs to be a hard invariant
-  rather than a strong instruction, the next step is a custom middleware/graph edge that reads
-  `story_bible.json`'s `originality_findings` and refuses to route to `writer-agent` in `block`
-  mode — worth doing before this is used for anything higher-stakes than drafting.
+- `warn` vs `block` strictness is enforced by a deterministic tool, `check_originality_gate`
+  (`tools/gate.py`), which the orchestrator's prompt requires calling before delegating to
+  `writer-agent`. It computes PROCEED/BLOCKED purely from `story_bible.json`'s
+  `originality_findings` and the configured strictness -- not from the model's own judgment of
+  its findings -- so the model only needs to call one tool and respect a literal string result,
+  rather than reason correctly about counts and severities itself. This is *not* a graph-level
+  hard veto: deepagents doesn't expose a clean hook to block a specific subagent name from
+  outside the graph without subclassing `SubAgentMiddleware`/the `task` tool internals, so a
+  model that ignores its instructions could still call `task(subagent="writer-agent", ...)`
+  after a BLOCKED verdict. If this needs to be a true invariant rather than a much-smaller-surface
+  instruction, the next step is custom middleware that intercepts `task` calls and consults the
+  gate itself.
 - No automated test exercises the live agent graph (would require a real or fake chat model and
   network access); `tests/` covers the schema, session lifecycle, and the deterministic
   validation tool, which are the parts safe to unit test without a model in the loop.
+
 
 Note: This document was generated using Claude Sonnet 5 based on the codebase. The general design is correct, but small details may be off.Z
