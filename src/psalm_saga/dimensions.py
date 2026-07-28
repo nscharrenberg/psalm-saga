@@ -136,26 +136,133 @@ class OriginalityFinding(BaseModel):
     )
     resolved: bool = False
 
+class DivergenceIntensity(StrEnum):
+    """How closely a generated story's treatment of one dimension should/does track the source.
+
+    Ordered from most to least similar -- see :data:`DIVERGENCE_ORDER` for the numeric ordering
+    used to measure how far an *achieved* level is from an *intended* one.
+    """
+
+    IDENTICAL = "identical"
+    """Near-verbatim reuse of this dimension's content. Rarely a real generation goal -- mostly
+    useful as an extreme positive-control point when benchmarking a detector."""
+
+    CLOSE = "close"
+    """Strongly similar: same core choices, only surface-level variation."""
+
+    MODERATE = "moderate"
+    """Recognizably related, but with real, substantive changes."""
+
+    LOOSE = "loose"
+    """Only faint or structural resemblance remains."""
+
+    DIVERGENT = "divergent"
+    """Deliberately different; not meant to resemble the source on this dimension at all."""
+
+
+#: Numeric ordering of DivergenceIntensity, most to least similar. Used to measure the distance
+#: between an intended and an achieved level (see :func:`evaluate_fidelity`).
+DIVERGENCE_ORDER: tuple[DivergenceIntensity, ...] = (
+    DivergenceIntensity.IDENTICAL,
+    DivergenceIntensity.CLOSE,
+    DivergenceIntensity.MODERATE,
+    DivergenceIntensity.LOOSE,
+    DivergenceIntensity.DIVERGENT,
+)
+
+
 class DivergencePlan(BaseModel):
     """
-    Only use in from_source mode: which dimension to preserve vs deliberately vary.
+    Only used in from_source mode: the intended similarity level, per PSALM dimension.
 
-    This is what makes the generated story usable as a PSALM evaluation counterpart.
-    The plan records, per dimension, the intended similarity so that a PSALM score can later be interpreted against stated intent rather than guessed at.
+    This is what makes the generated story usable as a PSALM evaluation counterpart -- and, at
+    scale, as a benchmarking dataset: the plan is the ground-truth label a PSALM score should be
+    checked against, dimension by dimension, rather than a single overall "similar or not".
     """
     model_config = ConfigDict(extra="forbid")
 
-    preserve: list[str] = Field(
-        default_factory=list,
-        description="Dimension names to keep close to the source."
-    )
-
-    vary: list[str] = Field(
-        default_factory=list,
-        description="Dimension names to deliberately diverge from the source."
+    per_dimension: dict[str, DivergenceIntensity] = Field(
+        default_factory=dict,
+        description="PSALM dimension name (see PSALM_DIMENSIONS) -> intended similarity level.",
     )
 
     notes: str = ""
+
+    def is_complete(self) -> bool:
+        """True once every PSALM dimension has an intended level recorded."""
+        return all(dim in self.per_dimension for dim in PSALM_DIMENSIONS)
+
+    def missing_dimensions(self) -> list[str]:
+        return [dim for dim in PSALM_DIMENSIONS if dim not in self.per_dimension]
+
+    @classmethod
+    def uniform(cls, level: DivergenceIntensity, *, notes: str = "") -> DivergencePlan:
+        """A baseline plan: every dimension set to the same intended level."""
+        return cls(per_dimension={dim: level for dim in PSALM_DIMENSIONS}, notes=notes)
+
+    @classmethod
+    def isolate(
+        cls,
+        dimension: str,
+        *,
+        near: DivergenceIntensity = DivergenceIntensity.CLOSE,
+        far: DivergenceIntensity = DivergenceIntensity.DIVERGENT,
+        notes: str = "",
+    ) -> DivergencePlan:
+        """A plan holding one dimension at ``near`` and every other dimension at ``far``.
+
+        This is the "does PSALM detect infringement on *this dimension alone*" test point: e.g.
+        ``DivergencePlan.isolate("characters")`` keeps characters close to the source while
+        deliberately diverging plot, world-building, voice, style, and scenes.
+        """
+        if dimension not in PSALM_DIMENSIONS:
+            raise ValueError(f"Unknown PSALM dimension: \"{dimension!r}\". Expected one of \"{PSALM_DIMENSIONS}\".")
+
+        plan = {dim: (near if dim == dimension else far) for dim in PSALM_DIMENSIONS}
+        return cls(per_dimension=plan, notes=notes)
+
+
+class FidelityMismatch(BaseModel):
+    """One dimension where the finished story didn't land where the divergence plan intended."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    dimension: str
+    intended: DivergenceIntensity
+    achieved: DivergenceIntensity
+    severity: str = Field(description="'minor' (one step off) or 'major' (two+ steps off).")
+
+def evaluate_fidelity(
+    plan: DivergencePlan, achieved: dict[str, DivergenceIntensity]
+) -> list[FidelityMismatch]:
+    """Compare intended vs. achieved divergence levels and flag mismatches.
+
+    A dataset item where the writer failed to actually hit its intended similarity level has a
+    silently wrong ground-truth label -- this is the deterministic check that catches that before
+    the item goes into a benchmarking manifest, rather than trusting the editor subagent's own
+    self-report of "yes, I diverged this enough" at face value.
+    """
+    mismatches: list[FidelityMismatch] = []
+
+    for dim, intended_level in plan.per_dimension.items():
+        if dim not in achieved:
+            continue
+
+        achieved_level = achieved[dim]
+
+        if achieved_level == intended_level:
+            continue
+
+        distance = abs(DIVERGENCE_ORDER.index(intended_level) - DIVERGENCE_ORDER.index(achieved_level))
+        severity = "major" if distance >= 2 else "minor"
+
+        mismatches.append(
+            FidelityMismatch(
+                dimension=dim, intended=intended_level, achieved=achieved_level, severity=severity
+            )
+        )
+
+    return mismatches
 
 class StoryBible(BaseModel):
     """
@@ -188,6 +295,15 @@ class StoryBible(BaseModel):
         description="Path (within the session_dir) to the source text, if any."
     )
     divergence_plan: DivergencePlan | None = None
+    achieved_divergence: dict[str, DivergenceIntensity] = Field(
+        default_factory=dict,
+        description=(
+            "Filled in by the editor subagent's fidelity check: what similarity level the "
+            "finished story actually landed on per dimension, for comparison against "
+            "divergence_plan.per_dimension via evaluate_fidelity()."
+        ),
+    )
+    fidelity_notes: str = ""
 
     # from_scratch only
     originality_findings: list[OriginalityFinding] = Field(default_factory=list)
