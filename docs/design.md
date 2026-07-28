@@ -28,15 +28,16 @@ before that mismatch corrupts a downstream ground-truth label.
 ## Benchmarking PSALM itself: the batch pipeline
 
 `batch.py` + `saga batch` exist specifically to turn `from_source` generation into a labeled
-dataset for benchmarking PSALM's own detection: `build_isolation_matrix()` builds one
-`DivergencePlan` per PSALM dimension, each holding that one dimension `close` to a source text
-while every other dimension is `divergent`. Running each variant through a non-interactive
-session and then through PSALM tests whether PSALM's per-dimension scoring actually attributes
-similarity to the *right* dimension rather than a diffuse "somewhat similar overall" signal, and
-`evaluate_fidelity()`'s mismatch report (surfaced in the manifest) lets you tell "PSALM missed
-real similarity" apart from "the generated story never actually achieved the intended similarity
-in the first place" -- two very different failure modes that a naive generate-and-score pipeline
-would conflate.
+dataset for benchmarking PSALM's own detection: `build_isolation_matrix()` (in `dimensions.py`,
+deliberately free of any `deepagents`/`langgraph` dependency so it's unit-testable on its own)
+builds one `DivergencePlan` per PSALM dimension, each holding that one dimension `close` to a
+source text while every other dimension is `divergent`. Running each variant through a
+non-interactive session and then through PSALM tests whether PSALM's per-dimension scoring
+actually attributes similarity to the *right* dimension rather than a diffuse "somewhat similar
+overall" signal, and `evaluate_fidelity()`'s mismatch report (surfaced in the manifest) lets you
+tell "PSALM missed real similarity" apart from "the generated story never actually achieved the
+intended similarity in the first place" -- two very different failure modes that a naive
+generate-and-score pipeline would conflate.
 
 ## Two pipelines, one spine
 
@@ -87,8 +88,22 @@ reference, not a script.
   instruction, the next step is custom middleware that intercepts `task` calls and consults the
   gate itself.
 - No automated test exercises the live agent graph (would require a real or fake chat model and
-  network access); `tests/` covers the schema, session lifecycle, and the deterministic
-  validation tool, which are the parts safe to unit test without a model in the loop.
+  network access); `tests/` covers the schema, session lifecycle, both deterministic tools, the
+  dependency-light matrix-building logic in `dimensions.py`, and the batch reuse/regenerate
+  decision in `dataset_utils.py` -- the parts safe to unit test without a model in the loop.
+  `dataset_utils.py` is deliberately its own module (not folded into `batch.py`) purely so it can
+  be imported without `batch.py`'s heavy `deepagents`/`langgraph`/`langchain_core` imports.
+- `achieved_divergence` is still, ultimately, an LLM's self-assessment (the editor subagent's) --
+  `evaluate_fidelity()` only catches disagreement between what was *intended* and what the editor
+  *claims* was achieved, not a fully independent measurement of textual similarity. A rigorous
+  benchmark should treat `achieved_divergence` as a secondary signal and rely on PSALM's own
+  scoring of `(source.txt, final_story.md)` as the primary measurement.
+- `saga batch` session ids are deterministic (`<source stem>__<variant name>`), which makes runs
+  idempotent/resumable but means two source files with the same stem in the same `sessions_root`
+  will collide; use distinct filenames or separate `--sessions-root` values per batch.
+- A failed dataset item (`status: "failed"` in the manifest) does not retry automatically; rerun
+  `saga batch` with the same arguments (without `--overwrite`) to retry only the missing/failed
+  items, since already-`ok` items are skipped.
 
 
 Note: This document was generated using Claude Sonnet 5 based on the codebase. The general design is correct, but small details may be off.Z
