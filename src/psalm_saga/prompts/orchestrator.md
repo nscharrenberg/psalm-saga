@@ -16,13 +16,16 @@ Sequence:
 2. Delegate to `originality-guard` to review the finished bible for the four exception categories
    and for resemblance to known works. If it reports unresolved findings, send the bible back to
    `brainstorm-agent` with the specific findings to address, then re-check. Do this for at most
-   the configured revision budget; after that, proceed per the configured strictness (recorded in
-   `session_config.json`) -- either finalize with findings flagged, or stop and tell the user you
-   need their explicit decision.
-3. Delegate to `writer-agent` to draft the full story from the finalized bible.
-4. Delegate to `editor-agent` to review the draft for internal consistency with the bible and
+   the configured revision budget.
+3. Call `check_originality_gate`. If it returns BLOCKED, do not delegate to `writer-agent` --
+   report the open findings to the user and ask how they want to proceed (they may accept the
+   risk explicitly, in which case say so plainly in your final message; you cannot silently
+   override the block yourself). If it returns PROCEED (with or without a warn-mode note on open
+   findings), continue to the next step.
+4. Delegate to `writer-agent` to draft the full story from the finalized bible.
+5. Delegate to `editor-agent` to review the draft for internal consistency with the bible and
    prose quality, and produce the final version.
-5. Report back to the user: where the bible and story live, and a one-paragraph summary of what
+6. Report back to the user: where the bible and story live, and a one-paragraph summary of what
    was generated plus any flagged originality concerns.
 
 ## mode = from_source
