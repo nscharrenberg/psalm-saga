@@ -1,10 +1,11 @@
-import json
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
 
 from psalm_saga.config import Settings  # type: ignore[import-untyped]
-from psalm_saga.dimensions import GenerationMode, StoryBible  # type: ignore[import-untyped]
+from psalm_saga.dimensions import DivergenceIntensity, DivergencePlan, GenerationMode, StoryBible  # type: ignore[import-untyped]
 from psalm_saga.session import init_session, load_session_config  # type: ignore[import-untyped]
 
 
@@ -22,6 +23,7 @@ def test_init_session_from_scratch_seeds_expected_files(settings: Settings) -> N
     config = load_session_config(session_dir)
     assert config.mode is GenerationMode.FROM_SCRATCH
     assert config.initial_context == "a heist on the moon"
+    assert config.non_interactive is False
 
 
 def test_init_session_from_source_copies_source_text(settings: Settings, tmp_path: Path) -> None:
@@ -47,3 +49,42 @@ def test_init_session_rejects_duplicate_session_id(settings: Settings) -> None:
     init_session(settings, GenerationMode.FROM_SCRATCH, session_id="my-session")
     with pytest.raises(FileExistsError):
         init_session(settings, GenerationMode.FROM_SCRATCH, session_id="my-session")
+
+
+def test_init_session_seeds_divergence_plan(settings: Settings, tmp_path: Path) -> None:
+    source = tmp_path / "input.txt"
+    source.write_text("Once upon a time...")
+    plan = DivergencePlan.isolate("characters")
+
+    session_dir = init_session(
+        settings,
+        GenerationMode.FROM_SOURCE,
+        source_path=source,
+        divergence_plan=plan,
+        non_interactive=True,
+    )
+
+    bible = StoryBible.model_validate_json((session_dir / "story_bible.json").read_text())
+    assert bible.divergence_plan is not None
+    assert bible.divergence_plan.per_dimension["characters"] is DivergenceIntensity.CLOSE
+
+    config = load_session_config(session_dir)
+    assert config.non_interactive is True
+
+
+def test_init_session_rejects_incomplete_divergence_plan(settings: Settings, tmp_path: Path) -> None:
+    source = tmp_path / "input.txt"
+    source.write_text("Once upon a time...")
+    incomplete_plan = DivergencePlan(per_dimension={"characters": DivergenceIntensity.CLOSE})
+
+    with pytest.raises(ValueError):
+        init_session(
+            settings, GenerationMode.FROM_SOURCE, source_path=source, divergence_plan=incomplete_plan
+        )
+
+
+def test_init_session_rejects_divergence_plan_in_from_scratch_mode(settings: Settings) -> None:
+    plan = DivergencePlan.uniform(DivergenceIntensity.MODERATE)
+    with pytest.raises(ValueError):
+        init_session(settings, GenerationMode.FROM_SCRATCH, divergence_plan=plan)
+

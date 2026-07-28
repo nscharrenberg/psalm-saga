@@ -25,7 +25,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 from psalm_saga.config import Settings
-from psalm_saga.dimensions import GenerationMode, StoryBible
+from psalm_saga.dimensions import GenerationMode, StoryBible, DivergencePlan
 from psalm_saga.prompts import load_prompt
 
 SESSION_CONFIG_FILENAME = "session_config.json"
@@ -43,6 +43,9 @@ class SessionConfig:
     originality_guard_strictness: str
     originality_guard_max_revisions: int
     initial_context: str = ""
+    non_interactive: bool = False
+    """True for batch/unattended sessions -- see `batch.py`. Threaded through to
+        `build_orchestrator(..., non_interactive=...)` so `ask_human` never actually pauses."""
 
 
 def new_session_id() -> str:
@@ -85,6 +88,8 @@ def init_session(
         source_path: Path | None = None,
         initial_context: str = "",
         session_id: str | None = None,
+        divergence_plan: DivergencePlan | None = None,
+        non_interactive: bool = False,
 ) -> Path:
     """
     Initializes a new session for generation tasks and creates necessary session files
@@ -110,12 +115,24 @@ def init_session(
     :param session_id: An optional identifier for the session. If not provided, a new
         session ID will be generated. Defaults to None.
     :type session_id: str | None
+    :param non_interactive: True for batch/unattended sessions -- see `batch.py`. Threaded through to
+        `build_orchestrator(..., non_interactive=...)` so `ask_human` never actually pauses.
+    :type non_interactive: bool
     :return: The path to the directory where the session files are stored.
     :rtype: Path
     :raises FileExistsError: If the session directory already exists.
     :raises ValueError: If the mode is GenerationMode.FROM_SOURCE and source_path is not
         provided.
     """
+    if divergence_plan is not None:
+        if mode is not GenerationMode.FROM_SOURCE:
+            raise ValueError("divergence_plan is only valid in from_source mode.")
+        if not divergence_plan.is_complete():
+            raise ValueError(
+                "divergence_plan must cover every PSALM dimension; missing: "
+                f"{divergence_plan.missing_dimensions()}"
+            )
+
     session_id = session_id or new_session_id()
     session_dir = session_dir_for(settings, session_id)
     if session_dir.exists():
@@ -136,8 +153,11 @@ def init_session(
 
         dest = session_dir / SOURCE_FILENAME
         shutil.copyfile(source_path, dest)
-        source_excerpt_path = SOURCE_FILENAME
-        bible = StoryBible(mode=mode, source_excerpt_path=source_excerpt_path)
+        bible = StoryBible(
+            mode=mode,
+            source_excerpt_path=SOURCE_FILENAME,
+            divergence_plan=divergence_plan
+        )
 
     (session_dir / "story_bible.json").write_text(
         bible.model_dump_json(indent=2),
@@ -153,6 +173,7 @@ def init_session(
         originality_guard_strictness=settings.originality_guard_strictness.value,
         originality_guard_max_revisions=settings.originality_guard_max_revisions,
         initial_context=initial_context,
+        non_interactive=non_interactive,
     )
 
     (session_dir / SESSION_CONFIG_FILENAME).write_text(
