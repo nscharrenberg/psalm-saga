@@ -17,14 +17,33 @@ not trip any of them with respect to an identifiable existing work) and are simp
 
 Keeping the schema dimension-for-dimension aligned with PSALM's evaluators is what makes
 `from_source` output directly usable as an evaluation counterpart in PSALM-based studies: the
-`divergence_plan` records, per dimension, what was *intended* (preserve vs. vary), so a later
-PSALM score can be read against stated intent.
+`divergence_plan` records, per dimension, a graded intended similarity level (`identical` /
+`close` / `moderate` / `loose` / `divergent`, most to least similar -- not just a binary
+preserve-vs-vary), so a later PSALM score can be read against a stated, graded intent. The editor
+subagent independently assesses what level the finished story actually achieved
+(`achieved_divergence`), and `evaluate_fidelity()` flags any dimension where intended and
+achieved don't match -- catching the case where the writer silently failed to hit its target
+before that mismatch corrupts a downstream ground-truth label.
+
+## Benchmarking PSALM itself: the batch pipeline
+
+`batch.py` + `saga batch` exist specifically to turn `from_source` generation into a labeled
+dataset for benchmarking PSALM's own detection: `build_isolation_matrix()` builds one
+`DivergencePlan` per PSALM dimension, each holding that one dimension `close` to a source text
+while every other dimension is `divergent`. Running each variant through a non-interactive
+session and then through PSALM tests whether PSALM's per-dimension scoring actually attributes
+similarity to the *right* dimension rather than a diffuse "somewhat similar overall" signal, and
+`evaluate_fidelity()`'s mismatch report (surfaced in the manifest) lets you tell "PSALM missed
+real similarity" apart from "the generated story never actually achieved the intended similarity
+in the first place" -- two very different failure modes that a naive generate-and-score pipeline
+would conflate.
 
 ## Two pipelines, one spine
 
 ```
 from_scratch:  brainstorm ──► originality_guard ──(revise loop)──► writer ──► editor
 from_source:   extract ──► brainstorm (negotiate divergence_plan) ──────────► writer ──► editor
+                            ^ skipped when divergence_plan is supplied pre-built (batch mode)
 ```
 
 Both pipelines converge on the same `writer`/`editor` subagents and the same bible schema. The
@@ -38,7 +57,7 @@ that knows which pipeline it's running; individual subagents don't need to.
 | Shared artifact | `story_bible.json` on a real filesystem backend rooted at the session dir |
 | Context isolation | Each pipeline stage is a declarative `SubAgent` (`agents/subagents.py`), invoked via deepagents' built-in `task` tool |
 | Forced reflection | A plain `think` tool (`tools/think.py`), à la `open_deep_research`'s `think_tool` |
-| Human-in-the-loop | `ask_human` (`tools/ask_human.py`) built on `langgraph.types.interrupt`; the CLI (`cli.py`) is the only piece that knows how to *drive* the interrupt (blocking prompt today, would be a websocket/store tomorrow) |
+| Human-in-the-loop | `ask_human` (`tools/ask_human.py`) built on `langgraph.types.interrupt`; the CLI (`cli.py`) is the only piece that knows how to *drive* the interrupt (blocking prompt today, would be a websocket/store tomorrow). Built as a factory (`make_ask_human_tool(non_interactive=...)`) so batch/unattended sessions get a variant that never actually pauses -- see below. |
 | Self-correction | `validate_story_bible` (`tools/bible.py`), a deterministic (non-LLM) Pydantic-validation tool bound per-session |
 | Resumability | A `SqliteSaver` checkpointer per session, so a paused `ask_human` question survives the CLI process exiting |
 | File tools | Not reimplemented — `FilesystemMiddleware`'s built-in `ls`/`read_file`/`write_file`/`edit_file`/`glob`/`grep`, attached automatically by `create_deep_agent`/subagent defaults |
