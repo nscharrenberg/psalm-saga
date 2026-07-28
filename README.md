@@ -9,11 +9,13 @@ PSALM-SAGA generates stories in two modes:
   pastiche, quotation, or genre stock elements (scenes à faire) in place of real invention, and
   doesn't read as an existing, identifiable work with the names changed.
 - **`from_source`** — extract the same dimensions from an existing source text, negotiate with
-  the user which dimensions to preserve vs. deliberately vary, then write a new story against
-  that plan. This mode exists to produce texts for evaluating a source against a generated
-  counterpart — e.g. with [PSALM](https://github.com/nscharrenberg/psalm), whose narratological
-  dimension taxonomy (writing style, narrative voice, characterisation, plot architecture, scene,
-  world-building) this library reuses generatively rather than for similarity scoring.
+  the user which dimensions to hold close vs. deliberately diverge from (a graded intensity per
+  dimension, not just a yes/no), then write a new story against that plan. This mode exists to
+  produce texts for evaluating a source against a generated counterpart — e.g. with
+  [PSALM](https://github.com/nscharrenberg/psalm), whose narratological dimension taxonomy
+  (writing style, narrative voice, characterisation, plot architecture, scene, world-building)
+  this library reuses generatively rather than for similarity scoring. `saga batch` (below) uses
+  this mode non-interactively to generate labeled benchmarking datasets at scale.
 
 Both modes converge on the same shared artifact, the **Story Bible** (`story_bible.json`), and
 the same writer/editor subagents — see [`docs/design.md`](docs/design.md) for the full
@@ -21,12 +23,13 @@ architecture writeup.
 
 ## Status
 
-This is an initial implementation, built and unit-tested for the parts that don't require live
-model calls (the `StoryBible` schema, session lifecycle, and the deterministic bible-validation
-tool). The agent graph itself (`agents/orchestrator.py`, the five subagents, and the `ask_human`
-interrupt/resume flow) is implemented against the documented `deepagents`/`langgraph` APIs but
-has not yet been exercised end-to-end against a live model. Before relying on it: `uv sync`, set
-a model, and run a `saga new` session yourself.
+This is an initial implementation. It has been built and unit-tested for the parts that don't
+require live model calls (the `StoryBible` schema, session lifecycle, and the deterministic
+bible-validation tool). The agent graph itself (`agents/orchestrator.py`, the five subagents, and
+the `ask_human` interrupt/resume flow) is implemented against the documented `deepagents` /
+`langgraph` APIs but has **not** been exercised end-to-end against a live model in this
+environment (no network access here to install `deepagents`/`langchain`/etc. or call a
+provider). Before relying on it: `uv sync`, set a model, and run a `saga new` session yourself.
 
 ## Install
 
@@ -66,11 +69,53 @@ uv run psalm-saga new --context "A lighthouse keeper who starts receiving mail f
 uv run psalm-saga new
 
 # From a source text
-uv run psalm-saga new --source ./my-novel-excerpt.txt --context "Preserve the voice, vary the ending."
+uv run psalm-saga new --source ./my-novel-excerpt.txt --context "Keep the voice close, vary the ending."
 
 # Resume a session (answers a pending question, or lets you send a new message)
 uv run psalm-saga resume 20260727-141203-a1b2c3
 ```
+
+### Generating a PSALM benchmarking dataset
+
+`saga batch` runs the from_source pipeline non-interactively over a whole directory of source
+texts, generating one story per (source, dimension) pair with a *graded, pre-set* divergence
+plan — no questions asked, so it can run unattended. The default strategy,
+`isolate_preserve`, holds **one** PSALM dimension `close` to the source while holding every other
+dimension `divergent`, per variant:
+
+```bash
+uv run saga batch ./source-texts/ --output ./dataset/manifest.json
+```
+
+For each `my-story.txt` in `./source-texts/`, this produces one session per dimension
+(`my-story__isolate_characters`, `my-story__isolate_plot`, ...) plus `baseline_all_close` and
+`baseline_all_divergent`, and a manifest (`manifest.json` + `manifest.csv`) recording, per item:
+the **intended** similarity level per dimension (the label), the **achieved** level the editor
+subagent assessed from the actual finished text, and any fidelity mismatches between the two.
+
+Feeding each `(source.txt, final_story.md)` pair into PSALM and checking whether its per-dimension
+scores line up with `intended` (not just `achieved`, which can itself be wrong -- see fidelity
+mismatches below) is the actual benchmark: for the `isolate_characters` item, PSALM should flag
+characterisation similarity and *not* plot/world-building/etc. similarity, since those were
+deliberately varied.
+
+Preview a matrix without generating anything:
+
+```bash
+uv run saga isolation-matrix --dimensions characters,plot
+```
+
+Other options worth knowing about (`uv run saga batch --help` for the rest):
+- `--strategy isolate_vary` inverts the test: vary **one** dimension, hold the rest close --
+  useful for checking whether a detector still fires when only one thing changed, rather than
+  testing per-dimension sensitivity.
+- `--near`/`--far` change the intensity levels used (default `close`/`divergent`; e.g.
+  `--near identical` for an even harder positive-control point).
+- `--overwrite` regenerates items whose session directory already exists; without it, a batch
+  run is safe to re-invoke after a partial failure -- already-generated items are reused.
+- A single one-off variant (rather than the whole matrix) can be run through `saga new` directly
+  with `--divergence-plan path/to/plan.json` (a `{"characters": "close", "plot": "divergent",
+  ...}` file covering all six dimensions) — this implies `--non-interactive`.
 
 Each session is a plain directory under `--sessions-root` (default `./psalm-saga-sessions/`):
 
@@ -119,6 +164,7 @@ uv run mypy src
 
 The `from_scratch` originality guard is a diligence aid — a subagent that critiques the story
 bible against PSALM's four statutory-exception categories (parody, pastiche, quotation,
-scènes à faire) and general resemblance to identifiable works — **not** a legal compliance
-guarantee. No automated tool can certify originality or copyright non-infringement; review
-flagged output yourself.
+scènes à faire) and general resemblance to identifiable works, in a bounded revise/re-check loop
+— **not** a legal compliance guarantee. No automated tool can certify originality or copyright
+non-infringement; review flagged output yourself, especially in `warn` strictness mode where
+generation proceeds with concerns merely noted.
