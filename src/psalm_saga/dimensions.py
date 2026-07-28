@@ -46,8 +46,8 @@ class WritingStyle(BaseModel):
 class NarrativeVoice(BaseModel):
     """Corresponds to PSALM's Narrative Voice evaluator"""
     model_config = ConfigDict(extra="forbid")
-    person: GrammaticalPerson | None = None,
-    narrator_knowledge: NarratorKnowledge | None = None,
+    person: GrammaticalPerson | None = None
+    narrator_knowledge: NarratorKnowledge | None = None
     narrative_distance: DimensionField = Field(default_factory=DimensionField)
     narrative_presence: DimensionField = Field(default_factory=DimensionField)
     focalisation: DimensionField = Field(default_factory=DimensionField)
@@ -173,7 +173,7 @@ class StoryBible(BaseModel):
     themes: list[str] = Field(
         default_factory=list,
     )
-    target_length_words: int | None = None,
+    target_length_words: int | None = None
 
     writing_style: WritingStyle = Field(default_factory=WritingStyle)
     narrative_voice: NarrativeVoice = Field(default_factory=NarrativeVoice)
