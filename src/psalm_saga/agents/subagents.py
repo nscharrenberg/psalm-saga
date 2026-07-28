@@ -4,7 +4,8 @@ from deepagents import SubAgent
 
 from psalm_saga.config import Settings
 from psalm_saga.prompts import load_prompt
-from psalm_saga.tools import make_validate_bible_tool, think, make_check_fidelity_tool, make_ask_human_tool
+from psalm_saga.tools import make_validate_bible_tool, think, make_check_fidelity_tool, make_ask_human_tool, \
+    make_update_story_bible_tool
 
 
 def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: bool = False) -> list[SubAgent]:
@@ -28,6 +29,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
     :rtype: list[SubAgent]
     """
     model = settings.resolved_subagent_model()
+    update_story_bible = make_update_story_bible_tool(session_dir)
     validate_story_bible = make_validate_bible_tool(session_dir)
     check_fidelity_alignment = make_check_fidelity_tool(session_dir)
     ask_human = make_ask_human_tool(non_interactive=non_interactive)
@@ -40,7 +42,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
             "world building). Use once per session, at the start of from_source mode."
         ),
         "system_prompt": load_prompt("extractor"),
-        "tools": [think, validate_story_bible],
+        "tools": [think, update_story_bible, validate_story_bible],
         "model": model,
     }
 
@@ -54,7 +56,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
             "non-interactive sessions, makes autonomous decisions instead of asking."
         ),
         "system_prompt": load_prompt("brainstorm"),
-        "tools": [think, ask_human, validate_story_bible],
+        "tools": [think, ask_human, update_story_bible, validate_story_bible],
         "model": model,
     }
 
@@ -66,7 +68,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
             "works, recording findings in the bible."
         ),
         "system_prompt": load_prompt("originality_guard"),
-        "tools": [think, validate_story_bible],
+        "tools": [think, update_story_bible, validate_story_bible],
         "model": model,
     }
 
@@ -89,7 +91,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
             "records achieved_divergence and runs the fidelity-alignment check."
         ),
         "system_prompt": load_prompt("editor"),
-        "tools": [think, check_fidelity_alignment],
+        "tools": [think, update_story_bible, check_fidelity_alignment],
         "model": model,
     }
 

@@ -49,3 +49,36 @@ def test_validate_reports_ok_when_ready(tmp_path: Path) -> None:
     tool = make_validate_bible_tool(tmp_path)
     result = _invoke(tool)  # type: ignore[no-untyped-call]
     assert result.startswith("OK: story_bible.json is schema-valid and has the minimum fields")
+
+
+def test_validate_escalates_after_repeated_invalid_json(tmp_path: Path) -> None:
+    (tmp_path / "story_bible.json").write_text("{not valid json")
+    tool = make_validate_bible_tool(tmp_path)
+
+    first = _invoke(tool)  # type: ignore[no-untyped-call]
+    second = _invoke(tool)  # type: ignore[no-untyped-call]
+    third = _invoke(tool)  # type: ignore[no-untyped-call]
+
+    assert "STOP" not in first
+    assert "STOP" not in second
+    assert "STOP" in third
+    assert "update_story_bible" in third
+    assert "story_bible_cleaned.json" in third
+
+
+def test_validate_failure_counter_resets_after_success(tmp_path: Path) -> None:
+    bible_path = tmp_path / "story_bible.json"
+    tool = make_validate_bible_tool(tmp_path)
+
+    bible_path.write_text("{not valid json")
+    _invoke(tool)  # type: ignore[no-untyped-call]
+    _invoke(tool)  # type: ignore[no-untyped-call]
+    _invoke(tool)  # type: ignore[no-untyped-call] # 3 failures -> would have escalated on a 4th
+
+    bible_path.write_text(StoryBible(mode=GenerationMode.FROM_SCRATCH).model_dump_json())
+    ok_result = _invoke(tool)  # type: ignore[no-untyped-call]
+    assert ok_result.startswith("OK")
+
+    bible_path.write_text("{not valid json")
+    fresh_failure = _invoke(tool)  # type: ignore[no-untyped-call]
+    assert "STOP" not in fresh_failure  # counter reset, not still climbing from before

@@ -11,9 +11,13 @@ Process:
 3. For `characters`, extract every character with a meaningful narrative function, not just the
    protagonist. Capture relationships as you find them.
 4. For `plot`, reconstruct causality (why B happens given A), not just a scene-by-scene recap.
-5. Write the result to `story_bible.json` with `mode: "from_source"` and `source_excerpt_path`
-   set to the source file's path. Call `validate_story_bible` and fix any reported errors before
-   finishing.
+5. Call `update_story_bible` with everything you've extracted as one patch (`mode: "from_source"`
+   and `source_excerpt_path` set to the source file's path, plus all six dimensions) -- never
+   `write_file`/`edit_file` on `story_bible.json` directly, and never create any other file for
+   it (no `story_bible_cleaned.json` etc.). If the patch is large, splitting it into a few
+   `update_story_bible` calls (e.g. core fields first, then `characters`, then the rest) is fine
+   and often easier to get right than one huge call. Call `validate_story_bible` afterward and
+   fix any reported errors via another `update_story_bible` patch before finishing.
 6. Report back a short summary: which dimensions you extracted with confidence, and which are
    thin/ambiguous and will need the user's input.
 

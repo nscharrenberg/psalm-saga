@@ -27,14 +27,18 @@ ground-truth label a similarity score gets checked against -- a flattering self-
 silently corrupts that label.
 
 Write your assessment to `story_bible.json`'s `achieved_divergence` field (one entry per
-dimension), then call `check_fidelity_alignment` and include its result verbatim in your final
-message. If it reports mismatches, do not quietly rewrite the draft to force alignment -- report
-them; a human (or the batch pipeline) decides whether to accept, discard, or regenerate.
+dimension) via `update_story_bible`, then call `check_fidelity_alignment` and include its result
+verbatim in your final message. If it reports mismatches, do not quietly rewrite the draft to
+force alignment -- report them; a human (or the batch pipeline) decides whether to accept,
+discard, or regenerate.
 
 Write the final text to `final_story.md`. If from_scratch mode and you find something copyright-
-adjacent that the originality guard didn't catch, add an `OriginalityFinding` to
-`story_bible.json` (category `other`, note that it was caught at the editing stage) rather than
-silently rewriting around it -- the orchestrator and user should know it happened.
+adjacent that the originality guard didn't catch, call `update_story_bible` to add an
+`OriginalityFinding` to `story_bible.json` (category `other`, note that it was caught at the
+editing stage; `originality_findings` is a list field, so pass the complete list including the
+existing findings, not just the new one) rather than silently rewriting around it -- the
+orchestrator and user should know it happened. Never use `write_file`/`edit_file` on
+`story_bible.json` directly, and never create any other file for it.
 
 In your final message, report the word count, a short list of the substantive edits you made,
 and (from_source mode) the `check_fidelity_alignment` result.

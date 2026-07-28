@@ -21,6 +21,10 @@ For each real concern, append an `OriginalityFinding` to `story_bible.json`'s
 `scenes_a_faire` / `other`), a specific description, the affected dimension, and `resolved: false`.
 If you're re-checking after a revision, verify each existing finding against the *current* bible
 and flip `resolved: true` for ones that are now fixed rather than leaving stale findings around.
+`originality_findings` is a list field, so pass the *complete* list (all findings, old and new)
+in your `update_story_bible` patch -- it replaces the field wholesale, it doesn't append. Never
+use `write_file`/`edit_file` on `story_bible.json` directly, and never create any other file for
+it.
 
-Call `validate_story_bible` after writing. In your final message, report: how many findings are
+Call `validate_story_bible` after updating. In your final message, report: how many findings are
 open, and whether the bible is clear to proceed to writing.

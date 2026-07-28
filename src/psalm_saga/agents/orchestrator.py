@@ -8,7 +8,8 @@ from psalm_saga.agents.subagents import build_subagents
 from psalm_saga.config import Settings
 from psalm_saga.prompts import load_prompt
 from psalm_saga.state import SagaState
-from psalm_saga.tools import make_validate_bible_tool, think, make_check_originality_gate_tool, make_check_fidelity_tool
+from psalm_saga.tools import make_validate_bible_tool, think, make_check_originality_gate_tool, \
+    make_check_fidelity_tool, make_update_story_bible_tool
 
 
 def build_orchestrator(  # type: ignore[no-untyped-def]
@@ -43,6 +44,7 @@ def build_orchestrator(  # type: ignore[no-untyped-def]
     """
     backend = FilesystemBackend(root_dir=str(session_dir), virtual_mode=True)
     subagents = build_subagents(settings, session_dir, non_interactive=non_interactive)
+    update_story_bible = make_update_story_bible_tool(session_dir)
     validate_story_bible = make_validate_bible_tool(session_dir)
     check_originality_gate = make_check_originality_gate_tool(
         session_dir,
@@ -53,7 +55,7 @@ def build_orchestrator(  # type: ignore[no-untyped-def]
     return create_deep_agent(
         model=settings.model,
         system_prompt=load_prompt("orchestrator"),
-        tools=[think, validate_story_bible, check_originality_gate, check_fidelity_alignment],
+        tools=[think, update_story_bible, validate_story_bible, check_originality_gate, check_fidelity_alignment],
         subagents=subagents,
         backend=backend,
         state_schema=SagaState,

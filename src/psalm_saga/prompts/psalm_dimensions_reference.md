@@ -8,7 +8,9 @@ section of `story_bible.json` to fill in.
 **This is internal bookkeeping, not a script.** The dimension names and vocabulary below are for
 agents to track progress and structure `story_bible.json` -- they should not leak into what gets
 said to the user (see `brainstorm.md` for how to translate a dimension into an actual creative
-question or proposal).
+question or proposal). All changes to `story_bible.json` go through the `update_story_bible` tool
+(never `write_file`/`edit_file` on it directly, and never a different file for it), which
+validates a patch before writing anything -- see `tools/bible.py`.
 
 ## writing_style
 Register, sentence rhythm, lexical density, figurative language, tone, dialogue style. This is

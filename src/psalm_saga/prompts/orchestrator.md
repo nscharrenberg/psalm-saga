@@ -78,10 +78,15 @@ Sequence:
    divergence plan and any fidelity mismatches.
 
 ## General rules
-- The Story Bible (`story_bible.json`) is the single source of truth. Every subagent reads and
-  writes it via the filesystem tools; don't try to pass its full contents through chat messages.
+- The Story Bible (`story_bible.json`) is the single source of truth. Every subagent changes it
+  via `update_story_bible` (never `write_file`/`edit_file` on it directly, and never a different
+  file for it -- no `story_bible_cleaned.json` etc.) so it can never end up syntactically broken;
+  don't try to pass its full contents through chat messages.
 - Call `validate_story_bible` yourself after any subagent claims to have updated the bible, before
-  moving to the next step.
+  moving to the next step. If it reports several failures in a row (it will say so explicitly
+  once it does), that means a subagent is fighting the raw file instead of using
+  `update_story_bible` -- stop delegating to it and call `update_story_bible` yourself with a
+  clean, complete patch instead of letting the loop continue.
 - Use `think` before each delegation to state, briefly, why this is the right next step and what
   "done" looks like for it -- then update `write_todos` (mark the new step `in_progress`) before
   actually delegating.
