@@ -58,6 +58,24 @@ def test_describe_tool_call_ask_human() -> None:
     assert "Sibling or mentor?" in desc
 
 
+def test_describe_tool_call_ask_human_with_options() -> None:
+    desc = describe_tool_call(
+        "ask_human",
+        {
+            "question": "Who is the rival?",
+            "options": ["A harbor official", "His own daughter", "Someone else"],
+        },
+    )
+    assert desc.startswith("❓")
+    assert "Who is the rival?" in desc
+    assert "(3 options)" in desc
+
+
+def test_describe_tool_call_ask_human_without_options_unchanged() -> None:
+    desc = describe_tool_call("ask_human", {"question": "Sibling or mentor?"})
+    assert "options" not in desc
+
+
 def test_describe_tool_call_known_tool_with_icon() -> None:
     desc = describe_tool_call("write_file", {"path": "story_bible.json"})
     assert desc.startswith("📝")

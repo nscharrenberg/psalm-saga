@@ -73,7 +73,11 @@ def describe_tool_call(name: str, args: dict[str, Any]) -> str:
     if name == "think":
         return f"🤔 {shorten(args.get('thought', ''), 100)}"
     if name == "ask_human":
-        return f"❓ asking: {shorten(args.get('question', ''), 90)}"
+        desc = f"❓ asking: {shorten(args.get('question', ''), 90)}"
+        options = args.get("options")
+        if isinstance(options, list) and options:
+            desc += f" ({len(options)} options)"
+        return desc
     icon = _TOOL_ICONS.get(name, "→")
     if args:
         preview = ", ".join(f"{k}={shorten(v, 40)}" for k, v in list(args.items())[:2])
