@@ -3,6 +3,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 from typing import Annotated
 
+import questionary
 import typer
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -18,6 +19,7 @@ from psalm_saga.batch import run_batch, write_manifest, build_isolation_matrix
 from psalm_saga.config import Settings
 from psalm_saga.dimensions import GenerationMode, DivergencePlan, DivergenceIntensity, PSALM_DIMENSIONS
 from psalm_saga.session import init_session, checkpoint_db_path, SessionConfig, load_session_config
+from psalm_saga.tools.ask_human import format_discussion_reply
 
 app = typer.Typer(
     name="psalm-saga",
@@ -112,17 +114,45 @@ def _pending_interrupt(orchestrator, config: dict):  # type: ignore[no-untyped-d
             return pending
     return None
 
+WRITE_OWN_ANSWER = "Write my own answer..."
+DISCUSS_FURTHER = "Let's talk about it more"
+
+
 def _prompt_for_interrupt(pending) -> str:  # type: ignore[no-untyped-def]
-    """Show a pending ask_human interrupt and block for the user's reply."""
+    """Show a pending ask_human interrupt and block for the user's reply.
+
+    If the interrupt payload carries `options`, render a selectable menu (the agent's options,
+    plus an always-available "write my own" and "let's talk about it more"). Otherwise fall back
+    to a plain free-text prompt, unchanged from before options existed -- this also covers old
+    session checkpoints whose recorded payloads predate the `options` key.
+    """
     payload = pending.value if hasattr(pending, "value") else pending
     if isinstance(payload, dict):
         question = payload.get("question", str(payload))
         why = payload.get("why")
+        options = payload.get("options") or None
     else:
-        question, why = str(payload), None
+        question, why, options = str(payload), None, None
+
     body = question if not why else f"{question}\n\n[dim]{why}[/dim]"
     console.print(Panel(body, title="PSALM-SAGA asks", border_style="cyan"))
-    return Prompt.ask("[bold cyan]Your answer[/bold cyan]")
+
+    if not options:
+        return Prompt.ask("[bold cyan]Your answer[/bold cyan]")
+
+    choice: str | None = questionary.select(
+        "Pick one, or:",
+        choices=[*options, WRITE_OWN_ANSWER, DISCUSS_FURTHER],
+    ).ask()
+
+    if choice is None:
+        raise typer.Exit(code=1)
+    if choice == WRITE_OWN_ANSWER:
+        return Prompt.ask("[bold cyan]Your answer[/bold cyan]")
+    if choice == DISCUSS_FURTHER:
+        text = Prompt.ask("[bold cyan]What's on your mind?[/bold cyan]")
+        return format_discussion_reply(text)
+    return choice
 
 
 def _print_final(orchestrator, config: dict) -> None:  # type: ignore[no-untyped-def,type-arg]
