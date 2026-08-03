@@ -75,8 +75,8 @@ def make_ask_human_tool(*, non_interactive: bool = False):  # type: ignore[no-un
 
         Args:
             question: The question to show the user, in plain language.
-            options: 2-4 short, concrete, mutually exclusive directions the user can pick from
-                (e.g. ["A harbor official who wants the letters stopped", "His own daughter,
+            options: Usually 2-4 short, concrete, mutually exclusive directions the user can pick
+                from (e.g. ["A harbor official who wants the letters stopped", "His own daughter,
                 scared of what he's becoming"]). Supply this whenever you have specific
                 proposals in mind -- which is most of the time. Leave it unset only for
                 genuinely open questions. The user will always also be able to write their own
@@ -87,8 +87,10 @@ def make_ask_human_tool(*, non_interactive: bool = False):  # type: ignore[no-un
         Returns:
             The user's raw reply as text if they picked or wrote an answer. If they chose to
             discuss the question further instead, the reply is prefixed with "STILL_EXPLORING"
-            -- treat that as a cue to keep the conversation going on this specific question (ask
-            a follow-up, riff, offer new options) rather than recording anything as settled.
+            -- treat that as a cue to keep exploring this specific question through another
+            ask_human call (ask a follow-up, riff, offer new options) rather than recording
+            anything as settled. This tool is your only channel to the user, so a plain text
+            reply with no further ask_human call will never reach them.
         """
         if non_interactive:
             return NON_INTERACTIVE_REPLY

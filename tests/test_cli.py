@@ -6,7 +6,10 @@ from rich.prompt import Prompt
 
 import psalm_saga.cli as cli_module
 from psalm_saga.cli import DISCUSS_FURTHER, WRITE_OWN_ANSWER, _prompt_for_interrupt
-from psalm_saga.tools.ask_human import STILL_EXPLORING_PREFIX  # type: ignore[import-untyped]
+from psalm_saga.tools.ask_human import (  # type: ignore[import-untyped]
+    STILL_EXPLORING_PREFIX,
+    make_ask_human_tool,
+)
 
 
 class _FakeSelect:
@@ -15,6 +18,13 @@ class _FakeSelect:
 
     def ask(self) -> str | None:
         return self._result
+
+
+class _FakePending:
+    """Stands in for langgraph's real pending-interrupt object, which exposes `.value`."""
+
+    def __init__(self, value: dict[str, object]) -> None:
+        self.value = value
 
 
 def test_prompt_for_interrupt_without_options_falls_back_to_free_text(
@@ -30,15 +40,25 @@ def test_prompt_for_interrupt_without_options_falls_back_to_free_text(
 def test_prompt_for_interrupt_with_options_selecting_an_option(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        cli_module.questionary, "select", lambda *a, **k: _FakeSelect("His own daughter")
-    )
+    captured_choices: list[str] = []
+
+    def fake_select(_message: str, choices: list[str]) -> _FakeSelect:
+        captured_choices.extend(choices)
+        return _FakeSelect("His own daughter")
+
+    monkeypatch.setattr(cli_module.questionary, "select", fake_select)
 
     reply = _prompt_for_interrupt(
         {"question": "Who is the rival?", "options": ["A harbor official", "His own daughter"]}
     )
 
     assert reply == "His own daughter"
+    assert captured_choices == [
+        "A harbor official",
+        "His own daughter",
+        WRITE_OWN_ANSWER,
+        DISCUSS_FURTHER,
+    ]
 
 
 def test_prompt_for_interrupt_write_own_answer(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,3 +97,47 @@ def test_prompt_for_interrupt_cancelled_menu_exits(monkeypatch: pytest.MonkeyPat
         _prompt_for_interrupt(
             {"question": "Who is the rival?", "options": ["A harbor official", "His own daughter"]}
         )
+
+
+def test_prompt_for_interrupt_consumes_real_ask_human_payload_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Crosses the ask_human -> CLI boundary: builds the payload via the real tool (not a hand-
+    written dict), wraps it the way langgraph's real pending interrupt does (a `.value` attribute,
+    not a bare dict), and feeds that into `_prompt_for_interrupt` -- catching a future key-name
+    drift between the two sides, and exercising the `pending.value` unwrap no other test reaches.
+    """
+    captured_payload: dict[str, object] = {}
+
+    def fake_interrupt(payload: dict[str, object]) -> str:
+        captured_payload.update(payload)
+        return "unused"
+
+    monkeypatch.setattr("psalm_saga.tools.ask_human.interrupt", fake_interrupt)
+
+    tool = make_ask_human_tool(non_interactive=False)  # type: ignore[no-untyped-call]
+    tool.invoke(
+        {
+            "question": "Who is the rival?",
+            "options": ["A harbor official", "His own daughter"],
+            "why": "shapes the antagonist",
+        }
+    )
+
+    captured_choices: list[str] = []
+
+    def fake_select(_message: str, choices: list[str]) -> _FakeSelect:
+        captured_choices.extend(choices)
+        return _FakeSelect("His own daughter")
+
+    monkeypatch.setattr(cli_module.questionary, "select", fake_select)
+
+    reply = _prompt_for_interrupt(_FakePending(captured_payload))
+
+    assert reply == "His own daughter"
+    assert captured_choices == [
+        "A harbor official",
+        "His own daughter",
+        WRITE_OWN_ANSWER,
+        DISCUSS_FURTHER,
+    ]

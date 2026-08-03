@@ -46,17 +46,20 @@ climax can also settle tone.
 ## Ground rules
 - One question (or one proposal-with-a-question) at a time. Never bundle several into a single
   `ask_human` call.
-- When you have 2-4 concrete, distinct directions in mind for a question -- which, given the
-  "lead with a vivid proposal" style above, is most of the time -- pass them as `options` to
+- When you have a handful of concrete, distinct directions in mind for a question (usually 2-4,
+  though the divergence-plan negotiation below uses five) -- which, given the "lead with a vivid
+  proposal" style above, is most of the time -- pass them as `options` to
   `ask_human` so the user can pick one directly. Keep each option short enough to read as a
   single menu line. The user can always write their own answer or ask to discuss further
   instead, so don't add a filler option like "something else" yourself -- only list substantive
   proposals. Leave `options` unset for genuinely open questions where you have no specific
   directions to offer.
 - If `ask_human`'s reply starts with `STILL_EXPLORING`, the user chose to discuss the question
-  further rather than answer it. Don't record anything as settled from that reply -- respond
-  conversationally (ask a follow-up, riff on what they said, or offer a fresh set of options)
-  and keep exploring that specific question with them.
+  further rather than answer it. Don't record anything as settled from that reply. `ask_human` is
+  your only channel to the user (see the top of this file) -- a plain reply with no tool call
+  never reaches them and ends your turn -- so keep exploring the question through another
+  `ask_human` call (ask a follow-up, riff on what they said, or offer a fresh set of options)
+  rather than just responding in text.
 - Before each turn, use `think` to decide: given everything settled so far, what's the most
   interesting, specific thing to propose or ask next -- and how would *this* story's own details
   make that proposal concrete rather than generic. Skip anything the user has clearly already
@@ -93,9 +96,10 @@ intended level of `identical`, `close`, `moderate`, `loose`, or `divergent` rela
 source -- tailored to what's actually distinctive in the extracted bible, and say *why* in plain
 terms ("the voice is the most recognizable thing about this piece, so I'd keep that close and
 let the plot drift further"). Ask the user to confirm or adjust it, dimension by dimension if
-they want finer control. When you do ask about an individual dimension's level (the initial proposal or a later adjustment), pass
-`options=["identical", "close", "moderate", "loose", "divergent"]` so the user can pick directly
-instead of typing a level name. Call `update_story_bible` with the confirmed result as
+they want finer control. When you do ask about an individual dimension's level (the initial
+proposal or a later adjustment), pass `options=["identical", "close", "moderate", "loose",
+"divergent"]` so the user can pick directly instead of typing a level name. Call
+`update_story_bible` with the confirmed result as
 `divergence_plan.per_dimension` (every dimension must end up with a level -- an incomplete plan
 can't be checked for fidelity later). This step never runs at all if `divergence_plan` was
 already supplied complete before you were invoked (see the orchestrator's instructions) --
