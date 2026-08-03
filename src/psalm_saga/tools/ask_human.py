@@ -32,6 +32,26 @@ NON_INTERACTIVE_REPLY = (
     "assumption in your final message, and continue -- do not call ask_human again for this."
 )
 
+#: `ask_human` always returns a plain string, so "the user wants to keep discussing this, not
+#: answer it" has to be signalled in-band. This prefix is self-describing on purpose -- the agent
+#: doesn't need to memorize a magic constant, the text itself explains what to do. Mirrors
+#: `NON_INTERACTIVE_REPLY` above, the existing convention for out-of-band signals in this tool.
+STILL_EXPLORING_PREFIX = (
+    "STILL_EXPLORING (this is not a final answer -- the user wants to discuss this specific "
+    "question further before deciding; respond conversationally and keep exploring it with "
+    "them, don't record anything as settled yet): "
+)
+
+
+def format_discussion_reply(text: str) -> str:
+    """Wrap a reply that means "let's discuss this more," not a settled answer.
+
+    Called by the transport layer (e.g. the CLI) when the user chooses to discuss a question
+    further instead of answering it, so the resulting tool output self-describes what kind of
+    reply this is.
+    """
+    return f"{STILL_EXPLORING_PREFIX}{text}"
+
 
 def make_ask_human_tool(*, non_interactive: bool = False):  # type: ignore[no-untyped-def]
     """Build the `ask_human` tool for one session.
@@ -42,7 +62,7 @@ def make_ask_human_tool(*, non_interactive: bool = False):  # type: ignore[no-un
     """
 
     @tool
-    def ask_human(question: str, why: str = "") -> str:
+    def ask_human(question: str, options: list[str] | None = None, why: str = "") -> str:
         """Ask the user a single, focused question and wait for their reply.
 
         Ask ONE question at a time -- do not bundle multiple questions into one call. Prefer
@@ -55,17 +75,29 @@ def make_ask_human_tool(*, non_interactive: bool = False):  # type: ignore[no-un
 
         Args:
             question: The question to show the user, in plain language.
+            options: 2-4 short, concrete, mutually exclusive directions the user can pick from
+                (e.g. ["A harbor official who wants the letters stopped", "His own daughter,
+                scared of what he's becoming"]). Supply this whenever you have specific
+                proposals in mind -- which is most of the time. Leave it unset only for
+                genuinely open questions. The user will always also be able to write their own
+                answer or ask to discuss the question further, so don't add filler options like
+                "something else" yourself -- only list substantive proposals.
             why: One short sentence on why you're asking (helps the user answer well). Optional.
 
         Returns:
-            The user's raw reply as text, or a non-interactive-mode notice.
+            The user's raw reply as text if they picked or wrote an answer. If they chose to
+            discuss the question further instead, the reply is prefixed with "STILL_EXPLORING"
+            -- treat that as a cue to keep the conversation going on this specific question (ask
+            a follow-up, riff, offer new options) rather than recording anything as settled.
         """
         if non_interactive:
             return NON_INTERACTIVE_REPLY
 
-        payload = {"question": question}
+        payload: dict[str, str | list[str]] = {"question": question}
         if why:
             payload["why"] = why
+        if options:
+            payload["options"] = options
         reply = interrupt(payload)
         return str(reply)
 
