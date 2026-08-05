@@ -94,6 +94,7 @@ def make_update_story_bible_tool(session_dir: Path):  # type: ignore[no-untyped-
             current = {}
 
         pre_patch_mode = current.get("mode")
+        pre_patch_length_tier = current.get("length_tier")
         is_bootstrap = "mode" not in current
         if is_bootstrap:
             if not any(op.path == "/mode" for op in patch):
@@ -125,6 +126,11 @@ def make_update_story_bible_tool(session_dir: Path):  # type: ignore[no-untyped-
             return (
                 f"Rejected -- story_bible.json was NOT changed. 'mode' is fixed for this "
                 f"session ({pre_patch_mode!r}) and cannot be changed by a patch."
+            )
+        if pre_patch_length_tier is not None and bible.length_tier.value != pre_patch_length_tier:
+            return (
+                f"Rejected -- story_bible.json was NOT changed. 'length_tier' is fixed for this "
+                f"session ({pre_patch_length_tier!r}) and cannot be changed by a patch."
             )
 
         bible_path.write_text(bible.model_dump_json(indent=2), encoding="utf-8")

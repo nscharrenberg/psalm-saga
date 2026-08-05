@@ -102,6 +102,25 @@ def test_mode_cannot_be_changed_by_a_patch(tmp_path: Path) -> None:
     assert bible.mode is GenerationMode.FROM_SCRATCH
 
 
+def test_length_tier_cannot_be_changed_by_a_patch(tmp_path: Path) -> None:
+    tool = make_update_story_bible_tool(tmp_path)
+    _invoke(  # type: ignore[no-untyped-call]
+        tool,
+        patch=[
+            _op("replace", "/mode", "from_scratch"),
+            _op("replace", "/length_tier", "medium"),
+            _op("replace", "/premise", "A lighthouse keeper."),
+        ],
+    )
+
+    result = _invoke(tool, patch=[_op("replace", "/length_tier", "short")])  # type: ignore[no-untyped-call]
+    assert "rejected" in result.lower()
+    assert "cannot be changed" in result
+
+    bible = StoryBible.model_validate_json((tmp_path / "story_bible.json").read_text())
+    assert bible.length_tier.value == "medium"
+
+
 def test_recovers_from_corrupt_file_on_disk(tmp_path: Path) -> None:
     (tmp_path / "story_bible.json").write_text("{not valid json at all")
     tool = make_update_story_bible_tool(tmp_path)
