@@ -88,8 +88,7 @@ Algorithm:
    result's `mode` to the pre-patch `mode` directly (not by inspecting the raw op list), so it
    can't be bypassed via `move`/`copy` ops targeting `/mode` indirectly.
 6. Write `outcome.validated.model_dump_json(indent=2)` to `story_bible.json` — unchanged from
-   today. Reset the (surviving, non-escalation) validation-failure bookkeeping if any remains — see
-   "Corrupt-file fallback" below for what's kept.
+   today.
 7. Return `f"OK: story_bible.json updated ({status})."` via `is_ready_for_writing()` — unchanged
    from today, minus the `recovered_note`/`recovering_from_corruption` ceremony.
 
