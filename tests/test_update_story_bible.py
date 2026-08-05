@@ -289,3 +289,21 @@ def test_non_object_json_on_disk_falls_back_like_a_parse_failure(tmp_path: Path)
 
     bible = StoryBible.model_validate_json((tmp_path / "story_bible.json").read_text())
     assert bible.premise == "A fresh start."
+
+
+def test_append_chapter_via_dash_path(tmp_path: Path) -> None:
+    tool = make_update_story_bible_tool(tmp_path)
+    _invoke(  # type: ignore[no-untyped-call]
+        tool,
+        patch=[
+            _op("replace", "/mode", "from_scratch"),
+            _op(
+                "add",
+                "/chapters/-",
+                {"index": 1, "title": "The First Letter", "target_word_count": 2000},
+            ),
+        ],
+    )
+    bible = StoryBible.model_validate_json((tmp_path / "story_bible.json").read_text())
+    assert bible.chapters[0].title == "The First Letter"
+    assert bible.chapters[0].status == "planned"

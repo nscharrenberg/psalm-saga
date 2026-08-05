@@ -350,6 +350,38 @@ def build_isolation_matrix(
 
     return variants
 
+
+class ChapterStatus(StrEnum):
+    PLANNED = "planned"
+    DRAFTED = "drafted"
+    APPROVED = "approved"
+
+
+class Chapter(BaseModel):
+    """One entry in the book's chapter outline, written by chapter-planner-agent and updated by
+    writer-agent/chapter-reviewer-agent as it moves through the per-chapter writing loop."""
+    model_config = ConfigDict(extra="forbid")
+
+    index: int
+    title: str = ""
+    planned_summary: str = Field(
+        default="",
+        description="chapter-planner-agent's intended beats for this chapter.",
+    )
+    actual_summary: str = Field(
+        default="",
+        description=(
+            "Filled in by chapter-reviewer-agent once the chapter is approved: what actually "
+            "happens in the finished prose (can drift from planned_summary). This, not the plan, "
+            "is what later chapters read for continuity."
+        ),
+    )
+    target_word_count: int = 0
+    characters_present: list[str] = Field(default_factory=list)
+    status: ChapterStatus = ChapterStatus.PLANNED
+    revision_count: int = 0
+
+
 class StoryBible(BaseModel):
     """
     The complete, structured brief that drives prose generation.
@@ -367,6 +399,8 @@ class StoryBible(BaseModel):
         default_factory=list,
     )
     target_length_words: int | None = None
+    length_tier: LengthTier = LengthTier.LONG
+    chapters: list[Chapter] = Field(default_factory=list)
 
     writing_style: WritingStyle = Field(default_factory=WritingStyle)
     narrative_voice: NarrativeVoice = Field(default_factory=NarrativeVoice)
