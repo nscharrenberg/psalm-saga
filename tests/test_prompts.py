@@ -43,3 +43,10 @@ def test_writer_prompt_drafts_one_chapter_not_the_full_story() -> None:
     text = load_prompt("writer")
     assert "write the full story" not in text
     assert "chapters/chapter_" in text
+
+
+def test_brainstorm_prompt_requires_title_proposal_not_optional() -> None:
+    text = load_prompt("brainstorm")
+    assert "fine to leave unsettled going into the writing stage" not in text
+    assert "Titling the book" in text
+    assert "Quokka Quest" in text
