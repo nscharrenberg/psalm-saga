@@ -81,14 +81,44 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "permissions": BIBLE_WRITE_PROTECTION,
     }
 
+    chapter_planner: SubAgent = {
+        "name": "chapter-planner-agent",
+        "description": (
+            "Runs once, after the bible is finalized and before any chapter is drafted: turns "
+            "story_bible.json into a chapter-by-chapter outline (the `chapters` list) sized to "
+            "length_tier, and sets the book title if brainstorm-agent left it unset."
+        ),
+        "system_prompt": load_prompt("chapter_planner"),
+        "tools": [think, update_story_bible, validate_story_bible],
+        "model": model,
+        "permissions": BIBLE_WRITE_PROTECTION,
+    }
+
     writer: SubAgent = {
         "name": "writer-agent",
         "description": (
-            "Drafts the full story in draft.md from a finalized story_bible.json (and, in "
-            "from_source mode, the divergence_plan and source text)."
+            "Drafts one chapter at a time to chapters/chapter_<NN>.md, given that chapter's "
+            "outline entry in story_bible.json's chapters list and bounded continuity context "
+            "(the previous chapter in full, running actual_summary of earlier chapters). "
+            "Delegated once per chapter, and again for any revision pass."
         ),
         "system_prompt": load_prompt("writer"),
         "tools": [think],
+        "model": model,
+        "permissions": BIBLE_WRITE_PROTECTION,
+    }
+
+    chapter_reviewer: SubAgent = {
+        "name": "chapter-reviewer-agent",
+        "description": (
+            "Runs once per chapter (and again per revision): reviews a just-drafted chapter "
+            "(chapters/chapter_<NN>.md) against the outline, the previous chapter, and earlier "
+            "chapters' actual_summary for prose quality, continuity, and fit against its "
+            "planned_summary. Approves (recording actual_summary + status=approved) or returns "
+            "specific revision notes for writer-agent."
+        ),
+        "system_prompt": load_prompt("chapter_reviewer"),
+        "tools": [think, update_story_bible, validate_story_bible],
         "model": model,
         "permissions": BIBLE_WRITE_PROTECTION,
     }
@@ -110,6 +140,8 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         extractor,
         brainstorm,
         originality_guard,
+        chapter_planner,
         writer,
+        chapter_reviewer,
         editor,
     ]

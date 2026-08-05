@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self, Literal, Sequence
 
@@ -28,6 +29,27 @@ PSALM_DIMENSIONS: tuple[str, ...] = (
     "scenes",
     "world_building",
 )
+
+
+class LengthTier(StrEnum):
+    """How long a generated story should be, in chapters and target word count."""
+    SHORT = "short"
+    MEDIUM = "medium"
+    LONG = "long"
+
+
+@dataclass(frozen=True)
+class LengthTierSpec:
+    min_chapters: int
+    max_chapters: int
+    target_total_words: int
+
+
+LENGTH_TIER_SPECS: dict[LengthTier, LengthTierSpec] = {
+    LengthTier.SHORT: LengthTierSpec(min_chapters=1, max_chapters=1, target_total_words=2_000),
+    LengthTier.MEDIUM: LengthTierSpec(min_chapters=6, max_chapters=10, target_total_words=20_000),
+    LengthTier.LONG: LengthTierSpec(min_chapters=25, max_chapters=35, target_total_words=90_000),
+}
 
 IsolationStrategy = Literal["isolate_preserve", "isolate_vary"]
 
@@ -328,6 +350,38 @@ def build_isolation_matrix(
 
     return variants
 
+
+class ChapterStatus(StrEnum):
+    PLANNED = "planned"
+    DRAFTED = "drafted"
+    APPROVED = "approved"
+
+
+class Chapter(BaseModel):
+    """One entry in the book's chapter outline, written by chapter-planner-agent and updated by
+    writer-agent/chapter-reviewer-agent as it moves through the per-chapter writing loop."""
+    model_config = ConfigDict(extra="forbid")
+
+    index: int
+    title: str = ""
+    planned_summary: str = Field(
+        default="",
+        description="chapter-planner-agent's intended beats for this chapter.",
+    )
+    actual_summary: str = Field(
+        default="",
+        description=(
+            "Filled in by chapter-reviewer-agent once the chapter is approved: what actually "
+            "happens in the finished prose (can drift from planned_summary). This, not the plan, "
+            "is what later chapters read for continuity."
+        ),
+    )
+    target_word_count: int = 0
+    characters_present: list[str] = Field(default_factory=list)
+    status: ChapterStatus = ChapterStatus.PLANNED
+    revision_count: int = 0
+
+
 class StoryBible(BaseModel):
     """
     The complete, structured brief that drives prose generation.
@@ -345,6 +399,8 @@ class StoryBible(BaseModel):
         default_factory=list,
     )
     target_length_words: int | None = None
+    length_tier: LengthTier = LengthTier.LONG
+    chapters: list[Chapter] = Field(default_factory=list)
 
     writing_style: WritingStyle = Field(default_factory=WritingStyle)
     narrative_voice: NarrativeVoice = Field(default_factory=NarrativeVoice)

@@ -40,6 +40,11 @@ class Settings(BaseSettings):
         default=3, ge=0, description="Max revise/re-check loops before giving up per strictness."
     )
 
+    chapter_review_max_revisions: int = Field(
+        default=2, ge=0,
+        description="Max writer-agent revise / chapter-reviewer-agent re-check loops per chapter.",
+    )
+
     max_brainstorm_turns: int = Field(
         default=40, description="Safety cap on ask_human round-trips per bible-filling session."
     )

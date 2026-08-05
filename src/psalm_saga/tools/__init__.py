@@ -1,3 +1,4 @@
+from psalm_saga.tools.assemble import make_assemble_draft_tool
 from psalm_saga.tools.ask_human import make_ask_human_tool
 from psalm_saga.tools.bible import (
     BIBLE_WRITE_PROTECTION,
@@ -12,6 +13,7 @@ from psalm_saga.tools.think import think
 
 __all__ = [
     "make_ask_human_tool",
+    "make_assemble_draft_tool",
     "think",
     "make_validate_bible_tool",
     "load_bible",

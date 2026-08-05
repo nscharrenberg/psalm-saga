@@ -13,7 +13,7 @@ from psalm_saga import StoryBible, Settings
 from psalm_saga.agents import build_orchestrator
 from psalm_saga.dataset_utils import decide_dataset_item_action
 from psalm_saga.dimensions import PSALM_DIMENSIONS, DivergenceIntensity, DivergencePlan, evaluate_fidelity, \
-    GenerationMode, IsolationStrategy, build_isolation_matrix
+    GenerationMode, IsolationStrategy, LengthTier, build_isolation_matrix
 from psalm_saga.session import session_dir_for, init_session, checkpoint_db_path
 
 ProgressCallback = Callable[[str, str, int, int], None]
@@ -140,6 +140,7 @@ def run_dataset_item(
         *,
         context: str = "",
         overwrite: bool = False,
+        length_tier: LengthTier = LengthTier.SHORT,
 ) -> DatasetItem:
     """
     Executes a dataset item creation process, managing sessions and handling divergence plans. This
@@ -161,6 +162,9 @@ def run_dataset_item(
     :param overwrite: Specifies whether to overwrite the existing session directory if it exists.
         Defaults to False.
     :type overwrite: bool, optional
+    :param length_tier: Book length tier for this dataset item. Defaults to 'short', applied
+        uniformly across the batch.
+    :type length_tier: LengthTier, optional
     :return: A dataset item object representing the outcome of the process. Its status indicates
         success, failure, or whether an existing session was skipped.
     :rtype: DatasetItem
@@ -190,6 +194,7 @@ def run_dataset_item(
             session_id=session_id,
             divergence_plan=plan,
             non_interactive=True,
+            length_tier=length_tier,
         )
 
         with SqliteSaver.from_conn_string(str(checkpoint_db_path(session_dir))) as checkpointer:
@@ -244,6 +249,7 @@ def run_batch(
         far: DivergenceIntensity = DivergenceIntensity.DIVERGENT,
         context: str = "",
         overwrite: bool = False,
+        length_tier: LengthTier = LengthTier.SHORT,
         progress_callback: ProgressCallback | None = None,
 ) -> list[DatasetItem]:
     """
@@ -268,6 +274,8 @@ def run_batch(
         empty string.
     :param overwrite: A boolean indicating whether existing dataset items should be overwritten. Defaults
         to False.
+    :param length_tier: Book length tier applied to every generated item. Defaults to 'short',
+        applied uniformly across the batch.
     :param progress_callback: An optional callable used to report progress. The callback takes four
         arguments: the name of the current source file, the name of the current variant, the count of
         items processed so far, and the total number of items to process. If not provided, no progress
@@ -300,6 +308,7 @@ def run_batch(
                 plan,
                 context=context,
                 overwrite=overwrite,
+                length_tier=length_tier,
             )
 
             items.append(item)

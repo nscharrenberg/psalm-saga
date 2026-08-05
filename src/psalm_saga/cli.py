@@ -17,7 +17,7 @@ from psalm_saga.activity import describe_tool_call, describe_tool_result, namesp
 from psalm_saga.agents import build_orchestrator
 from psalm_saga.batch import run_batch, write_manifest, build_isolation_matrix
 from psalm_saga.config import Settings
-from psalm_saga.dimensions import GenerationMode, DivergencePlan, DivergenceIntensity, PSALM_DIMENSIONS
+from psalm_saga.dimensions import GenerationMode, DivergencePlan, DivergenceIntensity, PSALM_DIMENSIONS, LengthTier
 from psalm_saga.session import init_session, checkpoint_db_path, SessionConfig, load_session_config
 from psalm_saga.tools.ask_human import format_discussion_reply
 
@@ -260,6 +260,10 @@ def new(
                      "Implied by --divergence-plan. For batch/scripted use, see `saga batch`.",
             ),
         ] = False,
+        length: Annotated[
+            str,
+            typer.Option("--length", help="Book length tier: 'short', 'medium', or 'long'."),
+        ] = "long",
 ) -> None:
     """
     Start a new story-generation session. The session can be
@@ -283,9 +287,18 @@ def new(
     :type guard_strictness: str | None
     :param session_name: A custom session identifier. If not provided, a default ID will be generated.
     :type session_name: str | None
+    :param length: Book length tier ('short'/'medium'/'long'). Defaults to 'long'.
+    :type length: str
     :return: None
     """
     settings = _build_settings(model, subagent_model, sessions_root, guard_strictness)
+    try:
+        length_tier = LengthTier(length)
+    except ValueError:
+        console.print(
+            f"[red]Invalid --length value: \"{length}\" (expected short, medium, or long).[/red]"
+        )
+        raise typer.Exit(code=1)
     mode = GenerationMode.FROM_SOURCE if source is not None else GenerationMode.FROM_SCRATCH
 
     divergence_plan: DivergencePlan | None = None
@@ -307,6 +320,7 @@ def new(
         session_id=session_name,
         divergence_plan=divergence_plan,
         non_interactive=non_interactive,
+        length_tier=length_tier,
     )
     console.print(f"[green]Session created:[/green] \"{session_dir}\"")
 
@@ -438,6 +452,10 @@ def batch(
             bool,
             typer.Option("--overwrite", help="Regenerate items whose session directory already exists."),
         ] = False,
+        length: Annotated[
+            str,
+            typer.Option("--length", help="Book length tier for every generated item: 'short', 'medium', or 'long'."),
+        ] = "short",
         output: Annotated[
             Path | None,
             typer.Option("--output", "-o", help="Manifest path (.json; a sibling .csv is also written)."),
@@ -464,12 +482,21 @@ def batch(
     :param far: Intensity level used for the 'different' side.
     :param context: Additional context or instructions applied to each item.
     :param overwrite: Whether to regenerate items whose session directory already exists.
+    :param length: Book length tier ('short'/'medium'/'long') applied to every generated item.
+        Defaults to 'short', applied uniformly across the batch.
     :param output: Path to save the manifest (.json file along with a sibling .csv file). If not
         provided, a default path based on timestamp is used.
 
     :return: None
     """
     settings = _build_settings(model, subagent_model, sessions_root, None)
+    try:
+        length_tier = LengthTier(length)
+    except ValueError:
+        console.print(
+            f"[red]Invalid --length value: \"{length}\" (expected short, medium, or long).[/red]"
+        )
+        raise typer.Exit(code=1)
     dim_list = [d.strip() for d in dimensions.split(",") if d.strip()]
 
     def _on_progress(source_name: str, variant_name: str, done: int, total: int) -> None:
@@ -486,6 +513,7 @@ def batch(
         context=context,
         overwrite=overwrite,
         progress_callback=_on_progress,
+        length_tier=length_tier,
     )
 
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")

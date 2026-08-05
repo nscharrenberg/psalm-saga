@@ -25,7 +25,7 @@ architecture writeup.
 
 This is an initial implementation. It has been built and unit-tested for the parts that don't
 require live model calls (the `StoryBible` schema, session lifecycle, and the deterministic
-bible-validation tool). The agent graph itself (`agents/orchestrator.py`, the five subagents, and
+bible-validation tool). The agent graph itself (`agents/orchestrator.py`, the seven subagents, and
 the `ask_human` interrupt/resume flow) is implemented against the documented `deepagents` /
 `langgraph` APIs but has **not** been exercised end-to-end against a live model in this
 environment (no network access here to install `deepagents`/`langchain`/etc. or call a
@@ -76,6 +76,10 @@ uv run psalm-saga new --source ./my-novel-excerpt.txt --context "Keep the voice 
 uv run psalm-saga resume 20260727-141203-a1b2c3
 ```
 
+`psalm-saga new` also takes `--length short`/`medium`/`long` to size the book (default `long`, a
+full novel-length story broken into chapters via `chapter-planner-agent` and drafted one chapter
+at a time; `short` is a single chapter, useful for quick smoke-testing the pipeline).
+
 While a session runs, the CLI streams a live todo checklist (what's done, what's in progress,
 what's next -- the same `write_todos` mechanism Claude Code uses) plus a one-line activity log
 for every tool call and result along the way (delegating to a subagent, writing the bible,
@@ -123,6 +127,9 @@ Other options worth knowing about (`uv run psalm-saga batch --help` for the rest
 - A single one-off variant (rather than the whole matrix) can be run through `psalm-saga new` directly
   with `--divergence-plan path/to/plan.json` (a `{"characters": "close", "plot": "divergent",
   ...}` file covering all six dimensions) — this implies `--non-interactive`.
+- `--length short`/`medium`/`long` sizes every generated item (default `short`, keeping batch runs
+  fast and cheap for benchmarking-dataset generation — pass `--length long` if you want full-length
+  novels in the dataset instead).
 
 Each session is a plain directory under `--sessions-root` (default `./psalm-saga-sessions/`):
 
@@ -132,7 +139,8 @@ psalm-saga-sessions/<session-id>/
     psalm_dimensions_reference.md
     story_bible.json      # the shared brief every agent reads/writes
     source.txt             # from_source mode only
-    draft.md
+    chapters/               # one file per chapter, chapter_01.md, chapter_02.md, ...
+    draft.md                # assembled from chapters/ once every chapter is approved
     final_story.md
     checkpoints.sqlite      # lets `saga resume` continue a paused conversation
 ```

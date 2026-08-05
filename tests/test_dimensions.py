@@ -6,11 +6,16 @@ import pytest
 from pydantic import ValidationError
 
 from psalm_saga.dimensions import (  # type: ignore[import-untyped]
+    LENGTH_TIER_SPECS,
     PSALM_DIMENSIONS,
+    Chapter,
+    ChapterStatus,
     Character,
     DivergenceIntensity,
     DivergencePlan,
     GenerationMode,
+    LengthTier,
+    LengthTierSpec,
     OriginalityFinding,
     StoryBible,
     build_isolation_matrix,
@@ -177,3 +182,45 @@ def test_build_isolation_matrix_rejects_unknown_strategy() -> None:
     with pytest.raises(ValueError):
         build_isolation_matrix(dimensions=["plot"],
                                strategy="not_a_real_strategy")  # type: ignore[arg-type,unused-ignore]
+
+
+def test_chapter_defaults_and_round_trips_through_json() -> None:
+    chapter = Chapter(index=1, title="The First Letter")
+    restored = Chapter.model_validate_json(chapter.model_dump_json())
+    assert restored == chapter
+    assert restored.status is ChapterStatus.PLANNED
+    assert restored.revision_count == 0
+    assert restored.characters_present == []
+
+
+def test_story_bible_chapters_default_empty_and_length_tier_defaults_long() -> None:
+    bible = StoryBible(mode=GenerationMode.FROM_SCRATCH)
+    assert bible.chapters == []
+    assert bible.length_tier is LengthTier.LONG
+
+
+def test_story_bible_with_chapters_round_trips_through_json() -> None:
+    bible = StoryBible(
+        mode=GenerationMode.FROM_SCRATCH,
+        length_tier=LengthTier.SHORT,
+        chapters=[Chapter(index=1, title="Only Chapter", target_word_count=2000)],
+    )
+    restored = StoryBible.model_validate_json(bible.model_dump_json())
+    assert restored.length_tier is LengthTier.SHORT
+    assert restored.chapters[0].title == "Only Chapter"
+    assert restored.chapters[0].status is ChapterStatus.PLANNED
+
+
+def test_length_tier_specs_cover_every_tier_with_expected_ranges() -> None:
+    assert set(LENGTH_TIER_SPECS) == {LengthTier.SHORT, LengthTier.MEDIUM, LengthTier.LONG}
+    assert LENGTH_TIER_SPECS[LengthTier.SHORT] == LengthTierSpec(
+        min_chapters=1, max_chapters=1, target_total_words=2_000
+    )
+    assert LENGTH_TIER_SPECS[LengthTier.MEDIUM] == LengthTierSpec(
+        min_chapters=6, max_chapters=10, target_total_words=20_000
+    )
+    assert LENGTH_TIER_SPECS[LengthTier.LONG] == LengthTierSpec(
+        min_chapters=25, max_chapters=35, target_total_words=90_000
+    )
+    for spec in LENGTH_TIER_SPECS.values():
+        assert spec.min_chapters <= spec.max_chapters

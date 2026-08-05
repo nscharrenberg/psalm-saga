@@ -61,11 +61,33 @@ This applies to `story_bible.json`'s other top-level fields too, not just the si
 dimensions -- `title` in particular sits first in the file, right after `mode`, but that's a
 schema artifact, not a conversation order. Always ask about the premise first (it's what
 everything else hangs off of, and it's the one thing required before the story can be written).
-Titling, by contrast, is optional -- it isn't required for writing at all -- and naturally comes
-*late*, once there's an actual story to name; proposing a title before the premise exists is a
-guess with nothing to hang on. Don't ask about it proactively until the rest of the bible has
-real shape, and even then treat it as low-priority: happy to settle if the user offers one or
-asks, otherwise it's fine to leave unsettled going into the writing stage.
+Titling comes *late* by the same logic -- once there's an actual story to name, not before, since
+proposing a title before the premise exists is a guess with nothing to hang on -- but titling is
+not optional: once premise, characters, and plot have real shape, propose the book's title the
+same way you propose everything else (see "Titling the book" below). Don't raise it before then.
+
+## Titling the book
+
+Once premise, characters, and plot have enough shape that a title could actually be grounded in
+something specific (not necessarily fully settled -- but there should be a real premise, a
+protagonist, and at least a sense of what's at stake), propose the title the same way you propose
+everything else: lead with concrete options, via `ask_human` with `options` set, not an abstract
+"what should we call it?"
+
+Propose 2-4 real title candidates, each grounded in one specific image, line, object, or irony
+already established in *this* story -- pulled from the premise, the climax, or a vivid character
+or world detail, not from the genre or the protagonist's role in the abstract.
+
+Bad titles -- avoid these shapes:
+- Generic noun-phrase combos: "Quokka Quest", "The Last Lighthouse", "Shadow of the Storm" --
+  interchangeable with a thousand other books, tells you nothing about *this* one.
+- On-the-nose scene labels: "A Dark Underbelly", "The Final Confrontation" -- describes a beat
+  instead of evoking it.
+
+If the user declines to pick from your options (asks you to decide, or their answer doesn't
+actually settle on one), settle on the strongest of your own candidates yourself and call
+`update_story_bible` with `{"op": "replace", "path": "/title", "value": "..."}` -- do not leave
+`title` empty going into the writing stage.
 
 ## Ground rules
 - One question (or one proposal-with-a-question) at a time. Never bundle several into a single

@@ -12,7 +12,8 @@ session was configured with, so `saga resume` doesn't need those flags repeated.
         psalm_dimensions_reference.md   # copied in, read-only reference for the agents
         story_bible.json                # created empty by init_session, filled in by agents
         source.txt                      # only in from_source mode
-        draft.md                        # written by writer-agent
+        chapters/                       # one file per chapter, chapter_01.md, chapter_02.md, ...
+        draft.md                        # assembled from chapters/ once every chapter is approved
         final_story.md                  # written by editor-agent
         checkpoints.sqlite               # LangGraph checkpointer storage
 """
@@ -25,7 +26,7 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 from psalm_saga.config import Settings
-from psalm_saga.dimensions import GenerationMode, StoryBible, DivergencePlan
+from psalm_saga.dimensions import GenerationMode, StoryBible, DivergencePlan, LengthTier
 from psalm_saga.prompts import load_prompt
 
 SESSION_CONFIG_FILENAME = "session_config.json"
@@ -42,6 +43,7 @@ class SessionConfig:
     subagent_model: str
     originality_guard_strictness: str
     originality_guard_max_revisions: int
+    length_tier: str = LengthTier.LONG.value
     initial_context: str = ""
     non_interactive: bool = False
     """True for batch/unattended sessions -- see `batch.py`. Threaded through to
@@ -89,6 +91,7 @@ def init_session(
         initial_context: str = "",
         session_id: str | None = None,
         divergence_plan: DivergencePlan | None = None,
+        length_tier: LengthTier = LengthTier.LONG,
         non_interactive: bool = False,
 ) -> Path:
     """
@@ -145,7 +148,7 @@ def init_session(
         encoding="utf-8",
     )
 
-    bible = StoryBible(mode=mode)
+    bible = StoryBible(mode=mode, length_tier=length_tier)
 
     if mode is GenerationMode.FROM_SOURCE:
         if source_path is None:
@@ -156,7 +159,8 @@ def init_session(
         bible = StoryBible(
             mode=mode,
             source_excerpt_path=SOURCE_FILENAME,
-            divergence_plan=divergence_plan
+            divergence_plan=divergence_plan,
+            length_tier=length_tier,
         )
 
     (session_dir / "story_bible.json").write_text(
@@ -172,6 +176,7 @@ def init_session(
         subagent_model=settings.resolved_subagent_model(),
         originality_guard_strictness=settings.originality_guard_strictness.value,
         originality_guard_max_revisions=settings.originality_guard_max_revisions,
+        length_tier=length_tier.value,
         initial_context=initial_context,
         non_interactive=non_interactive,
     )
