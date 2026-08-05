@@ -209,3 +209,47 @@ def test_new_rejects_invalid_length_option(monkeypatch: pytest.MonkeyPatch, tmp_
 
     with pytest.raises(typer.Exit):
         cli_module.new(sessions_root=tmp_path / "sessions", length="epic")
+
+
+def test_batch_defaults_length_tier_to_short(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    captured: dict[str, object] = {}
+
+    def fake_run_batch(settings, sources_dir, **kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(cli_module, "run_batch", fake_run_batch)
+    monkeypatch.setenv("PSALM_SAGA_MODEL", "anthropic:claude-opus-4-8")
+
+    cli_module.batch(
+        tmp_path, sessions_root=tmp_path / "sessions", output=tmp_path / "manifest.json"
+    )
+
+    assert captured["length_tier"] is LengthTier.SHORT
+
+
+def test_batch_honors_explicit_length_option(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    captured: dict[str, object] = {}
+
+    def fake_run_batch(settings, sources_dir, **kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(cli_module, "run_batch", fake_run_batch)
+    monkeypatch.setenv("PSALM_SAGA_MODEL", "anthropic:claude-opus-4-8")
+
+    cli_module.batch(
+        tmp_path,
+        sessions_root=tmp_path / "sessions",
+        output=tmp_path / "manifest.json",
+        length="long",
+    )
+
+    assert captured["length_tier"] is LengthTier.LONG
+
+
+def test_batch_rejects_invalid_length_option(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("PSALM_SAGA_MODEL", "anthropic:claude-opus-4-8")
+
+    with pytest.raises(typer.Exit):
+        cli_module.batch(tmp_path, sessions_root=tmp_path / "sessions", length="epic")

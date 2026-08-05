@@ -450,6 +450,10 @@ def batch(
             bool,
             typer.Option("--overwrite", help="Regenerate items whose session directory already exists."),
         ] = False,
+        length: Annotated[
+            str,
+            typer.Option("--length", help="Book length tier for every generated item: 'short', 'medium', or 'long'."),
+        ] = "short",
         output: Annotated[
             Path | None,
             typer.Option("--output", "-o", help="Manifest path (.json; a sibling .csv is also written)."),
@@ -482,6 +486,13 @@ def batch(
     :return: None
     """
     settings = _build_settings(model, subagent_model, sessions_root, None)
+    try:
+        length_tier = LengthTier(length)
+    except ValueError:
+        console.print(
+            f"[red]Invalid --length value: \"{length}\" (expected short, medium, or long).[/red]"
+        )
+        raise typer.Exit(code=1)
     dim_list = [d.strip() for d in dimensions.split(",") if d.strip()]
 
     def _on_progress(source_name: str, variant_name: str, done: int, total: int) -> None:
@@ -498,6 +509,7 @@ def batch(
         context=context,
         overwrite=overwrite,
         progress_callback=_on_progress,
+        length_tier=length_tier,
     )
 
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
