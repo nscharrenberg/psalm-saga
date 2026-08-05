@@ -60,14 +60,21 @@ def make_update_story_bible_tool(session_dir: Path):  # type: ignore[no-untyped-
         schema-invalid by going through it.
 
         Each entry in `patch` is one operation: `{"op": "replace", "path": "/plot/structure",
-        "value": "three-act"}` sets a field that already exists -- every StoryBible field has a
-        schema default, so `replace` always works, even on your very first call of a session.
-        Use `"add"` with a path ending in `/-` to append to a list, e.g. `{"op": "add", "path":
-        "/characters/-", "value": {"name": "Finn", "role": "..."}}`. Use `"remove"` to delete a
-        list entry or clear a dict key. Before a `remove` or index-targeted `replace` on a list
-        (e.g. `/characters/2`), prefix it with a `"test"` op asserting the value you expect to be
-        there -- if the list has drifted since you last read it, the test fails with a clear,
-        retryable error instead of silently mutating the wrong entry.
+        "value": "three-act"}` sets a field that already exists -- most StoryBible fields already
+        exist with a schema default, so `replace` works for them from your first call. A field
+        that's `None`/empty until first set (like `mode` on your very first call of a session, or
+        a new key inside a dict field such as `/achieved_divergence/<dimension>`) needs `"add"`
+        instead. Use `"add"` with a path ending in `/-` to append to a list, e.g. `{"op": "add",
+        "path": "/characters/-", "value": {"name": "Finn", "role": "..."}}`. Use `"remove"` to
+        delete a list entry or clear a dict key. Before a `remove` or index-targeted `replace` on
+        a list (e.g. `/characters/2`), prefix it with a `"test"` op asserting the value you expect
+        to be there -- if the list has drifted since you last read it, the test fails with a
+        clear, retryable error instead of silently mutating the wrong entry.
+
+        The very first `update_story_bible` call of a session must include an op that sets
+        `/mode` (e.g. `{"op": "add", "path": "/mode", "value": "from_scratch"}`) -- `mode` is
+        fixed for the rest of the session from whatever that first call sets it to, and there is
+        no way to change it afterward.
 
         If the patch would produce an invalid bible, nothing is written -- you get back the
         specific error to fix in your next call.
@@ -83,15 +90,25 @@ def make_update_story_bible_tool(session_dir: Path):  # type: ignore[no-untyped-
                 current = json.loads(bible_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 current = {}
+        if not isinstance(current, dict):
+            current = {}
 
         pre_patch_mode = current.get("mode")
-        if "mode" not in current:
+        is_bootstrap = "mode" not in current
+        if is_bootstrap:
+            if not any(op.path == "/mode" for op in patch):
+                return (
+                    "Rejected -- story_bible.json was NOT changed. The first update_story_bible "
+                    'call of a session must set \'mode\' explicitly, e.g. {"op": "add", '
+                    '"path": "/mode", "value": "from_scratch"}; it is fixed for the rest '
+                    "of the session from whatever that first call sets it to."
+                )
             current = _bootstrap_skeleton() | current
 
         try:
             patched = apply_patch(
                 current,
-                [op.model_dump(by_alias=True, exclude_none=True) for op in patch],
+                [op.model_dump(by_alias=True, exclude_unset=True) for op in patch],
             )
         except JsonPatchKitError as exc:
             return f"Patch rejected -- story_bible.json was NOT changed.\n{exc}"
