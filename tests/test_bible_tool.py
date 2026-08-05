@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from psalm_saga.dimensions import Character, GenerationMode, StoryBible  # type: ignore[import-untyped]
+from psalm_saga.dimensions import (  # type: ignore[import-untyped]
+    Character,
+    GenerationMode,
+    StoryBible,
+)
 from psalm_saga.tools.bible import make_validate_bible_tool  # type: ignore[import-untyped]
 
 
@@ -51,34 +55,15 @@ def test_validate_reports_ok_when_ready(tmp_path: Path) -> None:
     assert result.startswith("OK: story_bible.json is schema-valid and has the minimum fields")
 
 
-def test_validate_escalates_after_repeated_invalid_json(tmp_path: Path) -> None:
+def test_validate_does_not_escalate_after_repeated_invalid_json(tmp_path: Path) -> None:
+    """Regression test for removing the failure-counter escalation ladder: repeated calls
+    against the same broken file must stay flat (same plain message every time), not build up
+    to a 'STOP hand-editing' message -- that mechanism targeted a corruption path that no longer
+    exists now that update_story_bible is the only writer and validates before every write."""
     (tmp_path / "story_bible.json").write_text("{not valid json")
     tool = make_validate_bible_tool(tmp_path)
 
-    first = _invoke(tool)  # type: ignore[no-untyped-call]
-    second = _invoke(tool)  # type: ignore[no-untyped-call]
-    third = _invoke(tool)  # type: ignore[no-untyped-call]
-
-    assert "STOP" not in first
-    assert "STOP" not in second
-    assert "STOP" in third
-    assert "update_story_bible" in third
-    assert "story_bible_cleaned.json" in third
-
-
-def test_validate_failure_counter_resets_after_success(tmp_path: Path) -> None:
-    bible_path = tmp_path / "story_bible.json"
-    tool = make_validate_bible_tool(tmp_path)
-
-    bible_path.write_text("{not valid json")
-    _invoke(tool)  # type: ignore[no-untyped-call]
-    _invoke(tool)  # type: ignore[no-untyped-call]
-    _invoke(tool)  # type: ignore[no-untyped-call] # 3 failures -> would have escalated on a 4th
-
-    bible_path.write_text(StoryBible(mode=GenerationMode.FROM_SCRATCH).model_dump_json())
-    ok_result = _invoke(tool)  # type: ignore[no-untyped-call]
-    assert ok_result.startswith("OK")
-
-    bible_path.write_text("{not valid json")
-    fresh_failure = _invoke(tool)  # type: ignore[no-untyped-call]
-    assert "STOP" not in fresh_failure  # counter reset, not still climbing from before
+    for _ in range(5):
+        result = _invoke(tool)  # type: ignore[no-untyped-call]
+        assert "STOP" not in result
+        assert "Invalid JSON" in result

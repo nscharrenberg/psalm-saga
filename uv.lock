@@ -463,6 +463,18 @@ wheels = [
 ]
 
 [[package]]
+name = "jsonpatchkit"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ef/cd/75688b4c87ea1578f6d0e9a87e29182af2acebd0677c0c73679e6c17c2f6/jsonpatchkit-0.1.0.tar.gz", hash = "sha256:d8352ad651c9145d1ac30c8ad3fe3276a7e7331ab5bb51d2dfc1dc023365a598", size = 159497, upload-time = "2026-08-05T08:21:13.686Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/82/9c/a20d4da26d4ceff5f61ef0dbf3023700e6c86d75ca233842693bea02ff4b/jsonpatchkit-0.1.0-py3-none-any.whl", hash = "sha256:30a42b8da8aea3605824df759ed7e6356e71b29b028f6970f705c1233b879038", size = 28736, upload-time = "2026-08-05T08:21:12.304Z" },
+]
+
+[[package]]
 name = "jsonpointer"
 version = "3.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -862,6 +874,7 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "deepagents" },
+    { name = "jsonpatchkit" },
     { name = "langchain-core" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-sqlite" },
@@ -896,6 +909,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "deepagents", specifier = ">=0.6.12" },
+    { name = "jsonpatchkit", specifier = ">=0.1.0" },
     { name = "langchain-anthropic", marker = "extra == 'anthropic'", specifier = ">=1.5.2" },
     { name = "langchain-core", specifier = ">=1.5.1" },
     { name = "langchain-openai", marker = "extra == 'openai'", specifier = ">=1.4.1" },

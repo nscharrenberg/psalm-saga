@@ -5,6 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.14"
 dependencies = [
     "deepagents>=0.6.12",
+    "jsonpatchkit>=0.1.0",
     "langchain-core>=1.5.1",
     "langgraph>=1.2.9",
     "langgraph-checkpoint-sqlite>=3.1.0",
