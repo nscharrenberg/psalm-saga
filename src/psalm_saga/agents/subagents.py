@@ -97,8 +97,10 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
     writer: SubAgent = {
         "name": "writer-agent",
         "description": (
-            "Drafts the full story in draft.md from a finalized story_bible.json (and, in "
-            "from_source mode, the divergence_plan and source text)."
+            "Drafts one chapter at a time to chapters/chapter_<NN>.md, given that chapter's "
+            "outline entry in story_bible.json's chapters list and bounded continuity context "
+            "(the previous chapter in full, running actual_summary of earlier chapters). "
+            "Delegated once per chapter, and again for any revision pass."
         ),
         "system_prompt": load_prompt("writer"),
         "tools": [think],
