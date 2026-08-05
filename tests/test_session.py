@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 
 from psalm_saga.config import Settings  # type: ignore[import-untyped]
-from psalm_saga.dimensions import DivergenceIntensity, DivergencePlan, GenerationMode, StoryBible  # type: ignore[import-untyped]
+from psalm_saga.dimensions import (  # type: ignore[import-untyped]
+    DivergenceIntensity,
+    DivergencePlan,
+    GenerationMode,
+    LengthTier,
+    StoryBible,
+)
 from psalm_saga.session import init_session, load_session_config  # type: ignore[import-untyped]
 
 
@@ -87,4 +93,29 @@ def test_init_session_rejects_divergence_plan_in_from_scratch_mode(settings: Set
     plan = DivergencePlan.uniform(DivergenceIntensity.MODERATE)
     with pytest.raises(ValueError):
         init_session(settings, GenerationMode.FROM_SCRATCH, divergence_plan=plan)
+
+
+def test_init_session_defaults_length_tier_to_long(settings: Settings) -> None:
+    session_dir = init_session(settings, GenerationMode.FROM_SCRATCH)
+
+    bible = StoryBible.model_validate_json((session_dir / "story_bible.json").read_text())
+    assert bible.length_tier is LengthTier.LONG
+
+    config = load_session_config(session_dir)
+    assert config.length_tier == "long"
+
+
+def test_init_session_honors_explicit_length_tier(settings: Settings) -> None:
+    session_dir = init_session(
+        settings,
+        GenerationMode.FROM_SCRATCH,
+        length_tier=LengthTier.MEDIUM,
+        session_id="medium-session",
+    )
+
+    bible = StoryBible.model_validate_json((session_dir / "story_bible.json").read_text())
+    assert bible.length_tier is LengthTier.MEDIUM
+
+    config = load_session_config(session_dir)
+    assert config.length_tier == "medium"
 
