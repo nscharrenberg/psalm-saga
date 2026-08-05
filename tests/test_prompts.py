@@ -50,3 +50,11 @@ def test_brainstorm_prompt_requires_title_proposal_not_optional() -> None:
     assert "fine to leave unsettled going into the writing stage" not in text
     assert "Titling the book" in text
     assert "Quokka Quest" in text
+
+
+def test_orchestrator_prompt_documents_chapter_writing_loop() -> None:
+    text = load_prompt("orchestrator")
+    assert "draft the full story from the finalized bible" not in text
+    assert "chapter-planner-agent" in text
+    assert "chapter-reviewer-agent" in text
+    assert "assemble_draft" in text
