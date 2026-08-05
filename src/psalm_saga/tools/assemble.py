@@ -29,13 +29,21 @@ def make_assemble_draft_tool(session_dir: Path):  # type: ignore[no-untyped-def]
     chapters_dir = session_dir / CHAPTERS_DIRNAME
 
     @tool
-    def assemble_draft() -> str:
+    def assemble_draft(include_unapproved: bool = False) -> str:
         """Concatenate every approved chapter into draft.md, in chapter order.
 
         Call this once every chapter in story_bible.json's `chapters` list has status=approved.
         Refuses, naming the offending chapter(s), if any chapter isn't approved yet, or if an
         approved chapter's file is unexpectedly missing from chapters/ -- draft.md is only written
         once every chapter is genuinely ready for editor-agent to read.
+
+        :param include_unapproved: Default False, which preserves the refuse-on-any-non-approved
+            behavior above. Set True as the escape hatch for a chapter that exhausted its revision
+            budget without reaching approved: every chapter is included regardless of status (still
+            sorted by index, still read from its file on disk if present), and the refusal only
+            fires if a chapter's file is genuinely missing from chapters/ -- there is nothing to
+            read for that chapter. When some included chapters were not approved, the success
+            message names them explicitly (e.g. "included despite status=drafted: chapter 7").
         """
         if not bible_path.exists():
             return "Cannot assemble draft.md -- story_bible.json does not exist yet."
@@ -49,7 +57,7 @@ def make_assemble_draft_tool(session_dir: Path):  # type: ignore[no-untyped-def]
             )
 
         not_approved = [c for c in bible.chapters if c.status is not ChapterStatus.APPROVED]
-        if not_approved:
+        if not_approved and not include_unapproved:
             names = ", ".join(f"chapter {c.index} ({c.status.value})" for c in not_approved)
             return f"Cannot assemble draft.md -- not every chapter is approved yet: {names}."
 
@@ -66,8 +74,13 @@ def make_assemble_draft_tool(session_dir: Path):  # type: ignore[no-untyped-def]
             bodies.append(f"## {heading}\n\n{chapter_path.read_text(encoding='utf-8').strip()}")
 
         if missing:
+            reason = (
+                "required but their files are"
+                if include_unapproved
+                else "approved but their files are"
+            )
             return (
-                "Cannot assemble draft.md -- these chapters are approved but their files are "
+                f"Cannot assemble draft.md -- these chapters are {reason} "
                 f"missing from {CHAPTERS_DIRNAME}/: " + ", ".join(missing)
             )
 
@@ -75,6 +88,10 @@ def make_assemble_draft_tool(session_dir: Path):  # type: ignore[no-untyped-def]
         draft = f"# {title}\n\n" + "\n\n".join(bodies) + "\n"
         (session_dir / "draft.md").write_text(draft, encoding="utf-8")
 
-        return f"OK: draft.md assembled from {len(ordered)} approved chapter(s)."
+        message = f"OK: draft.md assembled from {len(ordered)} chapter(s)."
+        if include_unapproved and not_approved:
+            names = ", ".join(f"chapter {c.index} (status={c.status.value})" for c in not_approved)
+            message += f" Included despite non-approved status: {names}."
+        return message
 
     return assemble_draft

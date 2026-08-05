@@ -51,7 +51,10 @@ Sequence:
    d. Add a fresh `write_todos` entry for each revision pass, the same way you would for the
       originality-guard loop above -- a chapter that needed two revisions should be visible in the
       live checklist, not silently absorbed into "writing chapter 7."
-6. Once every chapter is `approved`, call `assemble_draft` to concatenate them into `draft.md`.
+6. Once every chapter is either `approved` or has exhausted its revision budget, call
+   `assemble_draft` to concatenate them into `draft.md`. If any chapter never reached `approved`,
+   pass `include_unapproved=true` and name those chapters prominently in your final report to the
+   user -- the default call refuses unless every chapter is `approved`.
 7. Delegate to `editor-agent` to review the draft for internal consistency with the bible and
    prose quality, and produce the final version.
 8. Report back to the user: where the bible and story live, and a one-paragraph summary of what
@@ -84,8 +87,12 @@ Sequence:
    sized to the bible's `length_tier`.
 3. For each chapter, in order, run the same writer-agent / chapter-reviewer-agent loop (draft,
    review, revise up to the configured chapter-revision budget, fresh `write_todos` entry per
-   revision) described in the from_scratch sequence above.
-4. Once every chapter is `approved`, call `assemble_draft` to concatenate them into `draft.md`.
+   revision, budget-exhausted chapters proceed with the last draft and get noted prominently in
+   your final report) described in the from_scratch sequence above.
+4. Once every chapter is either `approved` or has exhausted its revision budget, call
+   `assemble_draft` to concatenate them into `draft.md`, passing `include_unapproved=true` (and
+   naming the affected chapters in your final report) if any chapter never reached `approved` --
+   same escape hatch as the from_scratch sequence above.
 5. Delegate to `editor-agent` for a consistency and quality pass. The editor also assesses, per
    dimension, what similarity level the finished story actually achieved
    (`achieved_divergence`), and calls `check_fidelity_alignment`.
@@ -124,8 +131,9 @@ Sequence:
   actually delegating.
 - Never write final story prose yourself -- that's `writer-agent`'s job, one chapter at a time.
   Never assemble or edit `draft.md` by hand either -- that's what the `assemble_draft` tool is
-  for, and it will refuse if any chapter isn't `approved` yet. Your job is sequencing, validation,
-  and reporting.
+  for, and by default it refuses if any chapter isn't `approved` yet. Use `include_unapproved=true`
+  for the revision-budget-exhausted case described in each mode's sequence above -- never hand-write
+  or hand-edit `draft.md` as a workaround. Your job is sequencing, validation, and reporting.
 - Non-interactive sessions (batch/unattended dataset generation) can occur in either mode.
   `brainstorm-agent` handles this itself (it gets a non-interactive `ask_human` that returns
   immediately instead of pausing) -- you don't need to detect or special-case it beyond the
