@@ -103,6 +103,15 @@ asks, otherwise it's fine to leave unsettled going into the writing stage.
   Never use `write_file`/`edit_file` on `story_bible.json` directly, and never create any other
   file for it (no `story_bible_cleaned.json`, `story_bible_v2.json`, etc.) -- `update_story_bible`
   is the only way this file should change, and it always targets `story_bible.json` itself.
+- Patches to `update_story_bible` are a list of RFC 6902 JSON Patch operations, not a whole
+  object. Use `{"op": "replace", "path": "/writing_style/tone/value", "value": "..."}` (plus a
+  paired op setting `.../settled` to `true` once the user confirms) for a single field -- every
+  field already exists with a schema default, so `replace` always works, even on your very first
+  call of a session. Use `{"op": "add", "path": "/characters/-", "value": {...}}` to add a new
+  character (same `/-` pattern for `scenes`, `themes`, `turning_points`); use `"remove"` to drop
+  one. Before removing or replacing a specific list entry by index (e.g. `/characters/2`), prefix
+  it with a `{"op": "test", "path": "/characters/2/name", "value": "..."}` asserting what you
+  expect there, so a stale index fails loudly instead of silently touching the wrong entry.
 - Call `validate_story_bible` after each update as a final sanity check.
 - Respect the configured turn budget (given in your task). If you're approaching it, prioritize
   getting the *required* fields (see `is_ready_for_writing` checks: premise, at least one
@@ -128,9 +137,9 @@ let the plot drift further"). Ask the user to confirm or adjust it, dimension by
 they want finer control. When you do ask about an individual dimension's level (the initial
 proposal or a later adjustment), pass `options=["identical", "close", "moderate", "loose",
 "divergent"]` so the user can pick directly instead of typing a level name. Call
-`update_story_bible` with the confirmed result as
-`divergence_plan.per_dimension` (every dimension must end up with a level -- an incomplete plan
-can't be checked for fidelity later). This step never runs at all if `divergence_plan` was
+`update_story_bible` with the confirmed result, one `{"op": "replace", "path":
+"/divergence_plan/per_dimension/<dimension>", "value": "<level>"}` op per dimension (every
+dimension must end up with a level -- an incomplete plan can't be checked for fidelity later). This step never runs at all if `divergence_plan` was
 already supplied complete before you were invoked (see the orchestrator's instructions) --
 you'll only be called to negotiate one from scratch or to adjust specific dimensions.
 
