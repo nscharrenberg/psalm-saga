@@ -106,6 +106,21 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "permissions": BIBLE_WRITE_PROTECTION,
     }
 
+    chapter_reviewer: SubAgent = {
+        "name": "chapter-reviewer-agent",
+        "description": (
+            "Runs once per chapter (and again per revision): reviews a just-drafted chapter "
+            "(chapters/chapter_<NN>.md) against the outline, the previous chapter, and earlier "
+            "chapters' actual_summary for prose quality, continuity, and fit against its "
+            "planned_summary. Approves (recording actual_summary + status=approved) or returns "
+            "specific revision notes for writer-agent."
+        ),
+        "system_prompt": load_prompt("chapter_reviewer"),
+        "tools": [think, update_story_bible, validate_story_bible],
+        "model": model,
+        "permissions": BIBLE_WRITE_PROTECTION,
+    }
+
     editor: SubAgent = {
         "name": "editor-agent",
         "description": (
@@ -125,5 +140,6 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         originality_guard,
         chapter_planner,
         writer,
+        chapter_reviewer,
         editor,
     ]

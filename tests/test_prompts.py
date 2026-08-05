@@ -31,3 +31,9 @@ def test_chapter_planner_prompt_documents_json_patch_ops_and_title_guidance() ->
     text = load_prompt("chapter_planner")
     assert '"op": "add"' in text
     assert "Quokka Quest" in text
+
+
+def test_chapter_reviewer_prompt_documents_json_patch_ops() -> None:
+    text = load_prompt("chapter_reviewer")
+    assert '"op": "replace"' in text
+    assert "actual_summary" in text

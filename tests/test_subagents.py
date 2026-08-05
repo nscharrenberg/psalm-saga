@@ -19,3 +19,11 @@ def test_chapter_planner_agent_is_registered_without_ask_human(
     agent = _agent(settings, tmp_path, "chapter-planner-agent")
     assert "update_story_bible" in _tool_names(agent)
     assert "ask_human" not in _tool_names(agent)
+
+
+def test_chapter_reviewer_agent_is_registered_without_ask_human(
+    settings: Settings, tmp_path: Path
+) -> None:
+    agent = _agent(settings, tmp_path, "chapter-reviewer-agent")
+    assert "update_story_bible" in _tool_names(agent)
+    assert "ask_human" not in _tool_names(agent)
