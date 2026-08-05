@@ -51,6 +51,16 @@ Both pipelines converge on the same `writer`/`editor` subagents and the same bib
 orchestrator (`agents/orchestrator.py`, prompted by `prompts/orchestrator.md`) is the only thing
 that knows which pipeline it's running; individual subagents don't need to.
 
+The `writer` stage in the diagram above is itself chapter-by-chapter rather than a single pass:
+once the bible is finalized, `chapter-planner-agent` outlines the whole book once into
+`story_bible.json`'s `chapters` list, sized by the bible's `length_tier` (`short`/`medium`/`long`
+-- one chapter up to ~35). The orchestrator then loops `writer-agent`/`chapter-reviewer-agent` per
+chapter (draft to `chapters/chapter_<NN>.md`, review, revise up to a per-chapter revision budget),
+and the deterministic `assemble_draft` tool (`tools/assemble.py`) concatenates the approved
+chapters into `draft.md` before the unchanged `editor` pass reads it. This keeps each writer
+delegation's context bounded to one chapter plus a running summary of what came before, rather
+than the whole book at once.
+
 ## deepagents mapping
 
 | Concept | Implementation |

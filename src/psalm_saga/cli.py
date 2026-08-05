@@ -287,6 +287,8 @@ def new(
     :type guard_strictness: str | None
     :param session_name: A custom session identifier. If not provided, a default ID will be generated.
     :type session_name: str | None
+    :param length: Book length tier ('short'/'medium'/'long'). Defaults to 'long'.
+    :type length: str
     :return: None
     """
     settings = _build_settings(model, subagent_model, sessions_root, guard_strictness)
@@ -480,6 +482,8 @@ def batch(
     :param far: Intensity level used for the 'different' side.
     :param context: Additional context or instructions applied to each item.
     :param overwrite: Whether to regenerate items whose session directory already exists.
+    :param length: Book length tier ('short'/'medium'/'long') applied to every generated item.
+        Defaults to 'short', applied uniformly across the batch.
     :param output: Path to save the manifest (.json file along with a sibling .csv file). If not
         provided, a default path based on timestamp is used.
 

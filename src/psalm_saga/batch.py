@@ -162,6 +162,9 @@ def run_dataset_item(
     :param overwrite: Specifies whether to overwrite the existing session directory if it exists.
         Defaults to False.
     :type overwrite: bool, optional
+    :param length_tier: Book length tier for this dataset item. Defaults to 'short', applied
+        uniformly across the batch.
+    :type length_tier: LengthTier, optional
     :return: A dataset item object representing the outcome of the process. Its status indicates
         success, failure, or whether an existing session was skipped.
     :rtype: DatasetItem
@@ -271,6 +274,8 @@ def run_batch(
         empty string.
     :param overwrite: A boolean indicating whether existing dataset items should be overwritten. Defaults
         to False.
+    :param length_tier: Book length tier applied to every generated item. Defaults to 'short',
+        applied uniformly across the batch.
     :param progress_callback: An optional callable used to report progress. The callback takes four
         arguments: the name of the current source file, the name of the current variant, the count of
         items processed so far, and the total number of items to process. If not provided, no progress
