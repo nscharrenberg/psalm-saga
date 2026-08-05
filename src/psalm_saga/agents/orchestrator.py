@@ -10,6 +10,7 @@ from psalm_saga.prompts import load_prompt
 from psalm_saga.state import SagaState
 from psalm_saga.tools import (
     BIBLE_WRITE_PROTECTION,
+    make_assemble_draft_tool,
     make_check_fidelity_tool,
     make_check_originality_gate_tool,
     make_update_story_bible_tool,
@@ -57,11 +58,15 @@ def build_orchestrator(  # type: ignore[no-untyped-def]
         settings.originality_guard_strictness
     )
     check_fidelity_alignment = make_check_fidelity_tool(session_dir)
+    assemble_draft = make_assemble_draft_tool(session_dir)
 
     return create_deep_agent(
         model=settings.model,
         system_prompt=load_prompt("orchestrator"),
-        tools=[think, update_story_bible, validate_story_bible, check_originality_gate, check_fidelity_alignment],
+        tools=[
+            think, update_story_bible, validate_story_bible,
+            check_originality_gate, check_fidelity_alignment, assemble_draft,
+        ],
         subagents=subagents,
         backend=backend,
         state_schema=SagaState,
