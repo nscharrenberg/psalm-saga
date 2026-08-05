@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,11 @@ from psalm_saga.dimensions import (  # type: ignore[import-untyped]
     LengthTier,
     StoryBible,
 )
-from psalm_saga.session import init_session, load_session_config  # type: ignore[import-untyped]
+from psalm_saga.session import (  # type: ignore[import-untyped]
+    SESSION_CONFIG_FILENAME,
+    init_session,
+    load_session_config,
+)
 
 
 def test_init_session_from_scratch_seeds_expected_files(settings: Settings) -> None:
@@ -118,4 +123,33 @@ def test_init_session_honors_explicit_length_tier(settings: Settings) -> None:
 
     config = load_session_config(session_dir)
     assert config.length_tier == "medium"
+
+
+def test_load_session_config_defaults_length_tier_for_pre_migration_sessions(
+    settings: Settings, tmp_path: Path
+) -> None:
+    """A session_config.json written before length_tier existed has no such key. SessionConfig
+    must still construct (length_tier defaulting to "long") so `saga resume` doesn't crash with
+    a TypeError on old sessions."""
+    session_dir = tmp_path / "pre-migration-session"
+    session_dir.mkdir()
+
+    pre_migration_config = {
+        "session_id": "pre-migration-session",
+        "mode": GenerationMode.FROM_SCRATCH.value,
+        "created_at": "2025-01-01T00:00:00+00:00",
+        "model": "claude-sonnet-4-5",
+        "subagent_model": "claude-sonnet-4-5",
+        "originality_guard_strictness": "moderate",
+        "originality_guard_max_revisions": 3,
+        "initial_context": "",
+        "non_interactive": False,
+    }
+    (session_dir / SESSION_CONFIG_FILENAME).write_text(
+        json.dumps(pre_migration_config, indent=2), encoding="utf-8"
+    )
+
+    config = load_session_config(session_dir)
+
+    assert config.length_tier == "long"
 

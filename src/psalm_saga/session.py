@@ -12,7 +12,8 @@ session was configured with, so `saga resume` doesn't need those flags repeated.
         psalm_dimensions_reference.md   # copied in, read-only reference for the agents
         story_bible.json                # created empty by init_session, filled in by agents
         source.txt                      # only in from_source mode
-        draft.md                        # written by writer-agent
+        chapters/                       # one file per chapter, chapter_01.md, chapter_02.md, ...
+        draft.md                        # assembled from chapters/ once every chapter is approved
         final_story.md                  # written by editor-agent
         checkpoints.sqlite               # LangGraph checkpointer storage
 """
@@ -42,7 +43,7 @@ class SessionConfig:
     subagent_model: str
     originality_guard_strictness: str
     originality_guard_max_revisions: int
-    length_tier: str
+    length_tier: str = LengthTier.LONG.value
     initial_context: str = ""
     non_interactive: bool = False
     """True for batch/unattended sessions -- see `batch.py`. Threaded through to
