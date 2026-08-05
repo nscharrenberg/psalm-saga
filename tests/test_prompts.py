@@ -37,3 +37,9 @@ def test_chapter_reviewer_prompt_documents_json_patch_ops() -> None:
     text = load_prompt("chapter_reviewer")
     assert '"op": "replace"' in text
     assert "actual_summary" in text
+
+
+def test_writer_prompt_drafts_one_chapter_not_the_full_story() -> None:
+    text = load_prompt("writer")
+    assert "write the full story" not in text
+    assert "chapters/chapter_" in text
