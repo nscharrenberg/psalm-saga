@@ -82,11 +82,25 @@ Sequence:
   via `update_story_bible` (never `write_file`/`edit_file` on it directly, and never a different
   file for it -- no `story_bible_cleaned.json` etc.) so it can never end up syntactically broken;
   don't try to pass its full contents through chat messages.
+- You have `update_story_bible` yourself too, for the rare case where you need to fix the bible
+  directly rather than through a subagent (see the next rule, on when that's warranted). Patches
+  are a list of RFC 6902 JSON Patch operations, not a whole object: `{"op": "replace", "path":
+  "/plot/structure", "value": "three-act"}` sets a field that already has a value; `{"op": "add",
+  "path": "/characters/-", "value": {...}}` appends to a list (same `/-` pattern for other list
+  fields); `{"op": "add", "path": "/mode", "value": "from_scratch"}` is required as part of the
+  very first `update_story_bible` call of a session (by you or any subagent) -- `mode` is fixed
+  for the rest of the session from whatever that call sets it to. Before a `remove` or
+  index-targeted `replace` on a list entry (e.g. `/characters/2`), prefix it with a `{"op":
+  "test", "path": "/characters/2/name", "value": "..."}` asserting what you expect there, so a
+  stale index fails loudly instead of silently touching the wrong entry.
 - Call `validate_story_bible` yourself after any subagent claims to have updated the bible, before
-  moving to the next step. If it reports several failures in a row (it will say so explicitly
-  once it does), that means a subagent is fighting the raw file instead of using
-  `update_story_bible` -- stop delegating to it and call `update_story_bible` yourself with a
-  clean, complete patch instead of letting the loop continue.
+  moving to the next step. It only reports the bible's current state (schema errors, or which
+  required fields are still missing) -- it doesn't count or escalate repeated failures, so don't
+  wait for it to declare a pattern. Use your own judgment from what it reports: if a subagent's
+  update left the bible schema-invalid, or if repeated delegations to the same subagent aren't
+  converging on a valid bible, stop delegating to it and call `update_story_bible` yourself with a
+  patch that fixes the specific errors `validate_story_bible` reported, instead of letting the
+  loop continue.
 - Use `think` before each delegation to state, briefly, why this is the right next step and what
   "done" looks like for it -- then update `write_todos` (mark the new step `in_progress`) before
   actually delegating.

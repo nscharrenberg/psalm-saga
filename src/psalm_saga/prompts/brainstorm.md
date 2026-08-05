@@ -105,13 +105,21 @@ asks, otherwise it's fine to leave unsettled going into the writing stage.
   is the only way this file should change, and it always targets `story_bible.json` itself.
 - Patches to `update_story_bible` are a list of RFC 6902 JSON Patch operations, not a whole
   object. Use `{"op": "replace", "path": "/writing_style/tone/value", "value": "..."}` (plus a
-  paired op setting `.../settled` to `true` once the user confirms) for a single field -- every
-  field already exists with a schema default, so `replace` always works, even on your very first
-  call of a session. Use `{"op": "add", "path": "/characters/-", "value": {...}}` to add a new
-  character (same `/-` pattern for `scenes`, `themes`, `turning_points`); use `"remove"` to drop
-  one. Before removing or replacing a specific list entry by index (e.g. `/characters/2`), prefix
-  it with a `{"op": "test", "path": "/characters/2/name", "value": "..."}` asserting what you
-  expect there, so a stale index fails loudly instead of silently touching the wrong entry.
+  paired op setting `.../settled` to `true` once the user confirms) for a single field -- most
+  fields already exist with a schema default, so `replace` works for them from your first call.
+  A field that's `None`/empty until first set needs `"add"` instead -- this includes `mode` on
+  your very first `update_story_bible` call of the session (see below), and any new key inside a
+  dict field that starts empty. Use `{"op": "add", "path": "/characters/-", "value": {...}}` to
+  add a new character (same `/-` pattern for `scenes`, `themes`, `turning_points`); use
+  `"remove"` to drop one. Before removing or replacing a specific list entry by index (e.g.
+  `/characters/2`), prefix it with a `{"op": "test", "path": "/characters/2/name", "value":
+  "..."}` asserting what you expect there, so a stale index fails loudly instead of silently
+  touching the wrong entry.
+- The very first `update_story_bible` call of a session must include an op that sets `/mode`
+  (e.g. `{"op": "add", "path": "/mode", "value": "from_scratch"}`) -- `mode` is fixed for the
+  rest of the session from whatever that first call sets it to, and a call that omits it is
+  rejected outright with nothing written. If you split your first update into several
+  `update_story_bible` calls, make sure the very first one is the one that sets `/mode`.
 - Call `validate_story_bible` after each update as a final sanity check.
 - Respect the configured turn budget (given in your task). If you're approaching it, prioritize
   getting the *required* fields (see `is_ready_for_writing` checks: premise, at least one
@@ -136,12 +144,21 @@ terms ("the voice is the most recognizable thing about this piece, so I'd keep t
 let the plot drift further"). Ask the user to confirm or adjust it, dimension by dimension if
 they want finer control. When you do ask about an individual dimension's level (the initial
 proposal or a later adjustment), pass `options=["identical", "close", "moderate", "loose",
-"divergent"]` so the user can pick directly instead of typing a level name. Call
-`update_story_bible` with the confirmed result, one `{"op": "replace", "path":
-"/divergence_plan/per_dimension/<dimension>", "value": "<level>"}` op per dimension (every
-dimension must end up with a level -- an incomplete plan can't be checked for fidelity later). This step never runs at all if `divergence_plan` was
-already supplied complete before you were invoked (see the orchestrator's instructions) --
-you'll only be called to negotiate one from scratch or to adjust specific dimensions.
+"divergent"]` so the user can pick directly instead of typing a level name.
+
+`divergence_plan` is `null` until first set (unlike `achieved_divergence`, which starts as an
+empty `{}` -- see `editor.md`), so you can't target individual dimensions inside it with `add` or
+`replace` the way you can for other dict fields; there's nothing to descend into yet. Call
+`update_story_bible` with a single op that materializes the whole container at once: `{"op":
+"add", "path": "/divergence_plan", "value": {"per_dimension": {"writing_style": "<level>",
+"narrative_voice": "<level>", "characters": "<level>", "plot": "<level>", "scenes": "<level>",
+"world_building": "<level>"}}}` -- include every PSALM dimension in that one `value` object
+(every dimension must end up with a level -- an incomplete plan can't be checked for fidelity
+later). If the user later adjusts individual dimensions, resend the whole `per_dimension` object
+the same way with just the changed entries updated. This step never runs at all if
+`divergence_plan` was already supplied complete before you were invoked (see the orchestrator's
+instructions) -- you'll only be called to negotiate one from scratch or to adjust specific
+dimensions.
 
 ## Non-interactive sessions
 If `ask_human` returns a message starting with `NO_HUMAN_AVAILABLE`, there is no user to answer

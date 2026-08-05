@@ -20,8 +20,11 @@ Process:
    directly, and never create any other file for it (no `story_bible_cleaned.json` etc.). A whole
    extraction is naturally a lot of ops -- splitting them into a few `update_story_bible` calls
    (e.g. core fields first, then all `characters` adds, then the rest) is fine and often easier to
-   get right than one huge call. Call `validate_story_bible` afterward and fix any reported errors
-   via another `update_story_bible` patch before finishing.
+   get right than one huge call, but the very first `update_story_bible` call of the session must
+   be one that includes the `/mode` op -- `mode` is fixed for the rest of the session from
+   whatever that first call sets it to, and a first call that omits it is rejected outright with
+   nothing written. Call `validate_story_bible` afterward and fix any reported errors via another
+   `update_story_bible` patch before finishing.
 6. Report back a short summary: which dimensions you extracted with confidence, and which are
    thin/ambiguous and will need the user's input.
 
