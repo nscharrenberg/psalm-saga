@@ -6,11 +6,14 @@ import pytest
 from pydantic import ValidationError
 
 from psalm_saga.dimensions import (  # type: ignore[import-untyped]
+    LENGTH_TIER_SPECS,
     PSALM_DIMENSIONS,
     Character,
     DivergenceIntensity,
     DivergencePlan,
     GenerationMode,
+    LengthTier,
+    LengthTierSpec,
     OriginalityFinding,
     StoryBible,
     build_isolation_matrix,
@@ -177,3 +180,18 @@ def test_build_isolation_matrix_rejects_unknown_strategy() -> None:
     with pytest.raises(ValueError):
         build_isolation_matrix(dimensions=["plot"],
                                strategy="not_a_real_strategy")  # type: ignore[arg-type,unused-ignore]
+
+
+def test_length_tier_specs_cover_every_tier_with_expected_ranges() -> None:
+    assert set(LENGTH_TIER_SPECS) == {LengthTier.SHORT, LengthTier.MEDIUM, LengthTier.LONG}
+    assert LENGTH_TIER_SPECS[LengthTier.SHORT] == LengthTierSpec(
+        min_chapters=1, max_chapters=1, target_total_words=2_000
+    )
+    assert LENGTH_TIER_SPECS[LengthTier.MEDIUM] == LengthTierSpec(
+        min_chapters=6, max_chapters=10, target_total_words=20_000
+    )
+    assert LENGTH_TIER_SPECS[LengthTier.LONG] == LengthTierSpec(
+        min_chapters=25, max_chapters=35, target_total_words=90_000
+    )
+    for spec in LENGTH_TIER_SPECS.values():
+        assert spec.min_chapters <= spec.max_chapters

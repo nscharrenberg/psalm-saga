@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self, Literal, Sequence
 
@@ -28,6 +29,27 @@ PSALM_DIMENSIONS: tuple[str, ...] = (
     "scenes",
     "world_building",
 )
+
+
+class LengthTier(StrEnum):
+    """How long a generated story should be, in chapters and target word count."""
+    SHORT = "short"
+    MEDIUM = "medium"
+    LONG = "long"
+
+
+@dataclass(frozen=True)
+class LengthTierSpec:
+    min_chapters: int
+    max_chapters: int
+    target_total_words: int
+
+
+LENGTH_TIER_SPECS: dict[LengthTier, LengthTierSpec] = {
+    LengthTier.SHORT: LengthTierSpec(min_chapters=1, max_chapters=1, target_total_words=2_000),
+    LengthTier.MEDIUM: LengthTierSpec(min_chapters=6, max_chapters=10, target_total_words=20_000),
+    LengthTier.LONG: LengthTierSpec(min_chapters=25, max_chapters=35, target_total_words=90_000),
+}
 
 IsolationStrategy = Literal["isolate_preserve", "isolate_vary"]
 
