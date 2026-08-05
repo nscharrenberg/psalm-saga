@@ -8,8 +8,14 @@ from psalm_saga.agents.subagents import build_subagents
 from psalm_saga.config import Settings
 from psalm_saga.prompts import load_prompt
 from psalm_saga.state import SagaState
-from psalm_saga.tools import make_validate_bible_tool, think, make_check_originality_gate_tool, \
-    make_check_fidelity_tool, make_update_story_bible_tool
+from psalm_saga.tools import (
+    BIBLE_WRITE_PROTECTION,
+    make_check_fidelity_tool,
+    make_check_originality_gate_tool,
+    make_update_story_bible_tool,
+    make_validate_bible_tool,
+    think,
+)
 
 
 def build_orchestrator(  # type: ignore[no-untyped-def]
@@ -60,5 +66,6 @@ def build_orchestrator(  # type: ignore[no-untyped-def]
         backend=backend,
         state_schema=SagaState,
         checkpointer=checkpointer,
+        permissions=BIBLE_WRITE_PROTECTION,
         name="psalm-saga-orchestrator"
     )

@@ -4,8 +4,14 @@ from deepagents import SubAgent
 
 from psalm_saga.config import Settings
 from psalm_saga.prompts import load_prompt
-from psalm_saga.tools import make_validate_bible_tool, think, make_check_fidelity_tool, make_ask_human_tool, \
-    make_update_story_bible_tool
+from psalm_saga.tools import (
+    BIBLE_WRITE_PROTECTION,
+    make_ask_human_tool,
+    make_check_fidelity_tool,
+    make_update_story_bible_tool,
+    make_validate_bible_tool,
+    think,
+)
 
 
 def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: bool = False) -> list[SubAgent]:
@@ -44,6 +50,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("extractor"),
         "tools": [think, update_story_bible, validate_story_bible],
         "model": model,
+        "permissions": BIBLE_WRITE_PROTECTION,
     }
 
     brainstorm: SubAgent = {
@@ -58,6 +65,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("brainstorm"),
         "tools": [think, ask_human, update_story_bible, validate_story_bible],
         "model": model,
+        "permissions": BIBLE_WRITE_PROTECTION,
     }
 
     originality_guard: SubAgent = {
@@ -70,6 +78,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("originality_guard"),
         "tools": [think, update_story_bible, validate_story_bible],
         "model": model,
+        "permissions": BIBLE_WRITE_PROTECTION,
     }
 
     writer: SubAgent = {
@@ -81,6 +90,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("writer"),
         "tools": [think],
         "model": model,
+        "permissions": BIBLE_WRITE_PROTECTION,
     }
 
     editor: SubAgent = {
@@ -93,6 +103,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("editor"),
         "tools": [think, update_story_bible, check_fidelity_alignment],
         "model": model,
+        "permissions": BIBLE_WRITE_PROTECTION,
     }
 
     return [

@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from deepagents.middleware.filesystem import FilesystemPermission
 from langchain_core.tools import tool
 from pydantic import ValidationError
 
@@ -20,6 +21,21 @@ from psalm_saga.dimensions import StoryBible
 BIBLE_FILENAME = "story_bible.json"
 _FAILURE_COUNTER_FILENAME = ".bible_validation_failures"
 _ESCALATION_THRESHOLD = 3
+
+BIBLE_WRITE_PROTECTION: list[FilesystemPermission] = [
+    FilesystemPermission(operations=["write"], paths=["/story_bible*.json"], mode="deny"),
+]
+"""Blocks the built-in ``write_file``/``edit_file`` tools from touching story_bible.json
+(or lookalikes like story_bible_v2.json / story_bible_cleaned.json).
+
+``FilesystemMiddleware`` is attached to every subagent unconditionally by deepagents'
+``create_deep_agent``, regardless of what a SubAgent's own ``tools`` list contains -- so
+merely omitting write_file/edit_file from a subagent's tools does NOT stop it from getting
+them via middleware. Without this rule, a model can (and in practice does) hand-author or
+hand-edit the bible's raw JSON text instead of going through ``update_story_bible``,
+producing syntactically invalid JSON that ``update_story_bible``'s validate-before-write
+step would have caught. Pass this to every agent that can see story_bible.json.
+"""
 
 def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge ``patch`` onto ``base``.
