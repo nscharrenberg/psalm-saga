@@ -25,3 +25,9 @@ def test_editor_prompt_documents_json_patch_ops() -> None:
     text = load_prompt("editor")
     assert '"op": "add"' in text
     assert "pass the complete list" not in text
+
+
+def test_chapter_planner_prompt_documents_json_patch_ops_and_title_guidance() -> None:
+    text = load_prompt("chapter_planner")
+    assert '"op": "add"' in text
+    assert "Quokka Quest" in text

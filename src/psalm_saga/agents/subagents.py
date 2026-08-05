@@ -81,6 +81,19 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "permissions": BIBLE_WRITE_PROTECTION,
     }
 
+    chapter_planner: SubAgent = {
+        "name": "chapter-planner-agent",
+        "description": (
+            "Runs once, after the bible is finalized and before any chapter is drafted: turns "
+            "story_bible.json into a chapter-by-chapter outline (the `chapters` list) sized to "
+            "length_tier, and sets the book title if brainstorm-agent left it unset."
+        ),
+        "system_prompt": load_prompt("chapter_planner"),
+        "tools": [think, update_story_bible, validate_story_bible],
+        "model": model,
+        "permissions": BIBLE_WRITE_PROTECTION,
+    }
+
     writer: SubAgent = {
         "name": "writer-agent",
         "description": (
@@ -110,6 +123,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         extractor,
         brainstorm,
         originality_guard,
+        chapter_planner,
         writer,
         editor,
     ]
