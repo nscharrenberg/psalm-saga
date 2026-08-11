@@ -154,6 +154,25 @@ def test_orchestrator_prompt_never_writes_a_chapter_filename_itself() -> None:
     assert "write_chapter_file" in text or "read_chapter_file" in text
 
 
+def test_orchestrator_prompt_calls_check_bible_readiness_before_chapter_planner() -> None:
+    text = load_prompt("orchestrator")
+    assert "check_bible_readiness" in text
+    # must appear before the first chapter-planner-agent delegation in the from_scratch sequence
+    assert text.index("check_bible_readiness") < text.index("chapter-planner-agent")
+
+
+def test_orchestrator_prompt_from_source_settles_remaining_gaps_before_chapter_planner() -> None:
+    text = load_prompt("orchestrator")
+    from_source_section = text.split("## mode = from_source")[1].split("## General rules")[0]
+    assert "check_bible_readiness" in from_source_section
+    assert "settle" in from_source_section.lower()
+
+
+def test_orchestrator_prompt_tells_orchestrator_to_pass_turn_budget_to_brainstorm_agent() -> None:
+    text = load_prompt("orchestrator")
+    assert "max_brainstorm_turns" in text
+
+
 def test_orchestrator_prompt_forbids_parallel_chapter_delegation() -> None:
     """Regression test for InvalidUpdateError: At key 'mode' -- the orchestrator delegated
     writer-agent for three chapters in a single turn (deepagents' base prompt encourages

@@ -28,19 +28,25 @@ with respect to any identifiable existing work.
 Sequence:
 1. Delegate to `brainstorm-agent` to fill `story_bible.json` by conversing with the user, one
    question at a time, using the PSALM dimensions as your checklist. If the user supplied initial
-   context, pass it along verbatim so the subagent doesn't re-ask what's already known.
-2. Delegate to `originality-guard` to review the finished bible for the four exception categories
+   context, pass it along verbatim so the subagent doesn't re-ask what's already known. Also pass
+   the `max_brainstorm_turns` value from your session configuration above, so it knows its turn
+   budget for this invocation.
+2. Call `check_bible_readiness`. If it returns BLOCKED, delegate back to `brainstorm-agent` with
+   the specific unsettled fields it listed, then re-check -- repeat until it returns PROCEED or
+   PROCEED (OVERRIDDEN). If it returns PROCEED (OVERRIDDEN), note the override and the still-
+   unsettled fields for your final report, but continue to the next step regardless.
+3. Delegate to `originality-guard` to review the finished bible for the four exception categories
    and for resemblance to known works. If it reports unresolved findings, send the bible back to
    `brainstorm-agent` with the specific findings to address, then re-check. Do this for at most
    the configured revision budget.
-3. Call `check_originality_gate`. If it returns BLOCKED, do not delegate to
+4. Call `check_originality_gate`. If it returns BLOCKED, do not delegate to
    `chapter-planner-agent` -- report the open findings to the user and ask how they want to
    proceed (they may accept the risk explicitly, in which case say so plainly in your final
    message; you cannot silently override the block yourself). If it returns PROCEED (with or
    without a warn-mode note on open findings), continue to the next step.
-4. Delegate to `chapter-planner-agent` once, to turn the finalized bible into a chapter outline
+5. Delegate to `chapter-planner-agent` once, to turn the finalized bible into a chapter outline
    (`story_bible.json`'s `chapters` list) sized to the bible's `length_tier`.
-5. For each chapter, in order, **one chapter at a time -- never in parallel**: a chapter's
+6. For each chapter, in order, **one chapter at a time -- never in parallel**: a chapter's
    writer-agent/chapter-reviewer-agent loop must fully resolve (the chapter reaches `approved`,
    or exhausts its revision budget) before you delegate to `writer-agent` for the next chapter.
    Do not issue multiple `writer-agent` (or `chapter-reviewer-agent`) delegations in the same
@@ -70,18 +76,18 @@ Sequence:
    d. Add a fresh `write_todos` entry for each revision pass, the same way you would for the
       originality-guard loop above -- a chapter that needed two revisions should be visible in the
       live checklist, not silently absorbed into "writing chapter 7."
-6. Once every chapter is either `approved` or has exhausted its revision budget, call
+7. Once every chapter is either `approved` or has exhausted its revision budget, call
    `assemble_draft` to concatenate them into `draft.md`. If any chapter never reached `approved`,
    pass `include_unapproved=true` and name those chapters prominently in your final report to the
    user -- the default call refuses unless every chapter is `approved`.
-7. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
+8. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
    to `editor-agent`. Never delegate to `editor-agent` before calling `finalize_story` -- editing
    an empty or stale `final_story.md` is exactly the setup that let a single editor-agent
    completion silently truncate a 6-chapter book to 3 chapters with no error, since the whole book
    had to be regenerated from scratch in one pass instead of edited from a complete starting
    point. Editor-agent reviews the bible and consistency and makes targeted fixes; it does not
    regenerate the whole file.
-8. Report back to the user: where the bible and story live, and a one-paragraph summary of what
+9. Report back to the user: where the bible and story live, and a one-paragraph summary of what
    was generated plus any flagged originality concerns.
 
 ## mode = from_source
@@ -95,37 +101,48 @@ similarity level: `identical`, `close`, `moderate`, `loose`, or `divergent` (mos
 similar). Check `story_bible.json` before starting:
 
 - **If `divergence_plan` is already complete** (every PSALM dimension has a level -- this is how
-  batch/dataset-generation runs are seeded), skip straight to step 2 below. Do not delegate to
-  `brainstorm-agent` to renegotiate it -- a plan supplied up front is a deliberate, external
-  ground-truth label and must not be changed.
-- **Otherwise**, negotiate it as step 1.
+  batch/dataset-generation runs are seeded), do not delegate to `brainstorm-agent` to renegotiate
+  it in step 2 below -- a plan supplied up front is a deliberate, external ground-truth label and
+  must not be changed.
+- **Otherwise**, negotiate it as part of step 2 below.
 
 Sequence:
 1. Delegate to `extractor-agent` to read the source text (path given to you) and populate
-   `story_bible.json` from it. Then, unless `divergence_plan` was already complete when you
-   started (see above), delegate to `brainstorm-agent` to negotiate one with the user: an
-   intended similarity level per dimension. The subagent should propose a sensible default split
-   if the user has no strong opinion, then confirm it explicitly. (In a non-interactive session,
-   `brainstorm-agent` will decide on its own and note its assumptions instead of asking.)
-2. Delegate to `chapter-planner-agent` once, to turn the finalized bible into a chapter outline
+   `story_bible.json` from it -- it settles what the source text clearly supports directly, and
+   leaves the rest `settled: false` for the next step.
+2. Determine what's still open: check `divergence_plan` completeness yourself (is every PSALM
+   dimension present in `per_dimension`?) and call `check_bible_readiness` for the dimension
+   content. These are two independent gaps -- either, both, or neither may be open.
+   - If `divergence_plan` was already complete when you started (see above) and
+     `check_bible_readiness` returns PROCEED or PROCEED (OVERRIDDEN), skip straight to step 4 --
+     extraction alone left everything settled, there's nothing for `brainstorm-agent` to do.
+   - Otherwise, delegate to `brainstorm-agent` scoped to whichever gap(s) are open: negotiate
+     `divergence_plan` if it's incomplete (unless it was pre-set -- see above, that case never
+     renegotiates), settle the remaining dimension fields `check_bible_readiness` listed if it
+     returned BLOCKED, or both in the same delegation if both are open. Pass `max_brainstorm_turns`
+     from your session configuration the same way as in from_scratch mode.
+3. Call `check_bible_readiness` again. If it still returns BLOCKED, delegate back to
+   `brainstorm-agent` with the specific unsettled fields, then re-check -- repeat until PROCEED or
+   PROCEED (OVERRIDDEN). Note any override for your final report.
+4. Delegate to `chapter-planner-agent` once, to turn the finalized bible into a chapter outline
    sized to the bible's `length_tier`.
-3. For each chapter, in order, run the same writer-agent / chapter-reviewer-agent loop (draft,
+5. For each chapter, in order, run the same writer-agent / chapter-reviewer-agent loop (draft,
    review, revise up to the configured chapter-revision budget, fresh `write_todos` entry per
    revision, budget-exhausted chapters proceed with the last draft and get noted prominently in
    your final report) described in the from_scratch sequence above.
-4. Once every chapter is either `approved` or has exhausted its revision budget, call
+6. Once every chapter is either `approved` or has exhausted its revision budget, call
    `assemble_draft` to concatenate them into `draft.md`, passing `include_unapproved=true` (and
    naming the affected chapters in your final report) if any chapter never reached `approved` --
    same escape hatch as the from_scratch sequence above.
-5. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
+7. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
    to `editor-agent` for a consistency and quality pass -- same "never delegate before
    finalize_story" rule as the from_scratch sequence above. The editor also assesses, per
    dimension, what similarity level the finished story actually achieved
    (`achieved_divergence`), and calls `check_fidelity_alignment`.
-6. Read the `check_fidelity_alignment` result yourself. If it reports mismatches, note them
+8. Read the `check_fidelity_alignment` result yourself. If it reports mismatches, note them
    prominently in your final report -- do not silently smooth them over, since they mean the
    story's actual similarity to the source doesn't match the label recorded in `divergence_plan`.
-7. Report back to the user with the same summary shape as the from_scratch mode, plus the final
+9. Report back to the user with the same summary shape as the from_scratch mode, plus the final
    divergence plan and any fidelity mismatches.
 
 ## General rules
@@ -136,8 +153,11 @@ Sequence:
 - You have `update_story_bible` yourself too, for the rare case where you need to fix the bible
   directly rather than through a subagent (see the next rule, on when that's warranted). Patches
   are a list of RFC 6902 JSON Patch operations, not a whole object: `{"op": "replace", "path":
-  "/plot/structure", "value": "three-act"}` sets a field that already has a value; `{"op": "add",
-  "path": "/characters/-", "value": {...}}` appends to a list (same `/-` pattern for other list
+  "/premise", "value": "..."}` sets a plain scalar field that already has a value; a
+  `DimensionField` (e.g. `plot.structure`, a character's `role`) is an object, so target its
+  `.../value` and `.../settled` sub-paths separately, e.g. `{"op": "replace", "path":
+  "/plot/structure/value", "value": "three-act"}`; `{"op": "add", "path": "/characters/-",
+  "value": {...}}` appends to a list (same `/-` pattern for other list
   fields); `{"op": "add", "path": "/mode", "value": "from_scratch"}` is required as part of the
   very first `update_story_bible` call of a session (by you or any subagent) -- `mode` is fixed
   for the rest of the session from whatever that call sets it to. Before a `remove` or
@@ -145,7 +165,7 @@ Sequence:
   "test", "path": "/characters/2/name", "value": "..."}` asserting what you expect there, so a
   stale index fails loudly instead of silently touching the wrong entry.
 - **Never** hand-write an `update_story_bible` patch against `/chapters/<n>/...` yourself --
-  always use `update_chapter(index=<N>, ...)` for any chapter field (see step 5c above). The
+  always use `update_chapter(index=<N>, ...)` for any chapter field (see step 6c above). The
   `chapters` list's array position and a chapter's own `index` field are not the same number, and
   getting that arithmetic wrong silently corrupts a different chapter's data with no error at all.
 - Call `validate_story_bible` yourself after any subagent claims to have updated the bible, before
