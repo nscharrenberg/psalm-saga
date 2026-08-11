@@ -8,6 +8,7 @@ from psalm_saga.tools import (
     BIBLE_WRITE_PROTECTION,
     make_ask_human_tool,
     make_check_fidelity_tool,
+    make_update_chapter_tool,
     make_update_story_bible_tool,
     make_validate_bible_tool,
     think,
@@ -38,6 +39,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
     update_story_bible = make_update_story_bible_tool(session_dir)
     validate_story_bible = make_validate_bible_tool(session_dir)
     check_fidelity_alignment = make_check_fidelity_tool(session_dir)
+    update_chapter = make_update_chapter_tool(session_dir)
     ask_human = make_ask_human_tool(non_interactive=non_interactive)
 
     extractor: SubAgent = {
@@ -118,7 +120,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
             "specific revision notes for writer-agent."
         ),
         "system_prompt": load_prompt("chapter_reviewer"),
-        "tools": [think, update_story_bible, validate_story_bible],
+        "tools": [think, update_chapter, validate_story_bible],
         "model": model,
         "permissions": BIBLE_WRITE_PROTECTION,
     }
@@ -135,6 +137,8 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "model": model,
         "permissions": BIBLE_WRITE_PROTECTION,
     }
+
+
 
     return [
         extractor,

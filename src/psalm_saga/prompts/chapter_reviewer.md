@@ -39,23 +39,17 @@ explicitly, rather than jumping straight to approve/reject.
 
 ## On approval
 
-Write two things to `story_bible.json` via `update_story_bible`:
-- `actual_summary`: what actually happens in the finished chapter -- concrete enough that a
-  reviewer three chapters from now, who will only see this summary and not the chapter's full
-  text, can judge continuity against it. Describe events and their consequences, not just
-  atmosphere.
-- `status`: `"approved"`.
+Call `update_chapter` with the chapter's own `index` (the number from its outline entry -- never
+try to compute or guess a position in the `chapters` list; `update_chapter` finds it for you):
 
-```json
-[
-  {"op": "replace", "path": "/chapters/2/actual_summary", "value": "Mara opens the letter and recognizes her mother's handwriting in the unsent reply folded inside. She hides both from her father."},
-  {"op": "replace", "path": "/chapters/2/status", "value": "approved"}
-]
+```
+update_chapter(index=3, status="approved", actual_summary="Mara opens the letter and recognizes her mother's handwriting in the unsent reply folded inside. She hides both from her father.")
 ```
 
-(Chapter list indices are zero-based in the JSON path even though each chapter's own `index` field
-is 1-based -- chapter `index: 3` is `/chapters/2`. Prefix the `replace` with a `{"op": "test",
-"path": "/chapters/2/index", "value": 3}` op first if you want to guard against a stale index.)
+`actual_summary` should describe what actually happens in the finished chapter -- concrete enough
+that a reviewer three chapters from now, who will only see this summary and not the chapter's
+full text, can judge continuity against it. Describe events and their consequences, not just
+atmosphere.
 
 Call `validate_story_bible` after writing.
 

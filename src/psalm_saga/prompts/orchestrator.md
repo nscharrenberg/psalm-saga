@@ -40,12 +40,23 @@ Sequence:
    without a warn-mode note on open findings), continue to the next step.
 4. Delegate to `chapter-planner-agent` once, to turn the finalized bible into a chapter outline
    (`story_bible.json`'s `chapters` list) sized to the bible's `length_tier`.
-5. For each chapter, in order:
+5. For each chapter, in order, **one chapter at a time -- never in parallel**: a chapter's
+   writer-agent/chapter-reviewer-agent loop must fully resolve (the chapter reaches `approved`,
+   or exhausts its revision budget) before you delegate to `writer-agent` for the next chapter.
+   Do not issue multiple `writer-agent` (or `chapter-reviewer-agent`) delegations in the same
+   turn/message, even though parallelizing independent-looking tool calls is normally encouraged
+   -- these are not independent. Chapter N's continuity depends on reading chapter N-1's actual
+   finished text, which does not exist yet if they run concurrently; and running them concurrently
+   can crash the session outright (two subagent invocations resolving in the same step can collide
+   on shared graph state).
    a. Delegate to `writer-agent` to draft that chapter to `chapters/chapter_<NN>.md`.
    b. Delegate to `chapter-reviewer-agent` to review it.
    c. If it flags issues, delegate back to `writer-agent` with its specific notes, for at most the
-      configured chapter-revision budget -- incrementing that chapter's `revision_count` via
-      `update_story_bible` yourself each time you redelegate, so the budget check is a plain
+      configured chapter-revision budget -- incrementing that chapter's `revision_count` yourself
+      each time you redelegate by calling `update_chapter(index=<N>, increment_revision_count=true)`
+      (never a hand-written `update_story_bible` patch against `/chapters/<n>/revision_count` --
+      you would have to compute which array position `index` currently lives at, and getting that
+      wrong silently corrupts a *different* chapter's data), so the budget check is a plain
       comparison against the bible's own state. If the budget is exhausted without approval,
       proceed with the last draft anyway and note it prominently in your final report.
    d. Add a fresh `write_todos` entry for each revision pass, the same way you would for the
@@ -118,6 +129,10 @@ Sequence:
   index-targeted `replace` on a list entry (e.g. `/characters/2`), prefix it with a `{"op":
   "test", "path": "/characters/2/name", "value": "..."}` asserting what you expect there, so a
   stale index fails loudly instead of silently touching the wrong entry.
+- **Never** hand-write an `update_story_bible` patch against `/chapters/<n>/...` yourself --
+  always use `update_chapter(index=<N>, ...)` for any chapter field (see step 5c above). The
+  `chapters` list's array position and a chapter's own `index` field are not the same number, and
+  getting that arithmetic wrong silently corrupts a different chapter's data with no error at all.
 - Call `validate_story_bible` yourself after any subagent claims to have updated the bible, before
   moving to the next step. It only reports the bible's current state (schema errors, or which
   required fields are still missing) -- it doesn't count or escalate repeated failures, so don't

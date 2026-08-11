@@ -30,6 +30,30 @@ def test_refuses_when_no_chapters_planned(tmp_path: Path) -> None:
     assert "no chapters yet" in result
 
 
+def test_refuses_when_chapter_indices_are_duplicated(tmp_path: Path) -> None:
+    """Defense-in-depth regression test: a duplicate `index` value (the exact corruption that
+    caused draft.md to silently repeat one chapter's content for two different chapter slots)
+    must be refused loudly, not read from the same file twice."""
+    bible = StoryBible(
+        mode=GenerationMode.FROM_SCRATCH,
+        title="Broken Book",
+        chapters=[
+            Chapter(index=1, title="First", status=ChapterStatus.APPROVED),
+            Chapter(index=2, title="Second", status=ChapterStatus.APPROVED),
+            Chapter(index=2, title="Also Second", status=ChapterStatus.APPROVED),
+        ],
+    )
+    _write_bible(tmp_path, bible)
+    _write_chapter(tmp_path, 1, "First chapter text.")
+    _write_chapter(tmp_path, 2, "Second chapter text.")
+
+    tool = make_assemble_draft_tool(tmp_path)
+    result = _invoke(tool)  # type: ignore[no-untyped-call]
+    assert "duplicate" in result.lower()
+    assert "2" in result
+    assert not (tmp_path / "draft.md").exists()
+
+
 def test_refuses_when_a_chapter_is_not_approved(tmp_path: Path) -> None:
     bible = StoryBible(
         mode=GenerationMode.FROM_SCRATCH,

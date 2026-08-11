@@ -55,6 +55,12 @@ there.
 Write the finished chapter to `chapters/chapter_<NN>.md` (zero-padded to two digits, e.g.
 `chapters/chapter_03.md` for chapter 3) in the working directory -- plain prose, no bible
 scaffolding, no chapter-heading line (the orchestrator's `assemble_draft` tool adds titles when it
-concatenates every chapter into the final draft), no meta-commentary in the file itself. In your
+concatenates every chapter into the final draft), no meta-commentary in the file itself. On a
+first draft, `write_file` creates it. On a revision pass, the file already exists -- use
+`edit_file` to overwrite it, never `write_file` (which will refuse and suggest writing to a new
+file instead; do not take that suggestion). The filename must always be exactly
+`chapters/chapter_<NN>.md` for your chapter's index -- never a variant name like
+`chapter_03_revised.md` or `chapter_03_v2.md`, since `assemble_draft` only ever looks for the
+canonical name and would silently never see anything written under a different one. In your
 final message to the orchestrator, summarize what you wrote and flag any bible fields or
 `planned_summary` beats you had to interpret loosely.

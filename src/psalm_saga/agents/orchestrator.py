@@ -13,6 +13,7 @@ from psalm_saga.tools import (
     make_assemble_draft_tool,
     make_check_fidelity_tool,
     make_check_originality_gate_tool,
+    make_update_chapter_tool,
     make_update_story_bible_tool,
     make_validate_bible_tool,
     think,
@@ -59,13 +60,14 @@ def build_orchestrator(  # type: ignore[no-untyped-def]
     )
     check_fidelity_alignment = make_check_fidelity_tool(session_dir)
     assemble_draft = make_assemble_draft_tool(session_dir)
+    update_chapter = make_update_chapter_tool(session_dir)
 
     return create_deep_agent(
         model=settings.model,
         system_prompt=load_prompt("orchestrator"),
         tools=[
             think, update_story_bible, validate_story_bible,
-            check_originality_gate, check_fidelity_alignment, assemble_draft,
+            check_originality_gate, check_fidelity_alignment, assemble_draft, update_chapter,
         ],
         subagents=subagents,
         backend=backend,

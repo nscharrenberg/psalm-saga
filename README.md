@@ -176,10 +176,16 @@ uv run mypy src
 ```
 
 ## Copyright note
-
 The `from_scratch` originality guard is a diligence aid — a subagent that critiques the story
 bible against PSALM's four statutory-exception categories (parody, pastiche, quotation,
 scènes à faire) and general resemblance to identifiable works, in a bounded revise/re-check loop
 — **not** a legal compliance guarantee. No automated tool can certify originality or copyright
 non-infringement; review flagged output yourself, especially in `warn` strictness mode where
 generation proceeds with concerns merely noted.
+
+# Improvements
+- [ ] Lots of errors when edit_file tool is called.
+- [ ] Show in cli what agent is doing what.
+- [ ] Instruction following Evaluation (is it actually following the story bible? is the story bible populated properly from the answers we provide? etc.)
+- [ ] Output Performance
+- [ ] Granular Story Generation (Per chapter with Review per chapter)

@@ -56,6 +56,17 @@ def make_assemble_draft_tool(session_dir: Path):  # type: ignore[no-untyped-def]
                 "chapter-planner-agent first."
             )
 
+        seen_indices: dict[int, int] = {}
+        for chapter in bible.chapters:
+            seen_indices[chapter.index] = seen_indices.get(chapter.index, 0) + 1
+        duplicates = sorted(index for index, count in seen_indices.items() if count > 1)
+        if duplicates:
+            return (
+                "Cannot assemble draft.md -- story_bible.json's chapters list has duplicate "
+                f"index value(s): {', '.join(str(i) for i in duplicates)}. Fix the corrupt "
+                "entry (via update_story_bible) before assembling."
+            )
+
         not_approved = [c for c in bible.chapters if c.status is not ChapterStatus.APPROVED]
         if not_approved and not include_unapproved:
             names = ", ".join(f"chapter {c.index} ({c.status.value})" for c in not_approved)
