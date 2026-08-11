@@ -502,7 +502,8 @@ class StoryBible(BaseModel):
             missing.append("premise")
 
         for field_name in WritingStyle.model_fields:
-            if not getattr(self.writing_style, field_name).settled:
+            field = getattr(self.writing_style, field_name)
+            if not field.settled or not field.value.strip():
                 missing.append(f"writing_style.{field_name}")
 
         if self.narrative_voice.person is None:
@@ -510,7 +511,8 @@ class StoryBible(BaseModel):
         if self.narrative_voice.narrator_knowledge is None:
             missing.append("narrative_voice.narrator_knowledge")
         for field_name in _NARRATIVE_VOICE_DIMENSION_FIELDS:
-            if not getattr(self.narrative_voice, field_name).settled:
+            field = getattr(self.narrative_voice, field_name)
+            if not field.settled or not field.value.strip():
                 missing.append(f"narrative_voice.{field_name}")
 
         if not self.characters:
@@ -518,11 +520,13 @@ class StoryBible(BaseModel):
         else:
             for i, character in enumerate(self.characters):
                 for field_name in _CHARACTER_GATED_FIELDS:
-                    if not getattr(character, field_name).settled:
+                    field = getattr(character, field_name)
+                    if not field.settled or not field.value.strip():
                         missing.append(f"characters[{i}].{field_name}")
 
         for field_name in _PLOT_GATED_FIELDS:
-            if not getattr(self.plot, field_name).settled:
+            field = getattr(self.plot, field_name)
+            if not field.settled or not field.value.strip():
                 missing.append(f"plot.{field_name}")
 
         if not self.scenes:
@@ -530,11 +534,13 @@ class StoryBible(BaseModel):
         else:
             for i, scene in enumerate(self.scenes):
                 for field_name in _SCENE_GATED_FIELDS:
-                    if not getattr(scene, field_name).settled:
+                    field = getattr(scene, field_name)
+                    if not field.settled or not field.value.strip():
                         missing.append(f"scenes[{i}].{field_name}")
 
         for field_name in WorldBuilding.model_fields:
-            if not getattr(self.world_building, field_name).settled:
+            field = getattr(self.world_building, field_name)
+            if not field.settled or not field.value.strip():
                 missing.append(f"world_building.{field_name}")
 
         return len(missing) == 0, missing

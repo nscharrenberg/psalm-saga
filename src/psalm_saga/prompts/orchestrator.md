@@ -32,9 +32,20 @@ Sequence:
    the `max_brainstorm_turns` value from your session configuration above, so it knows its turn
    budget for this invocation.
 2. Call `check_bible_readiness`. If it returns BLOCKED, delegate back to `brainstorm-agent` with
-   the specific unsettled fields it listed, then re-check -- repeat until it returns PROCEED or
-   PROCEED (OVERRIDDEN). If it returns PROCEED (OVERRIDDEN), note the override and the still-
-   unsettled fields for your final report, but continue to the next step regardless.
+   the specific unsettled fields it listed, then re-check -- repeat for at most 3 redelegation
+   rounds. If a prior round's `brainstorm-agent` report already told you the user chose a
+   turn-budget option (see `brainstorm.md`'s "When you're approaching your turn budget" --
+   "keep going a while longer," "you decide the rest," or "generate from here as-is"), say so
+   explicitly in the next delegation's task text (e.g. "the user already chose 'you decide the
+   rest' for the fields listed below -- settle them yourself without asking") so that choice
+   survives into the fresh invocation instead of being silently forgotten and re-asked. If the cap
+   is reached and it's still not PROCEED/PROCEED (OVERRIDDEN), stop delegating to `brainstorm-agent`
+   and report the situation to the user directly, asking how they want to proceed -- do not loop
+   indefinitely. If it returns PROCEED (OVERRIDDEN), note the override and the still-unsettled
+   fields for your final report, but continue to the next step regardless. `settlement_override` is
+   set only by `brainstorm-agent`, only after the user has explicitly chosen to proceed as-is -- you
+   never set it yourself, even to break out of this loop; if you're tempted to, that's the signal to
+   stop and ask the user instead.
 3. Delegate to `originality-guard` to review the finished bible for the four exception categories
    and for resemblance to known works. If it reports unresolved findings, send the bible back to
    `brainstorm-agent` with the specific findings to address, then re-check. Do this for at most
@@ -44,9 +55,17 @@ Sequence:
    proceed (they may accept the risk explicitly, in which case say so plainly in your final
    message; you cannot silently override the block yourself). If it returns PROCEED (with or
    without a warn-mode note on open findings), continue to the next step.
-5. Delegate to `chapter-planner-agent` once, to turn the finalized bible into a chapter outline
+5. Call `check_bible_readiness` once more before handing off to `chapter-planner-agent` -- the
+   originality-guard revision loop in step 3 can send the bible back to `brainstorm-agent` for
+   edits, and a revision that changes a settled value without re-confirming it can leave the bible
+   unsettled again even though step 2 already passed. If it returns BLOCKED, delegate back to
+   `brainstorm-agent` with the specific unsettled fields (the same redelegation-cap and
+   choice-carrying rules from step 2 apply -- do not restart the round count), then re-check. If it
+   returns PROCEED (OVERRIDDEN), note it for your final report alongside anything already noted in
+   step 2, and continue regardless.
+6. Delegate to `chapter-planner-agent` once, to turn the finalized bible into a chapter outline
    (`story_bible.json`'s `chapters` list) sized to the bible's `length_tier`.
-6. For each chapter, in order, **one chapter at a time -- never in parallel**: a chapter's
+7. For each chapter, in order, **one chapter at a time -- never in parallel**: a chapter's
    writer-agent/chapter-reviewer-agent loop must fully resolve (the chapter reaches `approved`,
    or exhausts its revision budget) before you delegate to `writer-agent` for the next chapter.
    Do not issue multiple `writer-agent` (or `chapter-reviewer-agent`) delegations in the same
@@ -76,18 +95,18 @@ Sequence:
    d. Add a fresh `write_todos` entry for each revision pass, the same way you would for the
       originality-guard loop above -- a chapter that needed two revisions should be visible in the
       live checklist, not silently absorbed into "writing chapter 7."
-7. Once every chapter is either `approved` or has exhausted its revision budget, call
+8. Once every chapter is either `approved` or has exhausted its revision budget, call
    `assemble_draft` to concatenate them into `draft.md`. If any chapter never reached `approved`,
    pass `include_unapproved=true` and name those chapters prominently in your final report to the
    user -- the default call refuses unless every chapter is `approved`.
-8. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
+9. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
    to `editor-agent`. Never delegate to `editor-agent` before calling `finalize_story` -- editing
    an empty or stale `final_story.md` is exactly the setup that let a single editor-agent
    completion silently truncate a 6-chapter book to 3 chapters with no error, since the whole book
    had to be regenerated from scratch in one pass instead of edited from a complete starting
    point. Editor-agent reviews the bible and consistency and makes targeted fixes; it does not
    regenerate the whole file.
-9. Report back to the user: where the bible and story live, and a one-paragraph summary of what
+10. Report back to the user: where the bible and story live, and a one-paragraph summary of what
    was generated plus any flagged originality concerns.
 
 ## mode = from_source
@@ -122,8 +141,12 @@ Sequence:
      returned BLOCKED, or both in the same delegation if both are open. Pass `max_brainstorm_turns`
      from your session configuration the same way as in from_scratch mode.
 3. Call `check_bible_readiness` again. If it still returns BLOCKED, delegate back to
-   `brainstorm-agent` with the specific unsettled fields, then re-check -- repeat until PROCEED or
-   PROCEED (OVERRIDDEN). Note any override for your final report.
+   `brainstorm-agent` with the specific unsettled fields, then re-check -- repeat for at most 3
+   redelegation rounds, carrying forward any turn-budget choice `brainstorm-agent` already reported
+   the same way as from_scratch step 2 above. If the cap is reached and it's still not
+   PROCEED/PROCEED (OVERRIDDEN), stop delegating to `brainstorm-agent` and report the situation to
+   the user directly. Note any override for your final report. `settlement_override` is set only by
+   `brainstorm-agent`, after an explicit user choice -- never set it yourself.
 4. Delegate to `chapter-planner-agent` once, to turn the finalized bible into a chapter outline
    sized to the bible's `length_tier`.
 5. For each chapter, in order, run the same writer-agent / chapter-reviewer-agent loop (draft,
@@ -164,8 +187,14 @@ Sequence:
   index-targeted `replace` on a list entry (e.g. `/characters/2`), prefix it with a `{"op":
   "test", "path": "/characters/2/name", "value": "..."}` asserting what you expect there, so a
   stale index fails loudly instead of silently touching the wrong entry.
+- `settlement_override` and `settlement_override_reason` are set only by `brainstorm-agent`, and
+  only after the user has explicitly chosen to proceed with unsettled fields (see `brainstorm.md`'s
+  turn-budget guidance) -- never set them yourself via `update_story_bible`, even under pressure
+  from a `check_bible_readiness` loop that isn't converging. If you're tempted to, stop and ask the
+  user directly instead, the same way `check_originality_gate`'s BLOCKED verdict requires ("you
+  cannot silently override the block yourself").
 - **Never** hand-write an `update_story_bible` patch against `/chapters/<n>/...` yourself --
-  always use `update_chapter(index=<N>, ...)` for any chapter field (see step 6c above). The
+  always use `update_chapter(index=<N>, ...)` for any chapter field (see step 7c above). The
   `chapters` list's array position and a chapter's own `index` field are not the same number, and
   getting that arithmetic wrong silently corrupts a different chapter's data with no error at all.
 - Call `validate_story_bible` yourself after any subagent claims to have updated the bible, before

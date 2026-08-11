@@ -73,6 +73,18 @@ def test_is_ready_for_writing_true_once_everything_is_settled() -> None:
     assert missing == []
 
 
+def test_is_ready_for_writing_false_when_settled_field_is_blank() -> None:
+    """A DimensionField can be marked settled=True with an empty value -- e.g. a stale patch that
+    only flipped `settled` without ever writing real content. That must not count as ready."""
+    from conftest import build_fully_settled_bible
+
+    bible = build_fully_settled_bible()
+    bible.writing_style.tone = DimensionField(value="", settled=True)
+    ready, missing = bible.is_ready_for_writing()
+    assert ready is False
+    assert "writing_style.tone" in missing
+
+
 def test_extra_fields_are_rejected() -> None:
     with pytest.raises(ValidationError):
         StoryBible.model_validate({"mode": "from_scratch", "not_a_real_field": 1})
