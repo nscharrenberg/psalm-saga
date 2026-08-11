@@ -10,6 +10,7 @@ from psalm_saga.prompts import load_prompt
 from psalm_saga.state import SagaState
 from psalm_saga.tools import (
     make_assemble_draft_tool,
+    make_check_bible_readiness_tool,
     make_check_fidelity_tool,
     make_check_originality_gate_tool,
     make_finalize_story_tool,
@@ -58,6 +59,7 @@ def build_orchestrator(  # type: ignore[no-untyped-def]
         session_dir,
         settings.originality_guard_strictness
     )
+    check_bible_readiness = make_check_bible_readiness_tool(session_dir)
     check_fidelity_alignment = make_check_fidelity_tool(session_dir)
     assemble_draft = make_assemble_draft_tool(session_dir)
     update_chapter = make_update_chapter_tool(session_dir)
@@ -68,7 +70,7 @@ def build_orchestrator(  # type: ignore[no-untyped-def]
         system_prompt=load_prompt("orchestrator"),
         tools=[
             think, update_story_bible, validate_story_bible,
-            check_originality_gate, check_fidelity_alignment, assemble_draft, update_chapter,
+            check_originality_gate, check_bible_readiness, check_fidelity_alignment, assemble_draft, update_chapter,
             finalize_story,
         ],
         subagents=subagents,

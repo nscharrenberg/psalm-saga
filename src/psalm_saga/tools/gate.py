@@ -64,3 +64,50 @@ def make_check_originality_gate_tool(session_dir: Path, strictness: GuardStrictn
         )
 
     return check_originality_gate
+
+
+def make_check_bible_readiness_tool(session_dir: Path):  # type: ignore[no-untyped-def]
+    """Build a `check_bible_readiness` tool bound to one session's bible.
+
+    Mirrors `make_check_originality_gate_tool`'s pattern: a deterministic PROCEED/BLOCKED verdict
+    computed from `StoryBible.is_ready_for_writing()`, so the orchestrator's decision to hand off
+    to `chapter-planner-agent` doesn't depend on the model correctly judging "is this settled" from
+    a long JSON document itself.
+    """
+    bible_path = session_dir / "story_bible.json"
+
+    @tool
+    def check_bible_readiness() -> str:
+        """Check whether story_bible.json is fully settled and ready for chapter-planner-agent.
+
+        Call this before delegating to chapter-planner-agent, in both from_scratch and from_source
+        mode. If it returns BLOCKED, do not delegate to chapter-planner-agent -- send the bible
+        back to brainstorm-agent to settle the listed fields, then re-check. If it returns
+        PROCEED (OVERRIDDEN), the user has explicitly chosen to proceed with the listed fields
+        left unsettled -- continue, but surface the override and the unsettled list prominently in
+        your final report.
+        """
+        if not bible_path.exists():
+            return "BLOCKED: story_bible.json does not exist yet."
+
+        try:
+            bible = StoryBible.model_validate(json.loads(bible_path.read_text(encoding="utf-8")))
+        except Exception as exc:  # noqa: BLE001 - surfaced verbatim to the model, deliberately broad
+            return f"BLOCKED: story_bible.json is not currently valid ({exc}). Fix it first."
+
+        ready, missing = bible.is_ready_for_writing()
+        if ready:
+            return "PROCEED: story_bible.json is fully settled."
+
+        summary = ", ".join(missing)
+
+        if bible.settlement_override:
+            reason = bible.settlement_override_reason or "(no reason recorded)"
+            return (
+                f"PROCEED (OVERRIDDEN): {len(missing)} field(s) still unsettled: {summary}. "
+                f"User override reason: {reason}. Surface this prominently in your final report."
+            )
+
+        return f"BLOCKED: {len(missing)} field(s) still unsettled: {summary}."
+
+    return check_bible_readiness
