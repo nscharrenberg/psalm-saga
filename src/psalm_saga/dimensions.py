@@ -101,38 +101,38 @@ class Character(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    role: str = Field(
-        default="",
+    role: DimensionField = Field(
+        default_factory=DimensionField,
         description="The role of this character in the story."
     )
-    external_goal: str = ""
-    internal_need: str = ""
-    flaw: str = ""
-    arc: str = ""
-    voice_notes: str = Field(
-        default="",
+    external_goal: DimensionField = Field(default_factory=DimensionField)
+    internal_need: DimensionField = Field(default_factory=DimensionField)
+    flaw: DimensionField = Field(default_factory=DimensionField)
+    arc: DimensionField = Field(default_factory=DimensionField)
+    voice_notes: DimensionField = Field(
+        default_factory=DimensionField,
         description="How this character speaks/thinks."
     )
     relationships: dict[str, str] = Field(
         default_factory=dict,
         description="other character name -> nature of the relationship"
     )
-    backstory: str = ""
+    backstory: DimensionField = Field(default_factory=DimensionField)
 
 
 class PlotArchitecture(BaseModel):
     """Corresponds to PSALM's Plat Architecture evaluator"""
     model_config = ConfigDict(extra="forbid")
 
-    structure: str = Field(
-        default="",
+    structure: DimensionField = Field(
+        default_factory=DimensionField,
         description="The overall structure of the story, e.g. three-act, five-act, kishotenketsu, in medias res, frame tale"
     )
 
-    inciting_incident: str = ""
+    inciting_incident: DimensionField = Field(default_factory=DimensionField)
     turning_points: list[str] = Field(default_factory=list)
-    climax: str = ""
-    resolution: str = ""
+    climax: DimensionField = Field(default_factory=DimensionField)
+    resolution: DimensionField = Field(default_factory=DimensionField)
     causality_notes: str = Field(
         default="",
         description="How events causally chain into each other, not just sequence."
@@ -145,14 +145,14 @@ class Scene(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    setting: str = ""
-    sensory_details: str = ""
-    function: str = Field(
-        default="",
+    setting: DimensionField = Field(default_factory=DimensionField)
+    sensory_details: DimensionField = Field(default_factory=DimensionField)
+    function: DimensionField = Field(
+        default_factory=DimensionField,
         description="What this scene does for plot/character/theme."
     )
     characters_present: list[str] = Field(default_factory=list)
-    tension: str = ""
+    tension: DimensionField = Field(default_factory=DimensionField)
 
 
 class WorldBuilding(BaseModel):
@@ -398,6 +398,17 @@ class Chapter(BaseModel):
     revision_count: int = 0
 
 
+_CHARACTER_GATED_FIELDS: tuple[str, ...] = (
+    "role", "external_goal", "internal_need", "flaw", "arc", "voice_notes", "backstory",
+)
+_PLOT_GATED_FIELDS: tuple[str, ...] = ("structure", "inciting_incident", "climax", "resolution")
+_SCENE_GATED_FIELDS: tuple[str, ...] = ("setting", "sensory_details", "function", "tension")
+_NARRATIVE_VOICE_DIMENSION_FIELDS: tuple[str, ...] = (
+    "narrative_distance", "narrative_presence", "focalisation", "temporal_perspective",
+    "reader_engagement",
+)
+
+
 class StoryBible(BaseModel):
     """
     The complete, structured brief that drives prose generation.
@@ -441,6 +452,10 @@ class StoryBible(BaseModel):
     )
     fidelity_notes: str = ""
 
+    # settlement gate (both modes)
+    settlement_override: bool = False
+    settlement_override_reason: str = ""
+
     # from_scratch only
     originality_findings: list[OriginalityFinding] = Field(default_factory=list)
 
@@ -468,16 +483,17 @@ class StoryBible(BaseModel):
 
     def is_ready_for_writing(self) -> tuple[bool, list[str]]:
         """
-        Determine if all necessary elements are ready for writing a story.
+        Report whether every gated field in the bible is settled, and which ones aren't.
 
-        This method checks if essential elements for story writing are prepared.
-        It validates the presence of a premise, characters, plot structure, and the
-        inciting incident. If any of these elements are missing, they are listed.
+        A field counts as gated if it's one of the six PSALM dimensions' content fields (see
+        the module-level `_..._GATED_FIELDS` constants for exactly which ones -- connective/
+        reference fields like `turning_points` or `characters_present` are deliberately excluded).
+        `premise` is checked separately since it isn't part of any PSALM dimension. `characters`
+        and `scenes` also require at least one entry, not just settled entries once present.
 
-        :returns:
-            A tuple containing a boolean indicating readiness (`True` if all necessary
-            elements are ready, `False` otherwise) and a list of missing element
-            names required for writing the story.
+        :returns: `(True, [])` once nothing is missing, else `(False, <dotted-path list>)` --
+            e.g. `"characters[0].arc"`, `"plot.climax"`, `"writing_style.tone"` -- naming exactly
+            which fields still need settling.
         :rtype: tuple[bool, list[str]]
         """
         missing: list[str] = []
@@ -485,13 +501,40 @@ class StoryBible(BaseModel):
         if not self.premise:
             missing.append("premise")
 
+        for field_name in WritingStyle.model_fields:
+            if not getattr(self.writing_style, field_name).settled:
+                missing.append(f"writing_style.{field_name}")
+
+        if self.narrative_voice.person is None:
+            missing.append("narrative_voice.person")
+        if self.narrative_voice.narrator_knowledge is None:
+            missing.append("narrative_voice.narrator_knowledge")
+        for field_name in _NARRATIVE_VOICE_DIMENSION_FIELDS:
+            if not getattr(self.narrative_voice, field_name).settled:
+                missing.append(f"narrative_voice.{field_name}")
+
         if not self.characters:
             missing.append("characters")
+        else:
+            for i, character in enumerate(self.characters):
+                for field_name in _CHARACTER_GATED_FIELDS:
+                    if not getattr(character, field_name).settled:
+                        missing.append(f"characters[{i}].{field_name}")
 
-        if not self.plot.structure:
-            missing.append("plot.structure")
+        for field_name in _PLOT_GATED_FIELDS:
+            if not getattr(self.plot, field_name).settled:
+                missing.append(f"plot.{field_name}")
 
-        if not self.plot.inciting_incident:
-            missing.append("plot.inciting_incident")
+        if not self.scenes:
+            missing.append("scenes")
+        else:
+            for i, scene in enumerate(self.scenes):
+                for field_name in _SCENE_GATED_FIELDS:
+                    if not getattr(scene, field_name).settled:
+                        missing.append(f"scenes[{i}].{field_name}")
+
+        for field_name in WorldBuilding.model_fields:
+            if not getattr(self.world_building, field_name).settled:
+                missing.append(f"world_building.{field_name}")
 
         return len(missing) == 0, missing

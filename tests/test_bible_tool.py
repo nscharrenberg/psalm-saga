@@ -42,13 +42,9 @@ def test_validate_reports_missing_required_fields(tmp_path: Path) -> None:
 
 
 def test_validate_reports_ok_when_ready(tmp_path: Path) -> None:
-    bible = StoryBible(
-        mode=GenerationMode.FROM_SCRATCH,
-        premise="A clockmaker starts losing time itself, one hour at a time.",
-        characters=[Character(name="Odile", role="protagonist")],
-    )
-    bible.plot.structure = "three-act"
-    bible.plot.inciting_incident = "Odile's shop clock strikes an hour that hasn't happened yet."
+    from conftest import build_fully_settled_bible
+
+    bible = build_fully_settled_bible()
     (tmp_path / "story_bible.json").write_text(bible.model_dump_json())
     tool = make_validate_bible_tool(tmp_path)
     result = _invoke(tool)  # type: ignore[no-untyped-call]

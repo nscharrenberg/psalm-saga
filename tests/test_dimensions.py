@@ -11,6 +11,7 @@ from psalm_saga.dimensions import (  # type: ignore[import-untyped]
     Chapter,
     ChapterStatus,
     Character,
+    DimensionField,
     DivergenceIntensity,
     DivergencePlan,
     GenerationMode,
@@ -36,18 +37,37 @@ def test_is_ready_for_writing_reports_missing_fields() -> None:
     assert ready is False
     assert "premise" in missing
     assert "characters" in missing
+    assert "scenes" in missing
     assert "plot.structure" in missing
-    assert "plot.inciting_incident" in missing
+    assert "plot.climax" in missing
+    assert "writing_style.tone" in missing
+    assert "narrative_voice.person" in missing
+    assert "world_building.geography_and_space" in missing
 
 
-def test_is_ready_for_writing_true_once_minimum_fields_set() -> None:
+def test_is_ready_for_writing_false_with_only_the_old_minimal_fields_set() -> None:
+    """Regression guard for the full-settlement fix: premise + one character + plot.structure/
+    inciting_incident used to be enough to pass. It no longer is -- writing_style, narrative_voice,
+    world_building, scenes, and the rest of plot/characters must be settled too."""
     bible = StoryBible(
         mode=GenerationMode.FROM_SCRATCH,
         premise="A lighthouse keeper discovers the sea remembers everything it swallows.",
-        characters=[Character(name="Mara", role="protagonist")],
+        characters=[Character(name="Mara", role=DimensionField(value="protagonist", settled=True))],
     )
-    bible.plot.structure = "three-act"
-    bible.plot.inciting_incident = "A drowned bell washes ashore, still ringing."
+    bible.plot.structure = DimensionField(value="three-act", settled=True)
+    bible.plot.inciting_incident = DimensionField(
+        value="A drowned bell washes ashore, still ringing.", settled=True
+    )
+    ready, missing = bible.is_ready_for_writing()
+    assert ready is False
+    assert "plot.climax" in missing
+    assert "writing_style.tone" in missing
+
+
+def test_is_ready_for_writing_true_once_everything_is_settled() -> None:
+    from conftest import build_fully_settled_bible
+
+    bible = build_fully_settled_bible()
     ready, missing = bible.is_ready_for_writing()
     assert ready is True
     assert missing == []

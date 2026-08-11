@@ -59,13 +59,18 @@ def make_update_story_bible_tool(session_dir: Path):  # type: ignore[no-untyped-
         validates the patch itself, so the file on disk can never end up syntactically broken or
         schema-invalid by going through it.
 
-        Each entry in `patch` is one operation: `{"op": "replace", "path": "/plot/structure",
-        "value": "three-act"}` sets a field that already exists -- most StoryBible fields already
-        exist with a schema default, so `replace` works for them from your first call. A field
-        that's `None`/empty until first set (like `mode` on your very first call of a session, or
-        a new key inside a dict field such as `/achieved_divergence/<dimension>`) needs `"add"`
-        instead. Use `"add"` with a path ending in `/-` to append to a list, e.g. `{"op": "add",
-        "path": "/characters/-", "value": {"name": "Finn", "role": "..."}}`. Use `"remove"` to
+        Each entry in `patch` is one operation: `{"op": "replace", "path": "/premise",
+        "value": "..."}` sets a plain scalar field that already exists -- most StoryBible fields
+        already exist with a schema default, so `replace` works for them from your first call. A
+        `DimensionField` (e.g. `plot.structure`, `writing_style.tone`, a character's `role`) is an
+        object, not a plain value -- target its `.../value` and `.../settled` sub-paths
+        separately, e.g. `{"op": "replace", "path": "/plot/structure/value", "value":
+        "three-act"}` plus `{"op": "replace", "path": "/plot/structure/settled", "value": true}`
+        once you're confident enough in it to mark it settled. A field that's `None`/empty until
+        first set (like `mode` on your very first call of a session, or a new key inside a dict
+        field such as `/achieved_divergence/<dimension>`) needs `"add"` instead. Use `"add"` with
+        a path ending in `/-` to append to a list, e.g. `{"op": "add", "path": "/characters/-",
+        "value": {"name": "Finn", "role": {"value": "...", "settled": false}}}`. Use `"remove"` to
         delete a list entry or clear a dict key. Before a `remove` or index-targeted `replace` on
         a list (e.g. `/characters/2`), prefix it with a `"test"` op asserting the value you expect
         to be there -- if the list has drifted since you last read it, the test fails with a

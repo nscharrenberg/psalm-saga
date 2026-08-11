@@ -43,14 +43,15 @@ def test_replace_one_field_leaves_sibling_untouched(tmp_path: Path) -> None:
         tool,
         patch=[
             _op("replace", "/mode", "from_scratch"),
-            _op("replace", "/plot/structure", "three-act"),
+            _op("replace", "/plot/structure/value", "three-act"),
+            _op("replace", "/plot/structure/settled", True),
         ],
     )
-    _invoke(tool, patch=[_op("replace", "/plot/climax", "The light goes out for good.")])  # type: ignore[no-untyped-call]
+    _invoke(tool, patch=[_op("replace", "/plot/climax/value", "The light goes out for good."), _op("replace", "/plot/climax/settled", True)])  # type: ignore[no-untyped-call]
 
     bible = StoryBible.model_validate_json((tmp_path / "story_bible.json").read_text())
-    assert bible.plot.structure == "three-act"
-    assert bible.plot.climax == "The light goes out for good."
+    assert bible.plot.structure.value == "three-act"
+    assert bible.plot.climax.value == "The light goes out for good."
 
 
 def test_append_to_a_list_via_dash_path(tmp_path: Path) -> None:
@@ -59,10 +60,10 @@ def test_append_to_a_list_via_dash_path(tmp_path: Path) -> None:
         tool,
         patch=[
             _op("replace", "/mode", "from_scratch"),
-            _op("add", "/characters/-", {"name": "Mara", "role": "protagonist"}),
+            _op("add", "/characters/-", {"name": "Mara", "role": {"value": "protagonist", "settled": True}}),
         ],
     )
-    _invoke(tool, patch=[_op("add", "/characters/-", {"name": "Odile", "role": "antagonist"})])  # type: ignore[no-untyped-call]
+    _invoke(tool, patch=[_op("add", "/characters/-", {"name": "Odile", "role": {"value": "antagonist", "settled": True}})])  # type: ignore[no-untyped-call]
 
     bible = StoryBible.model_validate_json((tmp_path / "story_bible.json").read_text())
     assert [c.name for c in bible.characters] == ["Mara", "Odile"]
@@ -144,7 +145,7 @@ def test_stale_index_test_op_is_rejected_and_file_untouched(tmp_path: Path) -> N
         tool,
         patch=[
             _op("replace", "/mode", "from_scratch"),
-            _op("add", "/characters/-", {"name": "Mara", "role": "protagonist"}),
+            _op("add", "/characters/-", {"name": "Mara", "role": {"value": "protagonist", "settled": True}}),
         ],
     )
     before = (tmp_path / "story_bible.json").read_text()
@@ -177,11 +178,11 @@ def test_first_call_bootstraps_a_full_skeleton_for_granular_second_call(tmp_path
     # Only possible if the first call's write already produced a full schema-shaped skeleton on
     # disk (every StoryBible field present with its default), not just the one key the first
     # patch explicitly touched.
-    result = _invoke(tool, patch=[_op("replace", "/plot/structure", "three-act")])  # type: ignore[no-untyped-call]
+    result = _invoke(tool, patch=[_op("replace", "/plot/structure/value", "three-act"), _op("replace", "/plot/structure/settled", True)])  # type: ignore[no-untyped-call]
     assert result.startswith("OK")
 
     bible = StoryBible.model_validate_json((tmp_path / "story_bible.json").read_text())
-    assert bible.plot.structure == "three-act"
+    assert bible.plot.structure.value == "three-act"
 
 
 def test_first_call_omitting_mode_is_rejected_and_nothing_written(tmp_path: Path) -> None:
@@ -213,13 +214,13 @@ def test_first_call_with_mode_still_works_and_second_call_can_be_granular(tmp_pa
     )
     assert result.startswith("OK")
 
-    result = _invoke(tool, patch=[_op("replace", "/plot/structure", "three-act")])  # type: ignore[no-untyped-call]
+    result = _invoke(tool, patch=[_op("replace", "/plot/structure/value", "three-act"), _op("replace", "/plot/structure/settled", True)])  # type: ignore[no-untyped-call]
     assert result.startswith("OK")
 
     bible = StoryBible.model_validate_json((tmp_path / "story_bible.json").read_text())
     assert bible.mode is GenerationMode.FROM_SOURCE
     assert bible.premise == "A radio signal."
-    assert bible.plot.structure == "three-act"
+    assert bible.plot.structure.value == "three-act"
 
 
 def test_divergence_plan_must_be_added_whole_not_descended_into(tmp_path: Path) -> None:
