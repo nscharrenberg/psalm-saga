@@ -196,8 +196,13 @@ def test_brainstorm_prompt_mines_initial_context_before_asking() -> None:
 
 def test_brainstorm_prompt_promotes_multi_field_proposals() -> None:
     text = load_prompt("brainstorm")
-    assert "settle" in text.lower()
-    assert "at once" in text.lower() or "in the same" in text.lower()
+    # The new guidance must include language about settling multiple fields from a single proposal.
+    # Use a distinctive phrase unique to the new multi-field bullet, not just generic words that
+    # already appear elsewhere (e.g. "settle" in `settled: true`, "at once" in divergence-plan section).
+    assert "could plausibly settle at once" in text
+    # Also verify the guidance is scoped to the Ground rules section (the think-step bullet),
+    # not just mentioned in passing somewhere else.
+    assert text.index("could plausibly settle at once") > text.index("Before each turn, use `think`")
 
 
 def test_brainstorm_prompt_turn_budget_offers_three_options() -> None:
