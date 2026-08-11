@@ -184,3 +184,29 @@ def test_orchestrator_prompt_forbids_parallel_chapter_delegation() -> None:
     text = load_prompt("orchestrator")
     assert "parallel" in text.lower()
     assert "one chapter at a time" in text.lower() or "never issue multiple" in text.lower()
+
+
+def test_brainstorm_prompt_mines_initial_context_before_asking() -> None:
+    text = load_prompt("brainstorm")
+    assert "mine" in text.lower() or "mining" in text.lower()
+    # the mining instruction must appear before the "Ground rules" section (i.e. before the
+    # general question-asking rules), establishing it as a first-turn step
+    assert text.index("initial context") < text.index("## Ground rules")
+
+
+def test_brainstorm_prompt_promotes_multi_field_proposals() -> None:
+    text = load_prompt("brainstorm")
+    assert "settle" in text.lower()
+    assert "at once" in text.lower() or "in the same" in text.lower()
+
+
+def test_brainstorm_prompt_turn_budget_offers_three_options() -> None:
+    text = load_prompt("brainstorm")
+    assert "settlement_override" in text
+    assert "keep going" in text.lower() or "raise" in text.lower()
+    assert "you decide" in text.lower()
+
+
+def test_brainstorm_prompt_no_longer_references_old_four_field_minimum() -> None:
+    text = load_prompt("brainstorm")
+    assert "is_ready_for_writing checks: premise, at least one character" not in text
