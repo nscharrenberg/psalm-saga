@@ -37,7 +37,7 @@ def test_validate_reports_missing_required_fields(tmp_path: Path) -> None:
     (tmp_path / "story_bible.json").write_text(bible.model_dump_json())
     tool = make_validate_bible_tool(tmp_path)
     result = _invoke(tool)  # type: ignore[no-untyped-call]
-    assert "not yet ready" in result
+    assert "not yet fully settled" in result
     assert "premise" in result
 
 
@@ -48,7 +48,7 @@ def test_validate_reports_ok_when_ready(tmp_path: Path) -> None:
     (tmp_path / "story_bible.json").write_text(bible.model_dump_json())
     tool = make_validate_bible_tool(tmp_path)
     result = _invoke(tool)  # type: ignore[no-untyped-call]
-    assert result.startswith("OK: story_bible.json is schema-valid and has the minimum fields")
+    assert result.startswith("OK: story_bible.json is schema-valid and fully settled")
 
 
 def test_validate_does_not_escalate_after_repeated_invalid_json(tmp_path: Path) -> None:

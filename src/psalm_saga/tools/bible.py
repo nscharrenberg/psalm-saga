@@ -141,7 +141,10 @@ def make_update_story_bible_tool(session_dir: Path):  # type: ignore[no-untyped-
         bible_path.write_text(bible.model_dump_json(indent=2), encoding="utf-8")
 
         ready, missing = bible.is_ready_for_writing()
-        status = "ready for the writer subagent" if ready else f"missing: {', '.join(missing)}"
+        status = (
+            "fully settled, ready for chapter-planner-agent" if ready
+            else f"still unsettled: {', '.join(missing)}"
+        )
         return f"OK: story_bible.json updated ({status})."
 
     return update_story_bible
@@ -191,10 +194,13 @@ def make_validate_bible_tool(session_dir: Path):  # type: ignore[no-untyped-def]
         bible = outcome.validated
         ready, missing = bible.is_ready_for_writing()
         if ready:
-            return "OK: story_bible.json is schema-valid and has the minimum fields for writing."
+            return (
+                "OK: story_bible.json is schema-valid and fully settled, ready for "
+                "chapter-planner-agent."
+            )
         return (
-            "OK: story_bible.json is schema-valid, but not yet ready for the writer subagent. "
-            f"Missing/empty required fields: {', '.join(missing)}."
+            "OK: story_bible.json is schema-valid, but not yet fully settled. "
+            f"Still unsettled: {', '.join(missing)}."
         )
 
     return validate_story_bible
