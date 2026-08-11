@@ -215,3 +215,15 @@ def test_brainstorm_prompt_turn_budget_offers_three_options() -> None:
 def test_brainstorm_prompt_no_longer_references_old_four_field_minimum() -> None:
     text = load_prompt("brainstorm")
     assert "is_ready_for_writing checks: premise, at least one character" not in text
+
+
+def test_extractor_prompt_marks_confident_extractions_settled() -> None:
+    text = load_prompt("extractor")
+    assert "settled: true" in text or "settled\": true" in text or "settled=True" in text
+
+
+def test_extractor_prompt_patch_examples_use_dimension_field_shape() -> None:
+    text = load_prompt("extractor")
+    # the old bare-value example must be gone -- /plot/structure is a DimensionField now
+    assert '"/plot/structure", "value": "three-act"' not in text
+    assert "/plot/structure/value" in text
