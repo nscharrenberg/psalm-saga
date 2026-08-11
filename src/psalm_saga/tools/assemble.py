@@ -10,12 +10,43 @@ the same role `check_originality_gate`/`check_fidelity_alignment` already play.
 """
 
 import json
+import re
 from pathlib import Path
 
 from langchain_core.tools import tool
 
 from psalm_saga.dimensions import ChapterStatus, StoryBible
 from psalm_saga.tools._chapter_paths import CHAPTERS_DIRNAME, chapter_filename
+
+_CHAPTER_NUMBER_PREFIX_RE = re.compile(r"^chapter\s+\d+\s*[:.\-–—]?\s*", re.IGNORECASE)
+
+
+def _strip_redundant_leading_heading(content: str, title: str) -> str:
+    """Drop a chapter's own leading title/heading line if it just repeats `title`.
+
+    `writer.md` tells writer-agent not to include one -- `assemble_draft` adds the canonical
+    heading itself -- but that instruction isn't reliably followed. In production, chapters in
+    the same book self-titled in three different ways: a bare title line, a markdown `## Title`
+    line, and a `Chapter N: Title` line. This normalizes the first non-empty line the same way
+    regardless of which form it took, and only strips it on an exact match against `title` -- a
+    chapter that genuinely opens with prose is left untouched.
+    """
+    if not title:
+        return content
+
+    lines = content.split("\n")
+    if not lines or not lines[0].strip():
+        return content
+
+    first_line = lines[0].strip().lstrip("#").strip()
+    first_line = _CHAPTER_NUMBER_PREFIX_RE.sub("", first_line).strip()
+    if first_line.casefold() != title.strip().casefold():
+        return content
+
+    remaining = lines[1:]
+    while remaining and not remaining[0].strip():
+        remaining.pop(0)
+    return "\n".join(remaining)
 
 
 def make_assemble_draft_tool(session_dir: Path):  # type: ignore[no-untyped-def]
@@ -77,7 +108,9 @@ def make_assemble_draft_tool(session_dir: Path):  # type: ignore[no-untyped-def]
                 missing.append(f"chapter {chapter.index} ({chapter_filename(chapter.index)})")
                 continue
             heading = chapter.title or f"Chapter {chapter.index}"
-            bodies.append(f"## {heading}\n\n{chapter_path.read_text(encoding='utf-8').strip()}")
+            raw_body = chapter_path.read_text(encoding="utf-8").strip()
+            body = _strip_redundant_leading_heading(raw_body, chapter.title)
+            bodies.append(f"## {heading}\n\n{body}")
 
         if missing:
             reason = (

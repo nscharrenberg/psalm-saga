@@ -122,6 +122,25 @@ def test_orchestrator_prompt_uses_update_chapter_for_revision_count() -> None:
     assert "increment_revision_count" in text
 
 
+def test_orchestrator_prompt_calls_finalize_story_before_delegating_to_editor() -> None:
+    """Regression test: editor-agent used to be told to "produce the final version" of the whole
+    book in a single write_file call, which silently truncated a 6-chapter draft.md to 3 chapters
+    with no error -- the model just stopped partway through a large single-shot regeneration, the
+    same failure category the chapter-by-chapter writer rewrite fixed, never migrated to the
+    editor side. finalize_story() must run before editor-agent is delegated to (in both modes),
+    so final_story.md is always a complete, correct copy of every chapter before editor-agent
+    does anything -- regardless of what it does next."""
+    text = load_prompt("orchestrator")
+    assert text.count("finalize_story") >= 2
+
+
+def test_editor_prompt_makes_targeted_edits_not_a_full_rewrite() -> None:
+    text = load_prompt("editor")
+    assert "finalize_story" in text
+    assert "edit_file" in text
+    assert "produce the final version" not in text
+
+
 def test_orchestrator_prompt_never_writes_a_chapter_filename_itself() -> None:
     """Regression test for the actual root cause of the two-different-drafts-per-chapter bug:
     the orchestrator's own delegation text (composed in its own prose, not copied from anywhere)

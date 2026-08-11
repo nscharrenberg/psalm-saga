@@ -14,6 +14,7 @@ from psalm_saga.tools.chapter_files import (
     make_write_chapter_file_tool,
 )
 from psalm_saga.tools.fidelity import make_check_fidelity_tool
+from psalm_saga.tools.finalize import make_finalize_story_tool
 from psalm_saga.tools.gate import make_check_originality_gate_tool
 from psalm_saga.tools.think import think
 
@@ -30,6 +31,7 @@ __all__ = [
     "make_update_chapter_tool",
     "make_read_chapter_file_tool",
     "make_write_chapter_file_tool",
+    "make_finalize_story_tool",
     "BIBLE_WRITE_PROTECTION",
     "CHAPTERS_WRITE_PROTECTION",
 ]

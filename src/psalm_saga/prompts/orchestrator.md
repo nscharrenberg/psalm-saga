@@ -74,8 +74,13 @@ Sequence:
    `assemble_draft` to concatenate them into `draft.md`. If any chapter never reached `approved`,
    pass `include_unapproved=true` and name those chapters prominently in your final report to the
    user -- the default call refuses unless every chapter is `approved`.
-7. Delegate to `editor-agent` to review the draft for internal consistency with the bible and
-   prose quality, and produce the final version.
+7. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
+   to `editor-agent`. Never delegate to `editor-agent` before calling `finalize_story` -- editing
+   an empty or stale `final_story.md` is exactly the setup that let a single editor-agent
+   completion silently truncate a 6-chapter book to 3 chapters with no error, since the whole book
+   had to be regenerated from scratch in one pass instead of edited from a complete starting
+   point. Editor-agent reviews the bible and consistency and makes targeted fixes; it does not
+   regenerate the whole file.
 8. Report back to the user: where the bible and story live, and a one-paragraph summary of what
    was generated plus any flagged originality concerns.
 
@@ -112,7 +117,9 @@ Sequence:
    `assemble_draft` to concatenate them into `draft.md`, passing `include_unapproved=true` (and
    naming the affected chapters in your final report) if any chapter never reached `approved` --
    same escape hatch as the from_scratch sequence above.
-5. Delegate to `editor-agent` for a consistency and quality pass. The editor also assesses, per
+5. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
+   to `editor-agent` for a consistency and quality pass -- same "never delegate before
+   finalize_story" rule as the from_scratch sequence above. The editor also assesses, per
    dimension, what similarity level the finished story actually achieved
    (`achieved_divergence`), and calls `check_fidelity_alignment`.
 6. Read the `check_fidelity_alignment` result yourself. If it reports mismatches, note them

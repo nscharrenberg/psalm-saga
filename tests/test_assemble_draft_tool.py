@@ -139,6 +139,60 @@ def test_include_unapproved_assembles_a_chapter_that_exhausted_its_revision_budg
     assert "She wrote back" in draft
 
 
+def test_strips_redundant_leading_heading_matching_chapter_title(tmp_path: Path) -> None:
+    """Regression test: writer.md tells writer-agent not to include a heading line (assemble_draft
+    adds one), but in practice it's not reliably followed -- observed in production as three
+    different self-titling formats across chapters in the same book (a bare title line, a markdown
+    "## Title" line, and a "Chapter N: Title" line), each producing a visibly duplicated heading
+    in draft.md. assemble_draft must strip a redundant leading title line in any of these forms
+    before prepending its own canonical heading, regardless of what writer-agent did."""
+    bible = StoryBible(
+        mode=GenerationMode.FROM_SCRATCH,
+        title="Return to Sender",
+        chapters=[
+            Chapter(index=1, title="A Festive Beginning", status=ChapterStatus.APPROVED),
+            Chapter(index=2, title="Signs of Trouble", status=ChapterStatus.APPROVED),
+            Chapter(index=3, title="Overcoming the Crisis", status=ChapterStatus.APPROVED),
+        ],
+    )
+    _write_bible(tmp_path, bible)
+    _write_chapter(tmp_path, 1, "A Festive Beginning\n\nThe festival began at dawn.")
+    _write_chapter(tmp_path, 2, "## Signs of Trouble\n\nSomething felt off.")
+    _write_chapter(tmp_path, 3, "Chapter 3: Overcoming the Crisis\n\nThey faced it together.")
+
+    tool = make_assemble_draft_tool(tmp_path)
+    result = _invoke(tool)  # type: ignore[no-untyped-call]
+    assert result.startswith("OK")
+
+    draft = (tmp_path / "draft.md").read_text(encoding="utf-8")
+    # Each title appears exactly once (assemble_draft's own canonical heading) -- not duplicated.
+    assert draft.count("A Festive Beginning") == 1
+    assert draft.count("Signs of Trouble") == 1
+    assert draft.count("Overcoming the Crisis") == 1
+    assert "The festival began at dawn." in draft
+    assert "Something felt off." in draft
+    assert "They faced it together." in draft
+
+
+def test_does_not_strip_a_first_line_that_is_not_the_chapter_title(tmp_path: Path) -> None:
+    """Guard against false positives: a chapter that genuinely opens with prose (not a redundant
+    heading) must be left untouched, even if that prose happens to start with a capitalized
+    phrase."""
+    bible = StoryBible(
+        mode=GenerationMode.FROM_SCRATCH,
+        title="Return to Sender",
+        chapters=[Chapter(index=1, title="A Festive Beginning", status=ChapterStatus.APPROVED)],
+    )
+    _write_bible(tmp_path, bible)
+    _write_chapter(tmp_path, 1, "The Merchant arrived before anyone else, as always.")
+
+    tool = make_assemble_draft_tool(tmp_path)
+    _invoke(tool)  # type: ignore[no-untyped-call]
+
+    draft = (tmp_path / "draft.md").read_text(encoding="utf-8")
+    assert "The Merchant arrived before anyone else, as always." in draft
+
+
 def test_include_unapproved_still_refuses_if_a_required_chapter_file_is_missing(
     tmp_path: Path,
 ) -> None:
