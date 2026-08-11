@@ -10,16 +10,19 @@ class GenerationMode(StrEnum):
     FROM_SCRATCH = "from_scratch"
     FROM_SOURCE = "from_source"
 
+
 class NarratorKnowledge(StrEnum):
     LIMITED = "limited"
     MULTIPLE = " multiple"
     OMNISCIENT = "omniscient"
     OBJECTIVE = "objective"
 
+
 class GrammaticalPerson(StrEnum):
     FIRST = "first"
     SECOND = "second"
     THIRD = "third"
+
 
 PSALM_DIMENSIONS: tuple[str, ...] = (
     "writing_style",
@@ -33,6 +36,7 @@ PSALM_DIMENSIONS: tuple[str, ...] = (
 
 class LengthTier(StrEnum):
     """How long a generated story should be, in chapters and target word count."""
+    SINGLE = "single"
     SHORT = "short"
     MEDIUM = "medium"
     LONG = "long"
@@ -46,12 +50,14 @@ class LengthTierSpec:
 
 
 LENGTH_TIER_SPECS: dict[LengthTier, LengthTierSpec] = {
-    LengthTier.SHORT: LengthTierSpec(min_chapters=1, max_chapters=1, target_total_words=2_000),
-    LengthTier.MEDIUM: LengthTierSpec(min_chapters=6, max_chapters=10, target_total_words=20_000),
+    LengthTier.SINGLE: LengthTierSpec(min_chapters=1, max_chapters=1, target_total_words=2_000),
+    LengthTier.SHORT: LengthTierSpec(min_chapters=1, max_chapters=4, target_total_words=3_000),
+    LengthTier.MEDIUM: LengthTierSpec(min_chapters=5, max_chapters=10, target_total_words=20_000),
     LengthTier.LONG: LengthTierSpec(min_chapters=25, max_chapters=35, target_total_words=90_000),
 }
 
 IsolationStrategy = Literal["isolate_preserve", "isolate_vary"]
+
 
 class DimensionField(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -65,6 +71,7 @@ class DimensionField(BaseModel):
         description="True once the user has confirmed/accepted this value."
     )
 
+
 class WritingStyle(BaseModel):
     """Corresponds to PSALM's Writing Style evaluator"""
     model_config = ConfigDict(extra="forbid")
@@ -76,6 +83,7 @@ class WritingStyle(BaseModel):
     tone: DimensionField = Field(default_factory=DimensionField)
     dialogue_style: DimensionField = Field(default_factory=DimensionField)
 
+
 class NarrativeVoice(BaseModel):
     """Corresponds to PSALM's Narrative Voice evaluator"""
     model_config = ConfigDict(extra="forbid")
@@ -86,6 +94,7 @@ class NarrativeVoice(BaseModel):
     focalisation: DimensionField = Field(default_factory=DimensionField)
     temporal_perspective: DimensionField = Field(default_factory=DimensionField)
     reader_engagement: DimensionField = Field(default_factory=DimensionField)
+
 
 class Character(BaseModel):
     """One entry in PSALM's Characterisation evaluator."""
@@ -110,6 +119,7 @@ class Character(BaseModel):
     )
     backstory: str = ""
 
+
 class PlotArchitecture(BaseModel):
     """Corresponds to PSALM's Plat Architecture evaluator"""
     model_config = ConfigDict(extra="forbid")
@@ -129,6 +139,7 @@ class PlotArchitecture(BaseModel):
     )
     pacing: str = ""
 
+
 class Scene(BaseModel):
     """One entry in PSALM's Scene evaluator."""
     model_config = ConfigDict(extra="forbid")
@@ -143,6 +154,7 @@ class Scene(BaseModel):
     characters_present: list[str] = Field(default_factory=list)
     tension: str = ""
 
+
 class WorldBuilding(BaseModel):
     """Corresponds to PSALM's World Building evaluator"""
     model_config = ConfigDict(extra="forbid")
@@ -154,6 +166,7 @@ class WorldBuilding(BaseModel):
     )
     culture_and_society: DimensionField = Field(default_factory=DimensionField)
     history_and_myth: DimensionField = Field(default_factory=DimensionField)
+
 
 class OriginalityFinding(BaseModel):
     """One concern raised by the originality guard."""
@@ -168,6 +181,7 @@ class OriginalityFinding(BaseModel):
         description="Which bible dimension this concern touches, if any."
     )
     resolved: bool = False
+
 
 class DivergenceIntensity(StrEnum):
     """How closely a generated story's treatment of one dimension should/does track the source.
@@ -235,12 +249,12 @@ class DivergencePlan(BaseModel):
 
     @classmethod
     def isolate(
-        cls,
-        dimension: str,
-        *,
-        near: DivergenceIntensity = DivergenceIntensity.CLOSE,
-        far: DivergenceIntensity = DivergenceIntensity.DIVERGENT,
-        notes: str = "",
+            cls,
+            dimension: str,
+            *,
+            near: DivergenceIntensity = DivergenceIntensity.CLOSE,
+            far: DivergenceIntensity = DivergenceIntensity.DIVERGENT,
+            notes: str = "",
     ) -> DivergencePlan:
         """A plan holding one dimension at ``near`` and every other dimension at ``far``.
 
@@ -265,8 +279,9 @@ class FidelityMismatch(BaseModel):
     achieved: DivergenceIntensity
     severity: str = Field(description="'minor' (one step off) or 'major' (two+ steps off).")
 
+
 def evaluate_fidelity(
-    plan: DivergencePlan, achieved: dict[str, DivergenceIntensity]
+        plan: DivergencePlan, achieved: dict[str, DivergenceIntensity]
 ) -> list[FidelityMismatch]:
     """Compare intended vs. achieved divergence levels and flag mismatches.
 
@@ -296,6 +311,7 @@ def evaluate_fidelity(
         )
 
     return mismatches
+
 
 def build_isolation_matrix(
         *,
