@@ -21,6 +21,22 @@ from psalm_saga.tools import (
 )
 
 
+def _build_system_prompt(settings: Settings) -> str:
+    """The orchestrator's system prompt plus session-specific configuration values.
+
+    Prompts are loaded verbatim from static markdown (see `load_prompt`) with no templating, so
+    settings like `max_brainstorm_turns` are otherwise invisible to the orchestrator at runtime --
+    `orchestrator.md` tells it to pass this number to brainstorm-agent, but without this, there was
+    no number to pass.
+    """
+    return load_prompt("orchestrator") + (
+        "\n\n## Session configuration\n"
+        f"- max_brainstorm_turns: {settings.max_brainstorm_turns}\n\n"
+        "Pass the max_brainstorm_turns number above to brainstorm-agent in its delegation task "
+        "every time you invoke it, so it knows its turn budget for that invocation."
+    )
+
+
 def build_orchestrator(  # type: ignore[no-untyped-def]
         settings: Settings,
         session_dir: Path,
@@ -67,7 +83,7 @@ def build_orchestrator(  # type: ignore[no-untyped-def]
 
     return create_deep_agent(
         model=settings.model,
-        system_prompt=load_prompt("orchestrator"),
+        system_prompt=_build_system_prompt(settings),
         tools=[
             think, update_story_bible, validate_story_bible,
             check_originality_gate, check_bible_readiness, check_fidelity_alignment, assemble_draft, update_chapter,
