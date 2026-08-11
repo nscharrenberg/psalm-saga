@@ -50,6 +50,19 @@ def test_chapter_reviewer_agent_reads_chapters_via_read_chapter_file(
     assert "read_chapter_file" in _tool_names(agent)
 
 
+def test_deslop_agent_is_registered_without_ask_human_or_write_chapter_file(
+    settings: Settings, tmp_path: Path
+) -> None:
+    """deslop-agent must never edit a chapter file directly -- per-chapter findings go back to
+    writer-agent as revision notes, the same rule chapter-reviewer-agent follows, so
+    write_chapter_file must not be in its toolset even though it needs read_chapter_file."""
+    agent = _agent(settings, tmp_path, "deslop-agent")
+    assert "ask_human" not in _tool_names(agent)
+    assert "write_chapter_file" not in _tool_names(agent)
+    assert "read_chapter_file" in _tool_names(agent)
+    assert "scan_ai_tells" in _tool_names(agent)
+
+
 def test_writer_agent_uses_index_addressed_chapter_file_tools(
     settings: Settings, tmp_path: Path
 ) -> None:

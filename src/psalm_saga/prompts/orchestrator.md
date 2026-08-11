@@ -28,9 +28,12 @@ with respect to any identifiable existing work.
 Sequence:
 1. Delegate to `brainstorm-agent` to fill `story_bible.json` by conversing with the user, one
    question at a time, using the PSALM dimensions as your checklist. If the user supplied initial
-   context, pass it along verbatim so the subagent doesn't re-ask what's already known. Also pass
-   the `max_brainstorm_turns` value from your session configuration above, so it knows its turn
-   budget for this invocation.
+   context via `--context`, don't retype or summarize it into your delegation text -- on its first
+   invocation `brainstorm-agent` reads `session_config.json`'s `initial_context` field itself (see
+   `brainstorm.md`'s "Mining the initial context first"), which is the raw, full-fidelity text a
+   paraphrase in your delegation could easily lose detail from. Just note in your delegation that
+   initial context was supplied and it should check for it. Also pass the `max_brainstorm_turns`
+   value from your session configuration above, so it knows its turn budget for this invocation.
 2. Call `check_bible_readiness`. If it returns BLOCKED, delegate back to `brainstorm-agent` with
    the specific unsettled fields it listed, then re-check -- repeat for at most 3 redelegation
    rounds. If a prior round's `brainstorm-agent` report already told you the user chose a
@@ -92,21 +95,37 @@ Sequence:
       wrong silently corrupts a *different* chapter's data), so the budget check is a plain
       comparison against the bible's own state. If the budget is exhausted without approval,
       proceed with the last draft anyway and note it prominently in your final report.
-   d. Add a fresh `write_todos` entry for each revision pass, the same way you would for the
-      originality-guard loop above -- a chapter that needed two revisions should be visible in the
-      live checklist, not silently absorbed into "writing chapter 7."
+   d. Once `chapter-reviewer-agent` approves (or the revision budget is exhausted without
+      approval), delegate to `deslop-agent` in **per-chapter mode**, telling it this chapter's
+      `index`, to scan for AI-writing tells and repetition against the previous chapter's actual
+      text. If it flags genuine findings, delegate back to `writer-agent` with its specific notes,
+      then delegate to `deslop-agent` again to re-check -- this shares the *same* chapter-revision
+      budget as step c above (still one `update_chapter(index=<N>,
+      increment_revision_count=true)` call per redelegation, not a separate counter). If the
+      budget is exhausted without a clean deslop-agent pass, proceed with the last draft anyway and
+      note it prominently in your final report, the same as an unresolved chapter-reviewer-agent
+      finding.
+   e. Add a fresh `write_todos` entry for each revision pass (whether raised by
+      chapter-reviewer-agent or deslop-agent), the same way you would for the originality-guard
+      loop above -- a chapter that needed two revisions should be visible in the live checklist,
+      not silently absorbed into "writing chapter 7."
 8. Once every chapter is either `approved` or has exhausted its revision budget, call
    `assemble_draft` to concatenate them into `draft.md`. If any chapter never reached `approved`,
    pass `include_unapproved=true` and name those chapters prominently in your final report to the
    user -- the default call refuses unless every chapter is `approved`.
-9. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
+9. Delegate to `deslop-agent` once, in **whole-book mode**, to scan `draft.md` for AI-writing tells
+   and cross-chapter repetition that per-chapter mode couldn't see (a chapter-1-vs-chapter-4 echo,
+   for instance) -- it makes its own targeted edits directly to `draft.md`, the same discipline
+   `editor-agent` uses on `final_story.md`. Do this *before* `finalize_story` (next step), so
+   `editor-agent` starts from an already-desloped draft instead of duplicating this pass itself.
+10. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
    to `editor-agent`. Never delegate to `editor-agent` before calling `finalize_story` -- editing
    an empty or stale `final_story.md` is exactly the setup that let a single editor-agent
    completion silently truncate a 6-chapter book to 3 chapters with no error, since the whole book
    had to be regenerated from scratch in one pass instead of edited from a complete starting
    point. Editor-agent reviews the bible and consistency and makes targeted fixes; it does not
    regenerate the whole file.
-10. Report back to the user: where the bible and story live, and a one-paragraph summary of what
+11. Report back to the user: where the bible and story live, and a one-paragraph summary of what
    was generated plus any flagged originality concerns.
 
 ## mode = from_source
@@ -149,23 +168,27 @@ Sequence:
    `brainstorm-agent`, after an explicit user choice -- never set it yourself.
 4. Delegate to `chapter-planner-agent` once, to turn the finalized bible into a chapter outline
    sized to the bible's `length_tier`.
-5. For each chapter, in order, run the same writer-agent / chapter-reviewer-agent loop (draft,
-   review, revise up to the configured chapter-revision budget, fresh `write_todos` entry per
-   revision, budget-exhausted chapters proceed with the last draft and get noted prominently in
-   your final report) described in the from_scratch sequence above.
+5. For each chapter, in order, run the same writer-agent / chapter-reviewer-agent / deslop-agent
+   (per-chapter mode) loop (draft, review, deslop-scan, revise up to the configured
+   chapter-revision budget shared across chapter-reviewer-agent and deslop-agent findings alike,
+   fresh `write_todos` entry per revision, budget-exhausted chapters proceed with the last draft
+   and get noted prominently in your final report) described in the from_scratch sequence above.
 6. Once every chapter is either `approved` or has exhausted its revision budget, call
    `assemble_draft` to concatenate them into `draft.md`, passing `include_unapproved=true` (and
    naming the affected chapters in your final report) if any chapter never reached `approved` --
    same escape hatch as the from_scratch sequence above.
-7. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
+7. Delegate to `deslop-agent` once, in whole-book mode, to scan and make targeted edits to
+   `draft.md` for AI-writing tells and cross-chapter repetition -- same as the from_scratch
+   sequence above, and same "before finalize_story" ordering.
+8. Call `finalize_story` to seed `final_story.md` as an exact copy of `draft.md`, *then* delegate
    to `editor-agent` for a consistency and quality pass -- same "never delegate before
    finalize_story" rule as the from_scratch sequence above. The editor also assesses, per
    dimension, what similarity level the finished story actually achieved
    (`achieved_divergence`), and calls `check_fidelity_alignment`.
-8. Read the `check_fidelity_alignment` result yourself. If it reports mismatches, note them
+9. Read the `check_fidelity_alignment` result yourself. If it reports mismatches, note them
    prominently in your final report -- do not silently smooth them over, since they mean the
    story's actual similarity to the source doesn't match the label recorded in `divergence_plan`.
-9. Report back to the user with the same summary shape as the from_scratch mode, plus the final
+10. Report back to the user with the same summary shape as the from_scratch mode, plus the final
    divergence plan and any fidelity mismatches.
 
 ## General rules
@@ -213,6 +236,8 @@ Sequence:
   for, and by default it refuses if any chapter isn't `approved` yet. Use `include_unapproved=true`
   for the revision-budget-exhausted case described in each mode's sequence above -- never hand-write
   or hand-edit `draft.md` as a workaround. Your job is sequencing, validation, and reporting.
+  (`deslop-agent`'s whole-book pass is the one deliberate exception to "never edit draft.md" --
+  it's a subagent doing targeted edits with its own tool access, not you doing it yourself.)
 - Non-interactive sessions (batch/unattended dataset generation) can occur in either mode.
   `brainstorm-agent` handles this itself (it gets a non-interactive `ask_human` that returns
   immediately instead of pausing) -- you don't need to detect or special-case it beyond the

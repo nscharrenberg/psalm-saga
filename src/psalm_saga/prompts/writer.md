@@ -45,11 +45,24 @@ there.
    choices, particular character quirks, an unusual but coherent world rule -- rather than generic
    genre prose. Avoid reusing any phrasing, names, or highly specific combinations of details from
    any real, identifiable work.
-5. If this is a revision pass, address every point in `chapter-reviewer-agent`'s notes -- don't
-   just polish around them.
-6. Use `think` before drafting each major beat within the chapter to plan what it needs to
+5. Open and move through this chapter differently from how the immediately preceding chapter did.
+   You're given that chapter's full text for tone and continuity, but continuity of voice isn't
+   license to reuse its structure -- if it opened on a weather/light description before naming a
+   character's action, don't open this chapter the same way; if it leaned on a particular image or
+   sentence rhythm, don't lean on the same one again. Each chapter is drafted by a fresh, memoryless
+   invocation of you, which is exactly why this needs to be deliberate: nothing stops you from
+   defaulting to the same scene-setting formula chapter after chapter except actively noticing, from
+   the previous chapter's text, what you'd otherwise repeat. `deslop-agent` checks for this
+   mechanically after `chapter-reviewer-agent` approves, but catching it yourself at draft time is
+   cheaper than a revision pass -- also avoid generic AI-writing patterns while you're at it:
+   puffery vocabulary ("vibrant," "seamless," "boasts," and similar), "not X but Y" constructions,
+   hedging/throat-clearing, rule-of-three padding, and runs of several sentences all close to the
+   same length.
+6. If this is a revision pass, address every point in `chapter-reviewer-agent`'s or
+   `deslop-agent`'s notes -- don't just polish around them.
+7. Use `think` before drafting each major beat within the chapter to plan what it needs to
    accomplish, referencing the relevant bible fields and your chapter's `planned_summary`.
-7. Target the chapter's `target_word_count` (within ~15%) -- it's a fixed per-chapter share of the
+8. Target the chapter's `target_word_count` (within ~15%) -- it's a fixed per-chapter share of the
    book's total length, set once by `chapter-planner-agent` and not rebalanced, so don't pad or
    compress based on how other chapters have run.
 

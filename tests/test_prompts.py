@@ -194,6 +194,32 @@ def test_brainstorm_prompt_mines_initial_context_before_asking() -> None:
     assert text.index("initial context") < text.index("## Ground rules")
 
 
+def test_brainstorm_prompt_reads_session_config_for_initial_context() -> None:
+    """Regression test: brainstorm-agent must read `initial_context` from session_config.json
+    itself rather than trusting the orchestrator's delegation text to relay it. The task tool
+    replaces a subagent's entire message history with whatever the orchestrator writes into the
+    delegation, so a long --context string is easy for the orchestrator to summarize or drop
+    entirely on the way -- exactly what let a detailed CLI --context arg produce a brainstorm
+    session that acted as if no context had been given at all. Reading the field directly from
+    session_config.json (the same file the CLI already writes it into) is full-fidelity and
+    doesn't depend on the orchestrator's paraphrase."""
+    text = load_prompt("brainstorm")
+    mining_section = text.split("## Mining the initial context first")[1].split("## Conversation shape")[0]
+    assert "session_config.json" in mining_section
+    assert "initial_context" in mining_section
+
+
+def test_orchestrator_prompt_tells_orchestrator_not_to_retype_initial_context() -> None:
+    """Regression test: the orchestrator must not be told to paraphrase/retype the user's
+    --context text into its brainstorm-agent delegation -- see
+    test_brainstorm_prompt_reads_session_config_for_initial_context above for why that relay was
+    unreliable for long context strings."""
+    text = load_prompt("orchestrator")
+    from_scratch_section = text.split("## mode = from_scratch")[1].split("## mode = from_source")[0]
+    assert "session_config.json" in from_scratch_section
+    assert "don't retype" in from_scratch_section.lower() or "not retype" in from_scratch_section.lower()
+
+
 def test_brainstorm_prompt_promotes_multi_field_proposals() -> None:
     text = load_prompt("brainstorm")
     # The new guidance must include language about settling multiple fields from a single proposal.
@@ -215,6 +241,93 @@ def test_brainstorm_prompt_turn_budget_offers_three_options() -> None:
 def test_brainstorm_prompt_no_longer_references_old_four_field_minimum() -> None:
     text = load_prompt("brainstorm")
     assert "is_ready_for_writing checks: premise, at least one character" not in text
+
+
+def test_orchestrator_prompt_runs_deslop_agent_per_chapter_after_reviewer_approval() -> None:
+    text = load_prompt("orchestrator")
+    assert "deslop-agent" in text
+    assert "per-chapter mode" in text
+    # deslop-agent's per-chapter step must come after chapter-reviewer-agent's review step, not
+    # before -- it scans the chapter chapter-reviewer-agent already approved.
+    from_scratch_section = text.split("## mode = from_scratch")[1].split("## mode = from_source")[0]
+    assert from_scratch_section.index("chapter-reviewer-agent") < from_scratch_section.index(
+        "per-chapter mode"
+    )
+
+
+def test_orchestrator_prompt_deslop_agent_shares_chapter_revision_budget() -> None:
+    """Regression guard: deslop-agent must not get its own separate revision counter -- it reuses
+    the same update_chapter(increment_revision_count=true) budget chapter-reviewer-agent uses, per
+    the same array-position-corruption lesson update_chapter was built to remove entirely."""
+    text = load_prompt("orchestrator")
+    assert "same" in text.lower() and "chapter-revision budget" in text
+    assert "not a separate counter" in text
+
+
+def test_orchestrator_prompt_runs_deslop_agent_whole_book_before_finalize_story() -> None:
+    text = load_prompt("orchestrator")
+    assert "whole-book mode" in text
+    from_scratch_section = text.split("## mode = from_scratch")[1].split("## mode = from_source")[0]
+    assert from_scratch_section.index("assemble_draft") < from_scratch_section.index(
+        "whole-book mode"
+    )
+    assert from_scratch_section.index("whole-book mode") < from_scratch_section.rindex(
+        "finalize_story"
+    )
+
+
+def test_orchestrator_prompt_from_source_also_runs_deslop_agent() -> None:
+    text = load_prompt("orchestrator")
+    from_source_section = text.split("## mode = from_source")[1].split("## General rules")[0]
+    assert "deslop-agent" in from_source_section
+    assert "whole-book mode" in from_source_section
+    assert from_source_section.index("assemble_draft") < from_source_section.index(
+        "whole-book mode"
+    )
+    assert from_source_section.index("whole-book mode") < from_source_section.index(
+        "finalize_story"
+    )
+
+
+def test_orchestrator_prompt_documents_deslop_agent_draft_edit_exception() -> None:
+    """The orchestrator's own "never hand-edit draft.md" rule must not read as forbidding
+    deslop-agent's whole-book pass, which does edit draft.md directly (via a subagent, not the
+    orchestrator itself)."""
+    text = load_prompt("orchestrator")
+    general_rules = text.split("## General rules")[1]
+    assert "deslop-agent" in general_rules
+
+
+def test_deslop_agent_prompt_documents_both_modes() -> None:
+    text = load_prompt("deslop_agent")
+    assert "Per-chapter mode" in text
+    assert "Whole-book mode" in text
+    assert "scan_ai_tells" in text
+
+
+def test_deslop_agent_prompt_never_edits_chapter_files_directly() -> None:
+    text = load_prompt("deslop_agent")
+    assert "write_chapter_file" not in text or "isn't in your toolset" in text
+    assert "writer-agent" in text
+
+
+def test_deslop_agent_prompt_whole_book_mode_uses_targeted_edits() -> None:
+    text = load_prompt("deslop_agent")
+    assert "edit_file" in text
+    assert "targeted edits" in text
+
+
+def test_deslop_agent_prompt_warns_against_paraphrasing_the_pattern() -> None:
+    """Ported from deslopify's core principle -- swapping one puffery word for another synonym
+    isn't a fix, it's the same statistical fingerprint in different clothes."""
+    text = load_prompt("deslop_agent")
+    assert "paraphras" in text.lower()
+
+
+def test_writer_prompt_warns_against_repeating_previous_chapters_structure() -> None:
+    text = load_prompt("writer")
+    assert "deslop-agent" in text
+    assert "fresh" in text.lower() and "memoryless" in text.lower()
 
 
 def test_extractor_prompt_marks_confident_extractions_settled() -> None:

@@ -14,6 +14,7 @@ from psalm_saga.tools import (
     make_update_story_bible_tool,
     make_validate_bible_tool,
     make_write_chapter_file_tool,
+    scan_ai_tells,
     think,
 )
 
@@ -132,6 +133,23 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "permissions": SESSION_FILE_PROTECTION,
     }
 
+    deslop_agent: SubAgent = {
+        "name": "deslop-agent",
+        "description": (
+            "Scans prose for AI-writing tells (puffery vocabulary, negative-parallelism "
+            "constructions, hedging, rule-of-three padding, em-dash overuse, uniform sentence "
+            "rhythm) and chapter-to-chapter repetition. Runs in two modes: per-chapter, right "
+            "after chapter-reviewer-agent approves a chapter (flags issues as revision notes for "
+            "writer-agent -- never edits chapter files itself); and once, whole-book, on draft.md "
+            "after assemble_draft and before finalize_story (makes its own targeted edits, same "
+            "discipline as editor-agent)."
+        ),
+        "system_prompt": load_prompt("deslop_agent"),
+        "tools": [think, scan_ai_tells, read_chapter_file],
+        "model": model,
+        "permissions": SESSION_FILE_PROTECTION,
+    }
+
     editor: SubAgent = {
         "name": "editor-agent",
         "description": (
@@ -154,5 +172,6 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         chapter_planner,
         writer,
         chapter_reviewer,
+        deslop_agent,
         editor,
     ]
