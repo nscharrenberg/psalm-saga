@@ -41,3 +41,25 @@ def test_chapter_reviewer_agent_uses_update_chapter_not_update_story_bible(
     agent = _agent(settings, tmp_path, "chapter-reviewer-agent")
     assert "update_chapter" in _tool_names(agent)
     assert "update_story_bible" not in _tool_names(agent)
+
+
+def test_chapter_reviewer_agent_reads_chapters_via_read_chapter_file(
+    settings: Settings, tmp_path: Path
+) -> None:
+    agent = _agent(settings, tmp_path, "chapter-reviewer-agent")
+    assert "read_chapter_file" in _tool_names(agent)
+
+
+def test_writer_agent_uses_index_addressed_chapter_file_tools(
+    settings: Settings, tmp_path: Path
+) -> None:
+    """Regression test for the root cause of the two-different-drafts-per-chapter bug: the
+    orchestrator's own delegation text named `chapters/chapter_1.md` (unpadded) for chapter 1,
+    writer-agent wrote there literally via the generic write_file tool, and a later retry (after
+    assemble_draft correctly reported it missing under the padded name) produced a second,
+    different draft at the correctly-padded `chapters/chapter_01.md`. write_chapter_file/
+    read_chapter_file take the chapter's own `index` integer and compute the canonical filename
+    internally, so no agent ever constructs or transcribes a chapter path again."""
+    agent = _agent(settings, tmp_path, "writer-agent")
+    assert "write_chapter_file" in _tool_names(agent)
+    assert "read_chapter_file" in _tool_names(agent)

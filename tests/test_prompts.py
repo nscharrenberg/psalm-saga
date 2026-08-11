@@ -48,22 +48,34 @@ def test_chapter_reviewer_prompt_uses_update_chapter_not_raw_patches() -> None:
     assert '"op": "replace", "path": "/chapters/' not in text
 
 
+def test_chapter_reviewer_prompt_reads_chapters_via_read_chapter_file() -> None:
+    """Same root cause as the writer-side fix: the reviewer's own prompt used to spell out
+    literal paths (`chapters/chapter_<NN>.md`, `chapters/chapter_<NN-1>.md`) that it had to
+    construct itself. `read_chapter_file(index=...)` removes that construction step."""
+    text = load_prompt("chapter_reviewer")
+    assert "read_chapter_file" in text
+
+
 def test_writer_prompt_drafts_one_chapter_not_the_full_story() -> None:
     text = load_prompt("writer")
     assert "write the full story" not in text
     assert "chapters/chapter_" in text
 
 
-def test_writer_prompt_uses_edit_file_for_revisions() -> None:
-    """Regression test: on a revision pass, `write_file` refuses to overwrite an existing chapter
-    file and its own error text suggests "write to a new file" as the alternative -- which a
-    writer-agent run actually did, producing an orphaned `chapter_02_revised.md` that
-    assemble_draft never reads (since it only ever looks for the canonical `chapter_<NN>.md`
-    name), silently discarding that revision attempt. The prompt must tell the writer to use
-    `edit_file` on a revision pass, and never invent an alternate filename."""
+def test_writer_prompt_uses_index_addressed_chapter_file_tool() -> None:
+    """Regression test for the root cause of the two-different-drafts-per-chapter bug: the
+    orchestrator's own delegation text named `chapters/chapter_1.md` (unpadded) for chapter 1,
+    writer-agent wrote there literally via the generic write_file tool, and a later retry (after
+    assemble_draft correctly reported it missing under the padded name) produced a second,
+    different draft at the correctly-padded `chapters/chapter_01.md`. `write_chapter_file` takes
+    the chapter's own `index` integer and computes the canonical filename internally -- the
+    prompt must route through it instead of telling the writer to pick between write_file and
+    edit_file (both now permission-blocked on chapters/*.md anyway)."""
     text = load_prompt("writer")
-    assert "edit_file" in text
-    assert "write_file" in text
+    assert "write_chapter_file" in text
+    assert "read_chapter_file" in text
+    assert "use\n`edit_file`" not in text
+    assert "always overwrites" in text.lower() or "overwrites unconditionally" in text.lower()
 
 
 def test_brainstorm_prompt_requires_title_proposal_not_optional() -> None:
@@ -108,6 +120,19 @@ def test_orchestrator_prompt_uses_update_chapter_for_revision_count() -> None:
     text = load_prompt("orchestrator")
     assert "update_chapter" in text
     assert "increment_revision_count" in text
+
+
+def test_orchestrator_prompt_never_writes_a_chapter_filename_itself() -> None:
+    """Regression test for the actual root cause of the two-different-drafts-per-chapter bug:
+    the orchestrator's own delegation text (composed in its own prose, not copied from anywhere)
+    read "Draft Chapter 1 titled 'The Artifact' to chapters/chapter_1.md" -- unpadded, because
+    orchestrator.md never stated the padding convention at all (only writer.md did). Since
+    writer-agent now derives its output path from the chapter's `index` via `write_chapter_file`,
+    the orchestrator's delegation instructions must no longer tell it to compose a
+    `chapters/chapter_<NN>.md`-shaped path in its own delegation text."""
+    text = load_prompt("orchestrator")
+    assert "to `chapters/chapter_<NN>.md`" not in text
+    assert "write_chapter_file" in text or "read_chapter_file" in text
 
 
 def test_orchestrator_prompt_forbids_parallel_chapter_delegation() -> None:

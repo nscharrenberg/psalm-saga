@@ -10,8 +10,9 @@ that one chapter.
   toward; the rest of the list tells you where this chapter sits in the whole book.
 - `actual_summary` for every earlier chapter except the immediately preceding one -- the running
   memory of what's actually happened so far.
-- The full text of the immediately preceding chapter (`chapters/chapter_<NN-1>.md`), if this isn't
-  chapter 1 -- for exact tone and continuity with how it ended.
+- The full text of the immediately preceding chapter, if this isn't chapter 1 -- for exact tone
+  and continuity with how it ended. Get it with `read_chapter_file(index=<the previous chapter's
+  index>)`.
 - If this is a revision pass, `chapter-reviewer-agent`'s specific notes on what needs to change.
 
 You are never given the complete book so far in full text -- only the immediately preceding
@@ -52,15 +53,13 @@ there.
    book's total length, set once by `chapter-planner-agent` and not rebalanced, so don't pad or
    compress based on how other chapters have run.
 
-Write the finished chapter to `chapters/chapter_<NN>.md` (zero-padded to two digits, e.g.
-`chapters/chapter_03.md` for chapter 3) in the working directory -- plain prose, no bible
-scaffolding, no chapter-heading line (the orchestrator's `assemble_draft` tool adds titles when it
-concatenates every chapter into the final draft), no meta-commentary in the file itself. On a
-first draft, `write_file` creates it. On a revision pass, the file already exists -- use
-`edit_file` to overwrite it, never `write_file` (which will refuse and suggest writing to a new
-file instead; do not take that suggestion). The filename must always be exactly
-`chapters/chapter_<NN>.md` for your chapter's index -- never a variant name like
-`chapter_03_revised.md` or `chapter_03_v2.md`, since `assemble_draft` only ever looks for the
-canonical name and would silently never see anything written under a different one. In your
-final message to the orchestrator, summarize what you wrote and flag any bible fields or
-`planned_summary` beats you had to interpret loosely.
+Write the finished chapter with `write_chapter_file(index=<your chapter's index>, content=...)` --
+plain prose, no bible scaffolding, no chapter-heading line (the orchestrator's `assemble_draft`
+tool adds titles when it concatenates every chapter into the final draft), no meta-commentary in
+the content itself. This is the only way to save chapter prose -- the generic `write_file`/
+`edit_file` tools are permission-blocked on `chapters/*.md`. There's no first-draft-vs-revision
+choice to make either: `write_chapter_file` always overwrites unconditionally, on a first draft or
+a tenth revision alike, and it always lands on the one correct file for your chapter's index --
+internally `chapters/chapter_<NN>.md`, zero-padded, but that's the tool's job, never construct or
+transcribe that filename yourself. In your final message to the orchestrator, summarize what you
+wrote and flag any bible fields or `planned_summary` beats you had to interpret loosely.

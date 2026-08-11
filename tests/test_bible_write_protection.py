@@ -69,12 +69,17 @@ def test_bible_write_protection_blocks_write_and_edit_on_story_bible(tmp_path: P
 def test_subagents_that_can_see_the_bible_deny_direct_writes_to_it(tmp_path: Path) -> None:
     """Every subagent gets write_file/edit_file for free from FilesystemMiddleware,
     regardless of its own declared ``tools`` list, so each one must carry the bible
-    write-protection permission explicitly rather than relying on tool omission."""
+    write-protection permission explicitly rather than relying on tool omission.
+
+    Subagents' ``permissions`` is a superset (``BIBLE_WRITE_PROTECTION`` plus
+    ``CHAPTERS_WRITE_PROTECTION``, see test_chapters_write_protection.py), so this checks
+    containment rather than exact equality."""
     subagents = build_subagents(_settings(), tmp_path)
     assert subagents, "expected at least one subagent"
 
     for agent in subagents:
-        assert agent.get("permissions") == BIBLE_WRITE_PROTECTION, (
+        permissions = agent.get("permissions") or []
+        assert all(rule in permissions for rule in BIBLE_WRITE_PROTECTION), (
             f"{agent['name']} is missing BIBLE_WRITE_PROTECTION -- its inherited "
             "write_file/edit_file tools could still hand-corrupt story_bible.json"
         )

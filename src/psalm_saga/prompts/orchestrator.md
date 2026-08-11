@@ -49,7 +49,15 @@ Sequence:
    finished text, which does not exist yet if they run concurrently; and running them concurrently
    can crash the session outright (two subagent invocations resolving in the same step can collide
    on shared graph state).
-   a. Delegate to `writer-agent` to draft that chapter to `chapters/chapter_<NN>.md`.
+   a. Delegate to `writer-agent` to draft that chapter, identifying it only by its `index` and
+      title from the outline -- never by constructing a `chapters/chapter_<NN>.md`-shaped path
+      yourself in your delegation text. `writer-agent` and `chapter-reviewer-agent` read and write
+      chapter prose exclusively through `write_chapter_file`/`read_chapter_file`, which take the
+      chapter's own `index` and compute the on-disk filename internally; a hand-written path in
+      your delegation message is exactly what produced two different drafts for the same chapter
+      in production (an unpadded `chapters/chapter_1.md` from the delegation text, followed by a
+      second, different draft at the correctly-padded `chapters/chapter_01.md` once
+      `assemble_draft` reported the first one missing under the padded name).
    b. Delegate to `chapter-reviewer-agent` to review it.
    c. If it flags issues, delegate back to `writer-agent` with its specific notes, for at most the
       configured chapter-revision budget -- incrementing that chapter's `revision_count` yourself

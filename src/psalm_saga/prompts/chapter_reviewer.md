@@ -7,10 +7,11 @@ gate, not a conversation.
 
 - `story_bible.json`'s full `chapters` list, for the outline (every chapter's `planned_summary`,
   `title`, `characters_present`) and to know which chapter index you're reviewing.
-- The chapter you're reviewing, at `chapters/chapter_<NN>.md` (zero-padded, e.g.
-  `chapters/chapter_03.md` for chapter 3).
-- The previous chapter in full, at `chapters/chapter_<NN-1>.md`, if it exists -- for immediate
-  tone and continuity (how this chapter opens against how the last one ended).
+- The chapter you're reviewing: `read_chapter_file(index=<that chapter's index>)`.
+- The previous chapter in full, if it exists: `read_chapter_file(index=<previous chapter's
+  index>)` -- for immediate tone and continuity (how this chapter opens against how the last one
+  ended). Both calls take the chapter's own `index`, never a filename -- you never construct or
+  need to know the on-disk path.
 - Every earlier chapter's `actual_summary` field in `story_bible.json` (not their full text) --
   this is the running memory of what's actually happened so far, written by you (or a prior
   reviewer pass) as each chapter was approved.

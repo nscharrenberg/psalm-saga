@@ -6,13 +6,18 @@ from psalm_saga.config import Settings
 from psalm_saga.prompts import load_prompt
 from psalm_saga.tools import (
     BIBLE_WRITE_PROTECTION,
+    CHAPTERS_WRITE_PROTECTION,
     make_ask_human_tool,
     make_check_fidelity_tool,
+    make_read_chapter_file_tool,
     make_update_chapter_tool,
     make_update_story_bible_tool,
     make_validate_bible_tool,
+    make_write_chapter_file_tool,
     think,
 )
+
+SESSION_FILE_PROTECTION = BIBLE_WRITE_PROTECTION + CHAPTERS_WRITE_PROTECTION
 
 
 def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: bool = False) -> list[SubAgent]:
@@ -40,6 +45,8 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
     validate_story_bible = make_validate_bible_tool(session_dir)
     check_fidelity_alignment = make_check_fidelity_tool(session_dir)
     update_chapter = make_update_chapter_tool(session_dir)
+    write_chapter_file = make_write_chapter_file_tool(session_dir)
+    read_chapter_file = make_read_chapter_file_tool(session_dir)
     ask_human = make_ask_human_tool(non_interactive=non_interactive)
 
     extractor: SubAgent = {
@@ -52,7 +59,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("extractor"),
         "tools": [think, update_story_bible, validate_story_bible],
         "model": model,
-        "permissions": BIBLE_WRITE_PROTECTION,
+        "permissions": SESSION_FILE_PROTECTION,
     }
 
     brainstorm: SubAgent = {
@@ -67,7 +74,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("brainstorm"),
         "tools": [think, ask_human, update_story_bible, validate_story_bible],
         "model": model,
-        "permissions": BIBLE_WRITE_PROTECTION,
+        "permissions": SESSION_FILE_PROTECTION,
     }
 
     originality_guard: SubAgent = {
@@ -80,7 +87,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("originality_guard"),
         "tools": [think, update_story_bible, validate_story_bible],
         "model": model,
-        "permissions": BIBLE_WRITE_PROTECTION,
+        "permissions": SESSION_FILE_PROTECTION,
     }
 
     chapter_planner: SubAgent = {
@@ -93,7 +100,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("chapter_planner"),
         "tools": [think, update_story_bible, validate_story_bible],
         "model": model,
-        "permissions": BIBLE_WRITE_PROTECTION,
+        "permissions": SESSION_FILE_PROTECTION,
     }
 
     writer: SubAgent = {
@@ -105,9 +112,9 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
             "Delegated once per chapter, and again for any revision pass."
         ),
         "system_prompt": load_prompt("writer"),
-        "tools": [think],
+        "tools": [think, write_chapter_file, read_chapter_file],
         "model": model,
-        "permissions": BIBLE_WRITE_PROTECTION,
+        "permissions": SESSION_FILE_PROTECTION,
     }
 
     chapter_reviewer: SubAgent = {
@@ -120,9 +127,9 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
             "specific revision notes for writer-agent."
         ),
         "system_prompt": load_prompt("chapter_reviewer"),
-        "tools": [think, update_chapter, validate_story_bible],
+        "tools": [think, update_chapter, validate_story_bible, read_chapter_file],
         "model": model,
-        "permissions": BIBLE_WRITE_PROTECTION,
+        "permissions": SESSION_FILE_PROTECTION,
     }
 
     editor: SubAgent = {
@@ -135,7 +142,7 @@ def build_subagents(settings: Settings, session_dir: Path, *, non_interactive: b
         "system_prompt": load_prompt("editor"),
         "tools": [think, update_story_bible, check_fidelity_alignment],
         "model": model,
-        "permissions": BIBLE_WRITE_PROTECTION,
+        "permissions": SESSION_FILE_PROTECTION,
     }
 
 

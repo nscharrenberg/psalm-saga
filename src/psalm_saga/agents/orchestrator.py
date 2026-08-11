@@ -4,12 +4,11 @@ from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from psalm_saga.agents.subagents import build_subagents
+from psalm_saga.agents.subagents import SESSION_FILE_PROTECTION, build_subagents
 from psalm_saga.config import Settings
 from psalm_saga.prompts import load_prompt
 from psalm_saga.state import SagaState
 from psalm_saga.tools import (
-    BIBLE_WRITE_PROTECTION,
     make_assemble_draft_tool,
     make_check_fidelity_tool,
     make_check_originality_gate_tool,
@@ -73,6 +72,6 @@ def build_orchestrator(  # type: ignore[no-untyped-def]
         backend=backend,
         state_schema=SagaState,
         checkpointer=checkpointer,
-        permissions=BIBLE_WRITE_PROTECTION,
+        permissions=SESSION_FILE_PROTECTION,
         name="psalm-saga-orchestrator"
     )

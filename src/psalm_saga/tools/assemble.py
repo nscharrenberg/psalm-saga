@@ -15,12 +15,7 @@ from pathlib import Path
 from langchain_core.tools import tool
 
 from psalm_saga.dimensions import ChapterStatus, StoryBible
-
-CHAPTERS_DIRNAME = "chapters"
-
-
-def _chapter_filename(index: int) -> str:
-    return f"chapter_{index:02d}.md"
+from psalm_saga.tools._chapter_paths import CHAPTERS_DIRNAME, chapter_filename
 
 
 def make_assemble_draft_tool(session_dir: Path):  # type: ignore[no-untyped-def]
@@ -77,9 +72,9 @@ def make_assemble_draft_tool(session_dir: Path):  # type: ignore[no-untyped-def]
         missing: list[str] = []
         bodies: list[str] = []
         for chapter in ordered:
-            chapter_path = chapters_dir / _chapter_filename(chapter.index)
+            chapter_path = chapters_dir / chapter_filename(chapter.index)
             if not chapter_path.exists():
-                missing.append(f"chapter {chapter.index} ({_chapter_filename(chapter.index)})")
+                missing.append(f"chapter {chapter.index} ({chapter_filename(chapter.index)})")
                 continue
             heading = chapter.title or f"Chapter {chapter.index}"
             bodies.append(f"## {heading}\n\n{chapter_path.read_text(encoding='utf-8').strip()}")
