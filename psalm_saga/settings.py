@@ -188,7 +188,7 @@ class Settings(BaseSettings):
 
     """
 
-    model_config = SettingsConfigDict(env_prefix="psalm_saga_")
+    model_config = SettingsConfigDict(env_prefix="psalm_saga_", env_nested_delimiter="__")
     personal: PersonalSettings = PersonalSettings()
     agent: AgentSettings = AgentSettings()
     backend: BackendSettings = BackendSettings()
