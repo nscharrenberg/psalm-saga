@@ -9,6 +9,10 @@ Invoked from within `story-brainstorming`, step 2, when the story is derivative 
 
 **Announce at start:** "I'm using the adapting-existing-work skill to record how this relates to its source."
 
+<EXTREMELY-IMPORTANT>
+Do this yourself, directly in the conversation with your human partner — like `story-brainstorming`, this is an elicitation dialogue (which relationship is intended, what the specific evocation/transformation/attribution choices are), not a self-contained task. Never dispatch this skill to a subagent via `task`: a subagent has no channel back to your human partner and would have to guess at the relationship type and every sub-dimension answer instead of asking, producing a "Source Relationship" section nobody actually reviewed or agreed to.
+</EXTREMELY-IMPORTANT>
+
 **Reference files:** `references/parody-and-satire.md`, `references/pastiche.md`, `references/quotation-and-citation.md`, `references/scenes-a-faire.md` — one per relationship path below, each explaining the underlying legal doctrine (the CJEU case law and Directive articles PSALM's evaluators operationalise) in more depth than the bullet points here. `references/scenes-a-faire.md` applies to every adaptation regardless of which path is chosen; read the relevant path-specific file for whichever relationship your human partner picks in step 2 below.
 
 <EXTREMELY-IMPORTANT>

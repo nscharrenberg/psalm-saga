@@ -25,7 +25,7 @@ If `docs/psalm-saga/<slug>-spec.md` doesn't exist or wasn't signed off, stop and
    - **Characters present** and which part of their arc, relationships, or motivation advances here (Character sub-dimensions) — don't let a character appear with nothing to do relative to their spec'd arc.
    - **Plot events landing here** — which event-sequence beats, turning points, or convergences from the spec's Plot Structure land in this chapter.
    - **World-building elements** established or paid off here (World-Building sub-dimensions) — note setups that need a later payoff so `drafting-chapters` doesn't lose track of them across chapters.
-4. **Show the plan to your human partner in reviewable chunks** (per act or per few chapters, not the whole plan at once for long works) and get explicit sign-off before invoking `drafting-chapters`.
+4. **Show the plan to your human partner in reviewable chunks** (per act or per few chapters, not the whole plan at once for long works) and get explicit sign-off before invoking `drafting-chapters`. This step happens directly in the conversation, not via a dispatched subagent — sign-off requires an actual answer from your human partner, which a subagent has no way to obtain.
 5. Save the final version to `docs/psalm-saga/<slug>-plan.md`, referencing the spec's dimension language by name (e.g. "Narrative Distance: close, per spec") so `reviewing-story-dimensions` can check chapters against the plan without re-deriving the spec's intent from scratch.
 
 ## Continuity Budget

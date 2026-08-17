@@ -11,6 +11,10 @@ Turn a premise into a dimension spec through collaborative dialogue, with fixed 
 Do NOT invoke `writing-story-plans` or write any prose until every dimension below has an explicit answer and your human partner has approved the spec. Ceremony scales with the length and stakes of the piece — flash fiction gets one or two sentences per dimension, a novel gets paragraphs — but no dimension gets skipped outright.
 </HARD-GATE>
 
+<EXTREMELY-IMPORTANT>
+Do this yourself, directly in the conversation with your human partner. Never dispatch this skill (or any part of it) to a subagent via `task` — a subagent cannot ask your human partner anything and would have to fabricate every dimension's answer, producing a spec nobody actually agreed to.
+</EXTREMELY-IMPORTANT>
+
 **Announce at start:** "I'm using the story-brainstorming skill to build the dimension spec."
 
 **Save the spec to:** `docs/psalm-saga/<slug>-spec.md`
