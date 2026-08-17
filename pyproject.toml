@@ -1,12 +1,20 @@
 [project]
 name = "psalm-saga"
 version = "0.1.0"
-description = "Add your description here"
+description = "A spec-first, PSALM-dimension-aligned story-writing agent built on LangChain Deep Agents"
+readme = "README.md"
 requires-python = ">=3.14"
+license = { text = "MIT" }
+authors = [{ name = "nscharrenberg" }]
 dependencies = [
     "deepagents>=0.7.6",
     "jsonpatchkit>=0.1.0",
+    "langchain>=1.3.15",
+    "prompt-toolkit>=3.0.53",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.3",
+    "rich>=15.0.0",
 ]
 
 [project.urls]
@@ -15,22 +23,33 @@ Issues = "https://github.com/nscharrenberg/psalm-saga/issues"
 
 [dependency-groups]
 dev = [
+    "mypy>=2.3.1",
     "pytest>=9.1.1",
     "ruff>=0.16.3",
+    "psalm-saga[all]"
 ]
 
+[project.optional-dependencies]
+anthropic = [
+    "langchain-anthropic>=1.5.6",
+]
+openai = [
+    "langchain-openai>=1.5.1",
+]
+all = ["psalm-saga[anthropic,openai]"]
+
 [project.scripts]
-psalm-saga = "psalm_saga:main"
+psalm-saga = "psalm_saga.cli:main"
 
 [build-system]
-requires = ["setuptools>=82.0.1"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-py-modules = ["psalm_saga_plugin"]
-
-[tool.setuptools.packages.find]
-include = ["psalm_saga*"]
+[tool.hatchling.build.targets.wheel]
+packages = ["psalm_saga"]
+# `skills/` lives inside the package dir; make sure the non-.py content
+# (SKILL.md, references/*.md) ships too.
+artifacts = ["psalm_saga/skills/**"]
 
 [tool.ruff]
 line-length = 100
@@ -61,6 +80,9 @@ ignore = [
     "TC001",
     "TC003",
     "TRY003",
+    "CPY001",
+    "D401",
+    "D205"
 ]
 
 [tool.ruff.lint.per-file-ignores]
