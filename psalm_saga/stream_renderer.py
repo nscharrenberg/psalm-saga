@@ -83,6 +83,17 @@ class StreamRenderer:
             self._status = None
 
     def _start_status(self, label: str = "saga is thinking…") -> None:
+        # Rich's Console keeps a *stack* of active Live/Status regions —
+        # starting a new one without stopping the previous first pushes it
+        # onto that stack instead of replacing it. Since `self._status` then
+        # gets overwritten with the new object, the earlier one becomes
+        # permanently unreachable and can never be stopped again, leaking
+        # indefinitely (this was a real bug: every tool call in a burst —
+        # e.g. write_todos, write_file, read_file back to back during
+        # brainstorming — pushed another spinner that never got cleared,
+        # even across later turns). Always stop first so at most one status
+        # is ever active.
+        self._stop_status()
         self._status = self._console.status(f"[dim]{label}[/dim]", spinner="dots")
         self._status.start()
 
