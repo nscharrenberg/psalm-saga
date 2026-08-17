@@ -12,10 +12,43 @@ Classes:
 
 """
 
+from typing import Any
+
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
 from rich.text import Text
+
+
+def extract_text(content: Any) -> str:
+    """Normalize a streamed `AIMessageChunk.content` into plain text.
+
+    `content` is a plain `str` for most providers/models. For OpenAI's
+    Responses API — needed for GPT-5-reasoning-family models, since they
+    reject `reasoning_effort` together with function tools on the Chat
+    Completions API (see `Settings.agent.model_kwargs`) — it's instead a
+    list of typed content blocks, e.g. `{"type": "text", "text": "..."}` or
+    `{"type": "reasoning", "summary": [...]}`. Only `text` blocks are
+    rendered as story prose; `reasoning` blocks are the model's internal
+    thinking, not output meant for the reader, and are intentionally
+    skipped rather than interleaved into the rendered story. Unrecognized
+    shapes fall back to an empty string rather than raising, since this
+    runs on every streamed token and a malformed chunk shouldn't crash the
+    session.
+
+    """
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict) and block.get("type") == "text":
+            parts.append(block.get("text", ""))
+        # other block types (reasoning, tool_use, etc.) are intentionally skipped
+    return "".join(parts)
 
 
 class StreamRenderer:
@@ -60,10 +93,11 @@ class StreamRenderer:
             self._live.start()
         return self._live
 
-    def add_token(self, content: str) -> None:
-        if not content:
+    def add_token(self, content: Any) -> None:
+        text = extract_text(content)
+        if not text:
             return
-        self._buffer += content
+        self._buffer += text
         self._ensure_live().update(Markdown(self._buffer))
 
     def _finalize_segment(self) -> None:
