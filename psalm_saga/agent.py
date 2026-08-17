@@ -39,17 +39,14 @@ from pathlib import Path
 from typing import Any
 
 from deepagents import SubAgent, create_deep_agent
-from deepagents.backends import (
-    BackendProtocol,
-    CompositeBackend,
-    FilesystemBackend,
-    LocalShellBackend,
-)
+from deepagents.backends.composite import CompositeBackend
+from deepagents.backends.filesystem import FilesystemBackend
+from deepagents.backends.local_shell import LocalShellBackend
+from deepagents.backends.protocol import BackendProtocol
 from langchain.agents.middleware import TodoListMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.graph.state import CompiledStateGraph
 
 from psalm_saga.bootstrap import SKILLS_DIR, compose_system_prompt
 from psalm_saga.middleware import init_middleware
@@ -108,20 +105,6 @@ DIMENSION_REVIEWER_SUBAGENT: SubAgent = {
 }
 
 
-def build_model(settings: Settings) -> Any:
-    """Build the main-loop chat model from settings, with an optional rate limiter."""
-    rate_limiter = None
-
-    if settings.rate_limiter.enable_rate_limiter:
-        rate_limiter = InMemoryRateLimiter(
-            requests_per_second=settings.rate_limiter.requests_per_second,
-            check_every_n_seconds=settings.rate_limiter.check_every_n_seconds,
-            max_bucket_size=settings.rate_limiter.max_bucket_size,
-        )
-
-    return init_chat_model(model=settings.agent.orchestration_model_name, rate_limiter=rate_limiter)
-
-
 def _with_skills_mounted(base_backend: BackendProtocol, skills_dir: str | Path) -> BackendProtocol:
     """Wrap `base_backend` so `SKILLS_MOUNT` resolves to the vendored skills dir.
 
@@ -155,13 +138,48 @@ def build_backend(settings: Settings) -> BackendProtocol:
     default; the filesystem tools are unaffected either way.
     """
     if settings.backend.enable_shell:
-        project_backend: BackendProtocol = LocalShellBackend(
-            root_dir=str(settings.backend.root_dir)
-        )
+        project_backend: BackendProtocol = LocalShellBackend(root_dir=str(settings.backend.root_dir))
     else:
         project_backend = FilesystemBackend(root_dir=str(settings.backend.root_dir))
 
     return _with_skills_mounted(project_backend, SKILLS_DIR)
+
+
+def build_model(settings: Settings) -> Any:
+    """Build the main-loop chat model from settings, with an optional rate limiter.
+
+    `settings.agent.model_kwargs` is forwarded as-is to `init_chat_model` —
+    see `AgentSettings.model_kwargs`'s docstring for the main use case
+    (routing OpenAI reasoning models through the Responses API).
+    """
+    rate_limiter = None
+    if settings.rate_limiter.enable_rate_limiter:
+        rate_limiter = InMemoryRateLimiter(
+            requests_per_second=settings.rate_limiter.requests_per_second,
+            check_every_n_seconds=settings.rate_limiter.check_every_n_seconds,
+            max_bucket_size=settings.rate_limiter.max_bucket_size,
+        )
+    return init_chat_model(
+        model=settings.agent.orchestration_model_name,
+        rate_limiter=rate_limiter,
+        **settings.agent.model_kwargs,
+    )
+
+
+def build_subagent_model(settings: Settings) -> Any:
+    """Build the shared `chapter-writer` / `dimension-reviewer` model instance.
+
+    Built once here (rather than left as a bare model-name string on each
+    `SubAgent`) so `settings.agent.subagent_model_kwargs` — e.g. the same
+    Responses-API routing `build_model` needs for OpenAI reasoning models —
+    actually takes effect for subagents too. `deepagents.SubAgent["model"]`
+    accepts either a model-name string or a real `BaseChatModel` instance;
+    passing the pre-built instance is what makes the extra kwargs apply.
+    """
+    return init_chat_model(
+        model=settings.agent.subagent_model_name,
+        **settings.agent.subagent_model_kwargs,
+    )
 
 
 def build_agent(
@@ -172,7 +190,7 @@ def build_agent(
     subagents: Sequence[SubAgent] | None = None,
     checkpointer: Any = None,
     **create_deep_agent_kwargs: Any,
-) -> CompiledStateGraph:
+):
     """Construct the compiled psalm-saga deep agent.
 
     Args:
@@ -205,8 +223,8 @@ def build_agent(
     resolved_checkpointer = checkpointer if checkpointer is not None else InMemorySaver()
 
     resolved_subagents: list[SubAgent] = [
-        {**CHAPTER_WRITER_SUBAGENT, "model": settings.agent.subagent_model_name},
-        {**DIMENSION_REVIEWER_SUBAGENT, "model": settings.agent.subagent_model_name},
+        {**CHAPTER_WRITER_SUBAGENT, "model": build_subagent_model(settings)},
+        {**DIMENSION_REVIEWER_SUBAGENT, "model": build_subagent_model(settings)},
         *(subagents or []),
     ]
 

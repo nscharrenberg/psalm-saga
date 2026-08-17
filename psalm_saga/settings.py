@@ -7,7 +7,7 @@ or `PSALM_SAGA_BACKEND__ROOT_DIR=./my-story`.
 """
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,14 +36,39 @@ class AgentSettings(BaseModel):
             `dimension-reviewer`'s structured checklist work is usually fine
             on a faster/cheaper one — see `agent.py` for where these are
             actually wired to each named subagent.
+        model_kwargs: Extra keyword arguments forwarded to
+            `init_chat_model()` when building the orchestration model.
+            Provider- and model-specific — most people won't need this. The
+            one common case: OpenAI's GPT-5-family reasoning models (`gpt-5`,
+            `gpt-5.1`-`5.x`, o-series) reject `reasoning_effort` together
+            with function tools on the Chat Completions API, which deepagents
+            always uses tools with, so `chat/completions` fails outright for
+            these models. Fix: route through OpenAI's Responses API instead
+            — set `PSALM_SAGA_AGENT__MODEL_KWARGS='{"use_responses_api": true}'`
+            (JSON; pydantic-settings decodes dict-typed fields from env vars
+            this way).
+        subagent_model_kwargs: Same as `model_kwargs`, but for the
+            `chapter-writer` / `dimension-reviewer` subagents' model. Kept
+            separate since the subagent model can be a different
+            provider/model than the orchestration one.
 
     """
 
     orchestration_model_name: str = Field(
-        default="openai:gpt-4o-mini", description="The model to use for the orchestration agent"
+        default="anthropic:claude-sonnet-4-6",
+        description="The model to use for the main agent loop",
     )
     subagent_model_name: str = Field(
-        default="openai:gpt-4o-mini", description="The model to use for the subagent"
+        default="anthropic:claude-sonnet-4-6",
+        description="The model to use for chapter-writer and dimension-reviewer subagents",
+    )
+    model_kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra kwargs forwarded to init_chat_model() for the orchestration model",
+    )
+    subagent_model_kwargs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Extra kwargs forwarded to init_chat_model() for the subagent model",
     )
 
 
@@ -164,7 +189,7 @@ class ToolCallLimitSettings(BaseModel):
         default=200, description="The maximum number of tool calls allowed per run"
     )
     exit_behavior: Literal["continue", "end", "error"] = Field(
-        default="end", description="What to do when limits are exceeded: 'end' or 'error'"
+        default="end", description="What to do when limits are exceeded"
     )
 
 
