@@ -1,8 +1,77 @@
 [project]
-name = "psalm-saga-deepagents"
+name = "psalm-saga"
 version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.14"
 dependencies = [
     "deepagents>=0.7.6",
+    "jsonpatchkit>=0.1.0",
+    "python-dotenv>=1.2.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/nscharrenberg/psalm-saga"
+Issues = "https://github.com/nscharrenberg/psalm-saga/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.3",
+]
+
+[project.scripts]
+psalm-saga = "psalm_saga:main"
+
+[build-system]
+requires = ["setuptools>=82.0.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["psalm_saga_plugin"]
+
+[tool.setuptools.packages.find]
+include = ["psalm_saga*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".runtime/**", "**/_runtime/**", "examples/**", "runs/**"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN",
+    "C901",
+    "COM812",
+    "D203",
+    "D102",
+    "D213",
+    "D107",
+    "E501",
+    "EM102",
+    "ISC001",
+    "PERF401",
+    "PLR0912",
+    "PLR0915",
+    "PLR2004",
+    "Q000",
+    "S314",
+    "S603",
+    "S607",
+    "TC001",
+    "TC003",
+    "TRY003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "ANN001",
+    "ANN201",
+    "D",
+    "S101",
+    "TC002",
+    "TC003",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
