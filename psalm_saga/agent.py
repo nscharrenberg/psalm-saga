@@ -34,7 +34,9 @@ to be assembled:
    are layered on top.
 """
 
-from collections.abc import Sequence
+import sqlite3
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -47,9 +49,11 @@ from langchain.agents.middleware import TodoListMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.rate_limiters import InMemoryRateLimiter
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from psalm_saga.bootstrap import SKILLS_DIR, compose_system_prompt
 from psalm_saga.middleware import init_middleware
+from psalm_saga.session import checkpoint_db_path, generate_session_id, session_directory
 from psalm_saga.settings import Settings
 
 # Fixed so the skills are reachable regardless of `settings.backend.root_dir`
@@ -129,18 +133,53 @@ def _with_skills_mounted(base_backend: BackendProtocol, skills_dir: str | Path) 
     return CompositeBackend(default=base_backend, routes={SKILLS_MOUNT: skills_backend})
 
 
-def build_backend(settings: Settings) -> BackendProtocol:
-    """Build the project-files backend from settings, with skills mounted.
+@contextmanager
+def open_sqlite_checkpointer(settings: Settings, session_id: str) -> Iterator[SqliteSaver]:
+    """Open this session's own persistent SQLite checkpointer.
+
+    Conversation state (the full message history) is written here as the
+    agent runs, keyed by `session_id` (used as the LangGraph `thread_id`),
+    so a later `psalm-saga --session <same-id>` run in a fresh process can
+    resume the exact same conversation — verified end to end: writing via
+    one connection and reading back via an entirely separate connection to
+    the same file restores the full message history correctly.
+
+    A context manager because `SqliteSaver` wraps a raw `sqlite3.Connection`
+    that must be closed explicitly; the caller (the CLI's session loop) is
+    expected to hold this open for the duration of one interactive session
+    and let the `with` block close it on exit.
+    """
+    session_dir = session_directory(settings, session_id)
+    session_dir.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(checkpoint_db_path(settings, session_id)), check_same_thread=False)
+    try:
+        saver = SqliteSaver(conn)
+        saver.setup()
+        yield saver
+    finally:
+        conn.close()
+
+
+def build_backend(settings: Settings, session_id: str) -> BackendProtocol:
+    """Build the project-files backend, rooted at this session's own directory.
+
+    Every session gets its own directory under `settings.backend.root_dir`
+    (see `session.session_directory`) — spec/plan/chapter files a skill
+    writes during this session land there, not directly under
+    `settings.backend.root_dir`, so two sessions in the same project never
+    collide.
 
     Uses `LocalShellBackend` (unsandboxed local shell) instead of the plain
     `FilesystemBackend` only if `settings.backend.enable_shell` is set —
     none of the psalm-saga skills need shell access, so this stays off by
     default; the filesystem tools are unaffected either way.
     """
+    session_dir = session_directory(settings, session_id)
+    session_dir.mkdir(parents=True, exist_ok=True)
     if settings.backend.enable_shell:
-        project_backend: BackendProtocol = LocalShellBackend(root_dir=str(settings.backend.root_dir))
+        project_backend: BackendProtocol = LocalShellBackend(root_dir=str(session_dir))
     else:
-        project_backend = FilesystemBackend(root_dir=str(settings.backend.root_dir))
+        project_backend = FilesystemBackend(root_dir=str(session_dir))
 
     return _with_skills_mounted(project_backend, SKILLS_DIR)
 
@@ -182,9 +221,10 @@ def build_subagent_model(settings: Settings) -> Any:
     )
 
 
-def build_agent(
+def build_agent(  # noqa: PLR0913
     settings: Settings | None = None,
     *,
+    session_id: str | None = None,
     tools: Sequence[Any] | None = None,
     system_prompt: str = "",
     subagents: Sequence[SubAgent] | None = None,
@@ -196,6 +236,15 @@ def build_agent(
     Args:
         settings: Application settings. Defaults to `Settings()` (reading
             from environment variables / a loaded `.env` file).
+        session_id: This session's id (see `psalm_saga.session`). Every
+            session gets its own directory under `settings.backend.root_dir`
+            that its spec/plan/chapter files are written into — this is
+            what determines which one. Defaults to a fresh
+            `generate_session_id()` if not given, which is fine for
+            one-off programmatic use; the CLI always resolves and passes
+            this explicitly (from `--session`, or a freshly generated one)
+            so it can print the session directory and, when resuming, load
+            and display prior history before this function is even called.
         tools: Extra custom tools beyond the built-in filesystem/subagent/
             to-do tools (e.g. a web-research tool, for fact-checking a
             historical-fiction setting).
@@ -203,15 +252,12 @@ def build_agent(
             bootstrap is appended after this.
         subagents: Additional named subagents beyond `chapter-writer` and
             `dimension-reviewer`, which are always registered.
-        checkpointer: Passed to `create_deep_agent`. Defaults to `None`,
-            in which case an in-memory `InMemorySaver` is provisioned so a
-            multi-turn CLI session keeps conversation state across turns
-            within the same `thread_id` — note `checkpointer=True` (the
-            shorthand LangGraph offers) only works for *subgraphs*, not the
-            root graph `create_deep_agent` returns, so an actual saver
-            instance is required here. Pass your own `BaseCheckpointSaver`
-            (e.g. a SQLite- or Postgres-backed one) for persistence across
-            separate `psalm-saga` invocations.
+        checkpointer: Passed to `create_deep_agent`. Defaults to `None`, in
+            which case an in-memory `InMemorySaver` is provisioned — state
+            lives only for this process's lifetime. For state that survives
+            a process restart (what `--session <id>` needs to actually
+            resume anything), pass a persistent saver, e.g. one opened via
+            `session.open_sqlite_checkpointer(settings, session_id)`.
         **create_deep_agent_kwargs: Passed straight through to
             `create_deep_agent` (e.g. `permissions=`, `interrupt_on=`).
 
@@ -220,6 +266,7 @@ def build_agent(
 
     """
     settings = settings or Settings()
+    session_id = session_id or generate_session_id()
     resolved_checkpointer = checkpointer if checkpointer is not None else InMemorySaver()
 
     resolved_subagents: list[SubAgent] = [
@@ -239,7 +286,7 @@ def build_agent(
         tools=list(tools or []),
         system_prompt=full_system_prompt,
         skills=[SKILLS_MOUNT],
-        backend=build_backend(settings),
+        backend=build_backend(settings, session_id),
         subagents=resolved_subagents,
         middleware=middleware,
         checkpointer=resolved_checkpointer,
