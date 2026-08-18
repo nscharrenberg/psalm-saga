@@ -25,15 +25,13 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory, History, InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
-from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.text import Text
 
 from psalm_saga.agent import build_agent, open_sqlite_checkpointer
 from psalm_saga.session import generate_session_id, list_sessions, session_directory
 from psalm_saga.settings import Settings
-from psalm_saga.stream_renderer import extract_text, StreamRenderer
+from psalm_saga.stream_renderer import StreamRenderer, extract_text
 
 _BANNER = r"""[bold cyan]
  _ __  ___  __ _| |_ __ ___    ___  __ _  __ _  __ _
