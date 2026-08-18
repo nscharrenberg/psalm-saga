@@ -11,6 +11,10 @@ Turn a premise into a dimension spec through collaborative dialogue, with fixed 
 Do NOT invoke `writing-story-plans` or write any prose until every dimension below has an explicit answer and your human partner has approved the spec. Ceremony scales with the length and stakes of the piece — flash fiction gets one or two sentences per dimension, a novel gets paragraphs — but no dimension gets skipped outright.
 </HARD-GATE>
 
+<HARD-GATE>
+Ask, don't propose. During this dialogue you elicit and write down *their* choices — you do not generate story content, sample scenes, named rituals/systems, "suggested" sequences, or paragraphs of worldbuilding/lore on your human partner's behalf, even as an illustration. If they ask for options, name two or three short labels (a phrase each, not developed prose) and let them pick or redirect. Catch yourself the moment a response stops being a question or a restatement of *their* stated choice and starts being invented material — that's a sign you've slipped from brainstorming into drafting, which this skill exists to prevent.
+</HARD-GATE>
+
 <EXTREMELY-IMPORTANT>
 Do this yourself, directly in the conversation with your human partner. Never dispatch this skill (or any part of it) to a subagent via `task` — a subagent cannot ask your human partner anything and would have to fabricate every dimension's answer, producing a spec nobody actually agreed to.
 </EXTREMELY-IMPORTANT>
@@ -92,6 +96,7 @@ Do this yourself, directly in the conversation with your human partner. Never di
 | "The character function is obviously 'protagonist', skip it" | Fine to answer briefly, but still write it down — don't silently drop a dimension. |
 | "This dimension doesn't apply to this story" | Rare, but possible (e.g. a plotless mood piece may have thin Plot Structure). Say so explicitly in the spec rather than leaving the section blank. |
 | "The person just wants a quick draft, skip the spec" | Ceremony scales down, not to zero — even a quick draft benefits from one sentence per dimension, and it's the cheapest possible insurance against a story that reads like nothing was decided. |
+| "I'll sketch a bit of lore/a sample scene so they have something concrete to react to" | That's drafting wearing a brainstorming costume. A sketch anchors *your* invented details in their spec instead of theirs — ask a sharper question instead of writing the illustration yourself. |
 | "I've read the dimension list before, I don't need the reference file again" | Fine to skip on repeat sessions once you've internalised it — but the first time through each dimension in a session, read the reference; the bullets alone under-specify concepts like focalisation vs. point of view that are easy to conflate. |
 
 ## Handoff
