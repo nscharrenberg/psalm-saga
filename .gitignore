@@ -310,3 +310,9 @@ pip-selfcheck.json
 # End of https://www.toptal.com/developers/gitignore/api/python,intellij+all,visualstudiocode,git,venv
 
 my-story/*/**
+
+# DeepEval eval-suite session backend (see tests/evals/ai_app.py)
+tests/evals/.runtime/
+
+# DeepEval local test-run cache/history
+.deepeval/
