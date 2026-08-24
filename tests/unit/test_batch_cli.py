@@ -112,14 +112,21 @@ def test_run_batch_stops_once_count_is_reached(
         calls.append(n)
         (stories_dir(settings, session_id) / f"story-{n}").mkdir(parents=True)
 
+    captured_kwargs: dict[str, Any] = {}
+
+    def fake_build_agent(*_a: Any, **kwargs: Any) -> _FakeAgent:
+        captured_kwargs.update(kwargs)
+        return _FakeAgent(on_stream)
+
     monkeypatch.setattr(batch_cli, "open_sqlite_checkpointer", _fake_checkpointer)
-    monkeypatch.setattr(batch_cli, "build_agent", lambda *_a, **_kw: _FakeAgent(on_stream))
+    monkeypatch.setattr(batch_cli, "build_agent", fake_build_agent)
 
     args = _parse_args(["--count", "3", "--mode", "scratch", "--session", session_id])
     batch_cli.run_batch(settings, args, _quiet_console())
 
     assert len(calls) == 3
     assert promoted_story_count(settings, session_id) == 3
+    assert captured_kwargs["bootstrap_skill"] == batch_cli.BATCH_BOOTSTRAP_SKILL
 
 
 def test_run_batch_gives_up_after_the_attempt_cap(

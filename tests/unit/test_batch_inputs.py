@@ -74,7 +74,9 @@ def test_resolve_variant_sources_with_explicit_manifest(tmp_path: Path) -> None:
 
     result = resolve_variant_sources([source], manifest)
 
-    assert result == [VariantSource(source_path=source, dimensions=("character",))]
+    assert result == [
+        VariantSource(source_path=source, dimensions=("character",), content="once upon a time")
+    ]
 
 
 def test_resolve_variant_sources_with_default_manifest_in_directory(tmp_path: Path) -> None:
@@ -86,7 +88,11 @@ def test_resolve_variant_sources_with_default_manifest_in_directory(tmp_path: Pa
 
     result = resolve_variant_sources([tmp_path], None)
 
-    assert result == [VariantSource(source_path=source, dimensions=("plot-structure",))]
+    assert result == [
+        VariantSource(
+            source_path=source, dimensions=("plot-structure",), content="once upon a time"
+        )
+    ]
 
 
 def test_resolve_variant_sources_missing_manifest_raises(tmp_path: Path) -> None:
@@ -117,3 +123,31 @@ def test_resolve_variant_sources_source_without_manifest_entry_raises(tmp_path: 
 
     with pytest.raises(BatchInputError, match="No variant-manifest entry"):
         resolve_variant_sources([source, other], manifest)
+
+
+def test_resolve_variant_sources_malformed_manifest_json_raises(tmp_path: Path) -> None:
+    source = tmp_path / "old-draft.md"
+    source.write_text("once upon a time")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{not valid json")
+
+    with pytest.raises(BatchInputError, match="Invalid JSON"):
+        resolve_variant_sources([source], manifest)
+
+
+def test_resolve_variant_sources_non_string_source_raises(tmp_path: Path) -> None:
+    source = tmp_path / "old-draft.md"
+    source.write_text("once upon a time")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps([{"source": 123, "dimensions": ["character"]}]))
+
+    with pytest.raises(BatchInputError, match="'source' must be a string"):
+        resolve_variant_sources([source], manifest)
+
+
+def test_resolve_context_inputs_non_utf8_file_raises(tmp_path: Path) -> None:
+    file_path = tmp_path / "binary.txt"
+    file_path.write_bytes(b"\xff\xfe\x00\x00invalid")
+
+    with pytest.raises(BatchInputError, match="Not a UTF-8 text file"):
+        resolve_context_inputs([], [file_path])

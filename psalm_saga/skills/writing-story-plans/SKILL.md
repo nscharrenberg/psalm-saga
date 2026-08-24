@@ -42,6 +42,9 @@ other session.
 **Save path override:** save the plan to
 `docs/drafts/<story_name>/<story_name>-plan.md` instead of
 `docs/psalm-saga/<slug>-plan.md`, matching this story's spec location.
+This also changes what counts for the Scope Check above: in Autonomous
+Mode, check for `docs/drafts/<story_name>/<story_name>-spec.md` instead
+of `docs/psalm-saga/<slug>-spec.md` before proceeding.
 
 **Skip Step 4's sign-off.** Instead, self-check: re-verify the dimension
 carry-through table against the spec, and every chapter brief's POV,

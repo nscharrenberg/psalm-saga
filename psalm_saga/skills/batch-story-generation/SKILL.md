@@ -28,8 +28,13 @@ The CLI sends one instruction message per story, on this same session
 thread, shaped like:
 
 > Generate story {i} of {count}. Mode: {scratch|context|template|variant}.
-> Inputs: [...]. Combine: {mixed|separate}. Existing names in this
+> Combine: {mixed|separate}. Inputs: [...]. Existing names in this
 > session: [...].
+
+`Combine: separate` means the `Inputs` you were given for this specific
+story are already narrowed to just this story's share — treat them as the
+whole pool for this story, don't expect to see the rest. `Combine: mixed`
+means the full pool was given to you and you may draw on any part of it.
 
 Generate exactly the one story that message describes, then stop — end
 your turn with a short summary (story name, whether it was promoted or
@@ -38,9 +43,9 @@ the next one; do not generate more than one story per instruction message.
 
 ## The pipeline, per story
 
-Every story still goes through the same four stages interactive sessions
-do — batch mode changes who decides and whether there's a pause, not
-whether the process happens:
+Every story still goes through the same pipeline stages interactive
+sessions do — batch mode changes who decides and whether there's a pause,
+not whether the process happens:
 
 1. **Autonomous brainstorming** — invoke `story-brainstorming`, following
    its `## Autonomous Mode` section, which covers all four input modes
@@ -49,18 +54,24 @@ whether the process happens:
 2. **Autonomous planning** — invoke `writing-story-plans`, following its
    `## Autonomous Mode` section. Produces
    `docs/drafts/<story_name>/<story_name>-plan.md`.
-3. **Drafting** — invoke `drafting-chapters` exactly as written; it is
-   unchanged for batch mode. Dispatches the `chapter-writer` subagent per
-   chapter, same as an interactive session.
+3. **Drafting** — invoke `drafting-chapters`, following its
+   `## Autonomous Mode` section (save path and Scope Check path only —
+   the per-chapter loop itself is the same as an interactive session).
+   Dispatches the `chapter-writer` subagent per chapter, same as an
+   interactive session.
 4. **Autonomous review-and-fix** — invoke `reviewing-story-dimensions`,
    following its `## Autonomous Mode` section, per chapter and once for
    the whole story. Produces/updates
    `docs/drafts/<story_name>/<story_name>-review.md`.
-5. **Promote** — once the whole-story review is fully clean, copy
-   `docs/drafts/<story_name>/` to `docs/stories/<story_name>/`. If the
-   review never converges (see the fix-loop cap in
-   `reviewing-story-dimensions`'s Autonomous Mode), do not promote — leave
-   the draft as an abandoned record and say so in your final summary.
+5. **Finish** — once the whole-story review is fully clean, your work on
+   this story is done; end your turn. Promotion of
+   `docs/drafts/<story_name>/` to `docs/stories/<story_name>/` happens
+   outside this conversation, based on which draft directories exist
+   (and whether they carry an `ABANDONED.md`) when your turn ends — you
+   do not copy the files yourself. If the review never converges (see the
+   fix-loop cap in `reviewing-story-dimensions`'s Autonomous Mode), write
+   `ABANDONED.md` as that section describes and end your turn without
+   further action; a draft carrying `ABANDONED.md` is never promoted.
 
 <EXTREMELY-IMPORTANT>
 Brainstorming and planning still happen directly in your own turn, never

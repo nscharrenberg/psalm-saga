@@ -38,6 +38,14 @@ class VariantSource:
 
     source_path: Path
     dimensions: tuple[str, ...]
+    content: str
+
+
+def _read_text_or_raise(file_path: Path) -> str:
+    try:
+        return file_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise BatchInputError(f"Not a UTF-8 text file: {file_path}") from exc
 
 
 def expand_paths(paths: list[Path]) -> list[Path]:
@@ -68,7 +76,7 @@ def resolve_context_inputs(texts: list[str], paths: list[Path]) -> list[str]:
     """
     combined = list(texts)
     for file_path in expand_paths(paths):
-        combined.append(file_path.read_text(encoding="utf-8"))
+        combined.append(_read_text_or_raise(file_path))
     if not combined:
         msg = "--mode context requires at least one --context TEXT or --context-path PATH"
         raise BatchInputError(msg)
@@ -84,13 +92,16 @@ def resolve_template_inputs(paths: list[Path]) -> list[str]:
     if not paths:
         msg = "--mode template requires at least one --template-path PATH"
         raise BatchInputError(msg)
-    return [file_path.read_text(encoding="utf-8") for file_path in expand_paths(paths)]
+    return [_read_text_or_raise(file_path) for file_path in expand_paths(paths)]
 
 
 def _load_manifest_file(manifest_path: Path) -> dict[str, list[str]]:
     if not manifest_path.is_file():
         raise BatchInputError(f"Variant manifest not found: {manifest_path}")
-    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise BatchInputError(f"Invalid JSON in variant manifest {manifest_path}: {exc}") from exc
     if not isinstance(raw, list):
         raise BatchInputError(f"Variant manifest must be a JSON array: {manifest_path}")
 
@@ -109,10 +120,13 @@ def _load_manifest_file(manifest_path: Path) -> dict[str, list[str]]:
                     f"Unknown dimension {dimension!r} in {manifest_path}. "
                     f"Valid dimensions: {sorted(DIMENSION_SLUGS)}"
                 )
+        source_value = entry["source"]
+        if not isinstance(source_value, str):
+            raise BatchInputError(f"'source' must be a string in {manifest_path}: {entry}")
         # Resolve the manifest's own "source" value relative to the
         # manifest file's directory, matching how a human would write one
         # by hand next to the sources it describes.
-        resolved_source = (manifest_path.parent / entry["source"]).resolve()
+        resolved_source = (manifest_path.parent / source_value).resolve()
         entries[str(resolved_source)] = list(dimensions)
     return entries
 
@@ -164,6 +178,10 @@ def resolve_variant_sources(
         if key not in manifest_entries:
             raise BatchInputError(f"No variant-manifest entry for source file: {file_path}")
         sources.append(
-            VariantSource(source_path=file_path, dimensions=tuple(manifest_entries[key]))
+            VariantSource(
+                source_path=file_path,
+                dimensions=tuple(manifest_entries[key]),
+                content=_read_text_or_raise(file_path),
+            )
         )
     return sources

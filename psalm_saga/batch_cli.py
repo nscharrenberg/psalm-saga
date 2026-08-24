@@ -26,7 +26,13 @@ from psalm_saga.batch_inputs import (
     resolve_template_inputs,
     resolve_variant_sources,
 )
-from psalm_saga.batch_session import existing_story_names, promoted_story_count
+from psalm_saga.batch_session import (
+    drafts_dir,
+    existing_story_names,
+    promote_story,
+    promoted_story_count,
+    stories_dir,
+)
 from psalm_saga.bootstrap import BATCH_BOOTSTRAP_SKILL
 from psalm_saga.session import generate_session_id, session_directory
 from psalm_saga.settings import Settings
@@ -73,8 +79,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--combine", choices=["mixed", "separate"], default=None,
         help="How multiple inputs map onto --count stories. Forced to 'separate' for --mode variant.",
     )
-    parser.add_argument("--session", dest="session_id", default=None)
-    parser.add_argument("--model", dest="model", default=None)
+    parser.add_argument(
+        "--session",
+        dest="session_id",
+        default=None,
+        help="Resume/target a specific session id instead of starting a fresh one.",
+    )
+    parser.add_argument(
+        "--model",
+        dest="model",
+        default=None,
+        help="Override the main-loop model (e.g. anthropic:claude-sonnet-4-6).",
+    )
     args = parser.parse_args(argv)
 
     if args.count < 1:
@@ -111,7 +127,11 @@ def _build_story_instruction(  # noqa: PLR0913, PLR0917
     if mode == "variant":
         inputs_desc = json.dumps(
             [
-                {"source": str(source.source_path), "dimensions": list(source.dimensions)}
+                {
+                    "source": str(source.source_path),
+                    "dimensions": list(source.dimensions),
+                    "content": source.content,
+                }
                 for source in inputs or []
             ]
         )
@@ -128,6 +148,27 @@ def _build_story_instruction(  # noqa: PLR0913, PLR0917
     )
 
 
+def _promote_finished_drafts(settings: Settings, session_id: str, console: Console) -> None:
+    """Promote every draft directory that's done and not abandoned.
+
+    A draft counts as done once this function is called (after each
+    per-story agent turn) if it isn't already promoted and doesn't carry
+    an `ABANDONED.md` — the per-story instruction dispatches exactly one
+    story per turn, so any new, non-abandoned draft directory after a
+    turn is one this turn just finished.
+    """
+    drafts = drafts_dir(settings, session_id)
+    if not drafts.is_dir():
+        return
+    stories = stories_dir(settings, session_id)
+    already_promoted = {p.name for p in stories.iterdir() if p.is_dir()} if stories.is_dir() else set()
+    for draft in sorted(p for p in drafts.iterdir() if p.is_dir()):
+        if draft.name in already_promoted or (draft / "ABANDONED.md").is_file():
+            continue
+        promote_story(settings, session_id, draft.name)
+        console.print(f"[dim]Promoted:[/dim] {draft.name}")
+
+
 def run_batch(settings: Settings, args: argparse.Namespace, console: Console) -> None:
     """Generate stories until `docs/stories/` for this session holds
     `args.count` of them (or the overall attempt cap is hit).
@@ -136,11 +177,11 @@ def run_batch(settings: Settings, args: argparse.Namespace, console: Console) ->
     turn, `promoted_story_count` re-scans the filesystem, which is the only
     thing that decides whether the loop continues.
     """
+    inputs = _resolve_inputs(args)
+
     session_id = args.session_id or generate_session_id()
     console.print(f"[dim]Session:[/dim] {session_id}")
     console.print(f"[dim]Session directory:[/dim] {session_directory(settings, session_id)}\n")
-
-    inputs = _resolve_inputs(args)
 
     with open_sqlite_checkpointer(settings, session_id) as checkpointer:
         agent = build_agent(
@@ -158,27 +199,36 @@ def run_batch(settings: Settings, args: argparse.Namespace, console: Console) ->
         while done < args.count and attempts < max_attempts:
             attempts += 1
             names = existing_story_names(settings, session_id)
+            story_inputs = inputs
+            if args.combine == "separate" and inputs:
+                story_inputs = [inputs[done % len(inputs)]]
             message = _build_story_instruction(
-                done + 1, args.count, args.mode, args.combine, inputs, names
+                done + 1, args.count, args.mode, args.combine, story_inputs, names
             )
             console.print(f"[bold magenta]batch>[/bold magenta] attempt {attempts}: {message}\n")
 
             renderer = StreamRenderer(console)
-            for stream_mode, payload in agent.stream(
-                {"messages": [{"role": "user", "content": message}]},
-                config=config,
-                stream_mode=["messages", "updates"],
-            ):
-                if stream_mode == "messages":
-                    chunk, metadata = payload
-                    if metadata.get("langgraph_node") == "model":
-                        renderer.add_token(getattr(chunk, "content", ""))
-                elif stream_mode == "updates":
-                    for line in extract_tool_call_lines(payload):
-                        renderer.announce_tool_call(line)
+            try:
+                for stream_mode, payload in agent.stream(
+                    {"messages": [{"role": "user", "content": message}]},
+                    config=config,
+                    stream_mode=["messages", "updates"],
+                ):
+                    if stream_mode == "messages":
+                        chunk, metadata = payload
+                        if metadata.get("langgraph_node") == "model":
+                            renderer.add_token(getattr(chunk, "content", ""))
+                    elif stream_mode == "updates":
+                        for line in extract_tool_call_lines(payload):
+                            renderer.announce_tool_call(line)
+            except Exception as exc:  # noqa: BLE001 — a bad story shouldn't crash the whole batch
+                renderer.finish()
+                console.print(f"[red]Story attempt {attempts} failed: {exc}[/red]\n")
+                continue
             renderer.finish()
             console.print()
 
+            _promote_finished_drafts(settings, session_id, console)
             done = promoted_story_count(settings, session_id)
             console.print(f"[dim]Promoted so far:[/dim] {done}/{args.count}\n")
 
