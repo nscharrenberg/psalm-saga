@@ -87,3 +87,24 @@ def test_build_agent_attaches_subagent_middleware_to_chapter_writer_and_dimensio
         kinds = {type(m) for m in subagent_middleware}
         assert RateLimitAwareRetryMiddleware in kinds, f"{name} missing retry-after-aware retry"
         assert TokenBudgetMiddleware in kinds, f"{name} missing shared token budget"
+
+
+def test_build_agent_forwards_bootstrap_skill_override(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    monkeypatch.setattr(agent_module, "init_chat_model", lambda *, model, **_kw: f"stub:{model}")
+    monkeypatch.setattr(agent_module, "create_deep_agent", lambda **_kwargs: "stub-compiled-graph")
+
+    captured: dict[str, Any] = {}
+
+    def fake_compose_system_prompt(*, application_prompt: str, bootstrap_skill: str) -> str:  # noqa: ARG001
+        captured["bootstrap_skill"] = bootstrap_skill
+        return "stub-system-prompt"
+
+    monkeypatch.setattr(agent_module, "compose_system_prompt", fake_compose_system_prompt)
+
+    settings = Settings()
+    settings.backend.root_dir = tmp_path
+    agent_module.build_agent(settings, bootstrap_skill="batch-story-generation")
+
+    assert captured["bootstrap_skill"] == "batch-story-generation"
