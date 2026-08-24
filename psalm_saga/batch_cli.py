@@ -15,12 +15,22 @@ import argparse
 import json
 from pathlib import Path
 
+from dotenv import load_dotenv
+from rich.console import Console
+
+from psalm_saga.agent import build_agent, open_sqlite_checkpointer
 from psalm_saga.batch_inputs import (
+    BatchInputError,
     VariantSource,
     resolve_context_inputs,
     resolve_template_inputs,
     resolve_variant_sources,
 )
+from psalm_saga.batch_session import existing_story_names, promoted_story_count
+from psalm_saga.bootstrap import BATCH_BOOTSTRAP_SKILL
+from psalm_saga.session import generate_session_id, session_directory
+from psalm_saga.settings import Settings
+from psalm_saga.stream_renderer import StreamRenderer, extract_tool_call_lines
 
 MAX_ATTEMPT_MULTIPLIER = 3
 
@@ -116,3 +126,88 @@ def _build_story_instruction(  # noqa: PLR0913, PLR0917
         f"Existing names in this session: {sorted(existing_names)}. "
         "Use the batch-story-generation skill."
     )
+
+
+def run_batch(settings: Settings, args: argparse.Namespace, console: Console) -> None:
+    """Generate stories until `docs/stories/` for this session holds
+    `args.count` of them (or the overall attempt cap is hit).
+
+    Never trusts the agent's own claim of success — after every per-story
+    turn, `promoted_story_count` re-scans the filesystem, which is the only
+    thing that decides whether the loop continues.
+    """
+    session_id = args.session_id or generate_session_id()
+    console.print(f"[dim]Session:[/dim] {session_id}")
+    console.print(f"[dim]Session directory:[/dim] {session_directory(settings, session_id)}\n")
+
+    inputs = _resolve_inputs(args)
+
+    with open_sqlite_checkpointer(settings, session_id) as checkpointer:
+        agent = build_agent(
+            settings,
+            session_id=session_id,
+            checkpointer=checkpointer,
+            bootstrap_skill=BATCH_BOOTSTRAP_SKILL,
+        )
+        config = {"configurable": {"thread_id": session_id}}
+
+        attempts = 0
+        max_attempts = args.count * MAX_ATTEMPT_MULTIPLIER
+        done = promoted_story_count(settings, session_id)
+
+        while done < args.count and attempts < max_attempts:
+            attempts += 1
+            names = existing_story_names(settings, session_id)
+            message = _build_story_instruction(
+                done + 1, args.count, args.mode, args.combine, inputs, names
+            )
+            console.print(f"[bold magenta]batch>[/bold magenta] attempt {attempts}: {message}\n")
+
+            renderer = StreamRenderer(console)
+            for stream_mode, payload in agent.stream(
+                {"messages": [{"role": "user", "content": message}]},
+                config=config,
+                stream_mode=["messages", "updates"],
+            ):
+                if stream_mode == "messages":
+                    chunk, metadata = payload
+                    if metadata.get("langgraph_node") == "model":
+                        renderer.add_token(getattr(chunk, "content", ""))
+                elif stream_mode == "updates":
+                    for line in extract_tool_call_lines(payload):
+                        renderer.announce_tool_call(line)
+            renderer.finish()
+            console.print()
+
+            done = promoted_story_count(settings, session_id)
+            console.print(f"[dim]Promoted so far:[/dim] {done}/{args.count}\n")
+
+    if done < args.count:
+        console.print(
+            f"[yellow]Stopped after {attempts} attempts with {done}/{args.count} "
+            "stories promoted.[/yellow]"
+        )
+    else:
+        console.print(f"[bold green]Done.[/bold green] {done} stories in docs/stories/.")
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Entry point for the `psalm-saga-batch` console script."""
+    load_dotenv()
+    console = Console()
+
+    args = _parse_args(argv)
+
+    settings = Settings()
+    if args.model:
+        settings.agent.orchestration_model_name = args.model
+
+    try:
+        run_batch(settings, args, console)
+    except BatchInputError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise SystemExit(1) from exc
+
+
+if __name__ == "__main__":
+    main()
