@@ -56,9 +56,36 @@ ELICITATION_PROGRESS = ConversationalGEval(
     ),
 )
 
+# Added after a real session (see docs/psalm-saga, "the-kindness-of-hands")
+# shipped a spec where Character changed a giant to a wild elephant but
+# World-Building's material detail still said "preserve the coat, button,
+# cuff" -- nothing checked the two against each other. This metric catches
+# the same failure mode in either direction: a from-scratch session where
+# later dimensions clash with earlier ones, or a source-derived session
+# where an open dimension's answer breaks a locked one.
+CROSS_DIMENSION_CONSISTENCY = ConversationalGEval(
+    name="CrossDimensionConsistency",
+    evaluation_params=[MultiTurnParams.CONTENT],
+    criteria=(
+        "Determine whether the assistant keeps dimension choices consistent "
+        "with each other across the conversation. When a choice recorded "
+        "for one PSALM dimension (writing style, narrative voice, character, "
+        "plot structure, scene sequence, world-building) would contradict or "
+        "make physically/logically impossible a choice already recorded for "
+        "another dimension -- including a dimension the user asked to keep "
+        "unchanged from a supplied source text -- the assistant should name "
+        "the contradiction explicitly and ask the user which side to revise, "
+        "rather than silently carrying both contradictory choices forward "
+        "into the spec or silently resolving the conflict itself. Penalize "
+        "the assistant for producing or finalizing a spec containing an "
+        "unresolved contradiction between dimensions."
+    ),
+)
+
 MULTI_TURN_METRICS = [
     SPEC_FIRST_ADHERENCE,
     ELICITATION_PROGRESS,
+    CROSS_DIMENSION_CONSISTENCY,
     RoleAdherenceMetric(),
     TurnRelevancyMetric(),
 ]
