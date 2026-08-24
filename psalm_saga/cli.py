@@ -31,7 +31,7 @@ from rich.panel import Panel
 from psalm_saga.agent import build_agent, open_sqlite_checkpointer
 from psalm_saga.session import generate_session_id, list_sessions, session_directory
 from psalm_saga.settings import Settings
-from psalm_saga.stream_renderer import StreamRenderer, extract_text
+from psalm_saga.stream_renderer import StreamRenderer, extract_text, extract_tool_call_lines
 
 _BANNER = r"""[bold cyan]
  _ __  ___  __ _| |_ __ ___    ___  __ _  __ _  __ _
@@ -152,32 +152,6 @@ def _build_prompt_session(settings: Settings, persist_history: bool) -> PromptSe
     return PromptSession(multiline=True, key_bindings=_build_key_bindings(), history=history)
 
 
-def _extract_tool_call_lines(update: dict[str, Any]) -> list[str]:
-    """Best-effort extraction of tool-call announcements from a LangGraph
-    `updates`-mode payload for the main agent's `model` node.
-
-    This is a convenience for terminal feedback, not load-bearing — if the
-    update shape doesn't match what's expected (e.g. a deepagents internal
-    change), it returns nothing rather than raising.
-    """
-    lines: list[str] = []
-    try:
-        model_output = update.get("model")
-        if not model_output:
-            return lines
-        for message in model_output.get("messages", []):
-            for tool_call in getattr(message, "tool_calls", None) or []:
-                name = tool_call.get("name", "tool")
-                if name == "task":
-                    subagent = tool_call.get("args", {}).get("subagent_type", "?")
-                    lines.append(f"dispatching {subagent}")
-                else:
-                    lines.append(name)
-    except Exception:  # noqa: BLE001 — status lines are best-effort only
-        return lines
-    return lines
-
-
 def _replay_history(agent: Any, config: dict[str, Any], console: Console) -> None:
     """Print a resumed session's prior conversation before the prompt starts.
 
@@ -267,7 +241,7 @@ def run_session(
                     if metadata.get("langgraph_node") == "model":
                         renderer.add_token(getattr(chunk, "content", ""))
                 elif mode == "updates":
-                    for line in _extract_tool_call_lines(payload):
+                    for line in extract_tool_call_lines(payload):
                         renderer.announce_tool_call(line)
         except KeyboardInterrupt:
             renderer.finish()
