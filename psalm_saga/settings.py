@@ -128,6 +128,15 @@ class ModelRetrySettings(BaseModel):
         backoff_factor: Multiplier applied to the delay between retries.
         initial_delay: Delay in seconds before the first retry.
         jitter: Whether to add randomness to retry delays.
+        honor_retry_after: Whether to parse a provider-suggested wait time
+            out of the error (e.g. OpenAI's "Please try again in 3.608s.")
+            and sleep that instead of the exponential-backoff schedule
+            below. Falls back to the backoff schedule when no such hint can
+            be parsed out of the exception.
+        retry_after_buffer: Extra seconds padded onto a parsed
+            provider-suggested wait, since the reported time is measured at
+            the moment the 429 was raised, not at the moment the retry
+            actually fires.
 
     """
 
@@ -142,6 +151,67 @@ class ModelRetrySettings(BaseModel):
         default=1.0, description="The initial delay for retrying a model call"
     )
     jitter: bool = Field(default=True, description="Enable jitter for retrying a model call")
+    honor_retry_after: bool = Field(
+        default=True,
+        description="Parse and honor a provider-suggested wait time before falling back to backoff",
+    )
+    retry_after_buffer: float = Field(
+        default=0.5,
+        description="Extra seconds padded onto a parsed provider-suggested wait",
+    )
+
+
+class TokenBudgetSettings(BaseModel):
+    """Settings for the shared tokens-per-minute backpressure limiter.
+
+    Unlike `RateLimiterSettings` (which paces *requests* per second),
+    this tracks actual *token* usage in a rolling 60s window, shared across
+    every caller of the same model name — the orchestrator and every
+    dispatched subagent alike, since they typically draw on the same
+    provider quota. It blocks a model call before it's made if the call
+    would likely exceed that shared budget, rather than only reacting after
+    a 429 has already happened.
+
+    Attributes:
+        enable_token_budget: Whether to enforce the shared token budget.
+        tokens_per_minute: The provider's TPM limit for the model these
+            calls share. Set this to match your org's actual limit (see
+            your provider's rate-limits page) — it's specific to your
+            account tier and the model in question.
+        safety_margin: Fraction of `tokens_per_minute` actually usable
+            before calls block, leaving headroom for the token estimate's
+            inherent inaccuracy.
+        chars_per_token_estimate: Rough chars-per-token used to estimate a
+            call's input size before it's made. The actual usage is
+            recorded afterward and corrects the window for later calls.
+        reserved_output_tokens: Assumed output+reasoning tokens reserved
+            per call before the real usage is known.
+        max_wait_seconds: Give up waiting for budget headroom after this
+            long and let the call through anyway.
+        poll_interval_seconds: How often to recheck budget headroom while
+            waiting for capacity.
+
+    """
+
+    enable_token_budget: bool = Field(default=True, description="Enable the shared token budget")
+    tokens_per_minute: int = Field(
+        default=200_000, description="The provider's tokens-per-minute limit for this model"
+    )
+    safety_margin: float = Field(
+        default=0.85, description="Fraction of tokens_per_minute usable before calls block"
+    )
+    chars_per_token_estimate: float = Field(
+        default=4.0, description="Rough chars-per-token used to estimate a call's input size"
+    )
+    reserved_output_tokens: int = Field(
+        default=4096, description="Assumed output+reasoning tokens reserved per call"
+    )
+    max_wait_seconds: float = Field(
+        default=120.0, description="Give up waiting for budget headroom after this long"
+    )
+    poll_interval_seconds: float = Field(
+        default=0.5, description="How often to recheck budget headroom while waiting"
+    )
 
 
 class ModelCallLimitSettings(BaseModel):
@@ -208,6 +278,8 @@ class Settings(BaseSettings):
             has shell access.
         rate_limiter: Model-call rate limiting.
         model_retry: Model-call retry behaviour.
+        token_budget: Shared tokens-per-minute backpressure across the
+            orchestrator and its subagents.
         model_call_limit: Caps on total model calls.
         tool_call_limit: Caps on total tool calls.
 
@@ -219,5 +291,6 @@ class Settings(BaseSettings):
     backend: BackendSettings = BackendSettings()
     rate_limiter: RateLimiterSettings = RateLimiterSettings()
     model_retry: ModelRetrySettings = ModelRetrySettings()
+    token_budget: TokenBudgetSettings = TokenBudgetSettings()
     model_call_limit: ModelCallLimitSettings = ModelCallLimitSettings()
     tool_call_limit: ToolCallLimitSettings = ToolCallLimitSettings()

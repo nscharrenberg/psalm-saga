@@ -30,8 +30,15 @@ to be assembled:
    model override from settings); `TodoListMiddleware` is added since
    `write_todos` isn't included by `create_deep_agent` by default; the
    cross-cutting reliability middleware from `middleware.init_middleware`
-   (retry, call limits, tool-error formatting) and an optional rate limiter
-   are layered on top.
+   (retry, token budget, call limits, tool-error formatting) and an
+   optional rate limiter are layered on top of the orchestrator. Subagents
+   get their own, narrower stack from `middleware.init_subagent_middleware`
+   (retry + token budget only) via each `SubAgent["middleware"]` —
+   `create_deep_agent` does not apply the orchestrator's middleware list to
+   dispatched subagents automatically, and since `chapter-writer` makes the
+   largest calls of any caller in this app, leaving it off that list would
+   mean the reliability middleware never covers the calls most likely to
+   need it.
 """
 
 import sqlite3
@@ -52,7 +59,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from psalm_saga.bootstrap import SKILLS_DIR, compose_system_prompt
-from psalm_saga.middleware import init_middleware
+from psalm_saga.middleware import init_middleware, init_subagent_middleware
 from psalm_saga.session import checkpoint_db_path, generate_session_id, session_directory
 from psalm_saga.settings import Settings
 
@@ -184,6 +191,16 @@ def build_backend(settings: Settings, session_id: str) -> BackendProtocol:
     return _with_skills_mounted(project_backend, SKILLS_DIR)
 
 
+def _build_rate_limiter(settings: Settings) -> InMemoryRateLimiter | None:
+    if not settings.rate_limiter.enable_rate_limiter:
+        return None
+    return InMemoryRateLimiter(
+        requests_per_second=settings.rate_limiter.requests_per_second,
+        check_every_n_seconds=settings.rate_limiter.check_every_n_seconds,
+        max_bucket_size=settings.rate_limiter.max_bucket_size,
+    )
+
+
 def build_model(settings: Settings) -> Any:
     """Build the main-loop chat model from settings, with an optional rate limiter.
 
@@ -191,16 +208,9 @@ def build_model(settings: Settings) -> Any:
     see `AgentSettings.model_kwargs`'s docstring for the main use case
     (routing OpenAI reasoning models through the Responses API).
     """
-    rate_limiter = None
-    if settings.rate_limiter.enable_rate_limiter:
-        rate_limiter = InMemoryRateLimiter(
-            requests_per_second=settings.rate_limiter.requests_per_second,
-            check_every_n_seconds=settings.rate_limiter.check_every_n_seconds,
-            max_bucket_size=settings.rate_limiter.max_bucket_size,
-        )
     return init_chat_model(
         model=settings.agent.orchestration_model_name,
-        rate_limiter=rate_limiter,
+        rate_limiter=_build_rate_limiter(settings),
         **settings.agent.model_kwargs,
     )
 
@@ -214,9 +224,16 @@ def build_subagent_model(settings: Settings) -> Any:
     actually takes effect for subagents too. `deepagents.SubAgent["model"]`
     accepts either a model-name string or a real `BaseChatModel` instance;
     passing the pre-built instance is what makes the extra kwargs apply.
+
+    Also gets `settings.rate_limiter` applied, same as `build_model` —
+    `chapter-writer` in particular makes the largest calls of any caller in
+    this app (it drafts the actual prose), so leaving it unthrottled while
+    only the orchestrator is rate-limited defeats the point of setting
+    `rate_limiter` at all.
     """
     return init_chat_model(
         model=settings.agent.subagent_model_name,
+        rate_limiter=_build_rate_limiter(settings),
         **settings.agent.subagent_model_kwargs,
     )
 
@@ -270,8 +287,16 @@ def build_agent(  # noqa: PLR0913
     resolved_checkpointer = checkpointer if checkpointer is not None else InMemorySaver()
 
     resolved_subagents: list[SubAgent] = [
-        {**CHAPTER_WRITER_SUBAGENT, "model": build_subagent_model(settings)},
-        {**DIMENSION_REVIEWER_SUBAGENT, "model": build_subagent_model(settings)},
+        {
+            **CHAPTER_WRITER_SUBAGENT,
+            "model": build_subagent_model(settings),
+            "middleware": list(init_subagent_middleware(settings)),
+        },
+        {
+            **DIMENSION_REVIEWER_SUBAGENT,
+            "model": build_subagent_model(settings),
+            "middleware": list(init_subagent_middleware(settings)),
+        },
         *(subagents or []),
     ]
 
