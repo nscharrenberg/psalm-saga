@@ -18,3 +18,10 @@ def test_story_brainstorming_has_autonomous_mode_section() -> None:
 
     assert "## Autonomous Mode" in body
     assert "docs/drafts/<story_name>/<story_name>-spec.md" in body
+
+
+def test_writing_story_plans_has_autonomous_mode_section() -> None:
+    body = _read_skill("writing-story-plans")
+
+    assert "## Autonomous Mode" in body
+    assert "docs/drafts/<story_name>/<story_name>-plan.md" in body

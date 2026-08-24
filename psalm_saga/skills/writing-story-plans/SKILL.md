@@ -33,6 +33,27 @@ If `docs/psalm-saga/<slug>-spec.md` doesn't exist or wasn't signed off, stop and
 
 For long works, decide now how later chapters will get continuity context without re-reading every prior chapter in full: a running one-paragraph continuity summary updated after each chapter, maintained as part of the plan file, is usually enough. Note the approach in the plan so `drafting-chapters` knows what to hand each writer subagent.
 
+## Autonomous Mode
+
+Only active when `batch-story-generation` is the force-injected bootstrap
+for this session (a `psalm-saga-batch` run); ignore this section in every
+other session.
+
+**Save path override:** save the plan to
+`docs/drafts/<story_name>/<story_name>-plan.md` instead of
+`docs/psalm-saga/<slug>-plan.md`, matching this story's spec location.
+
+**Skip Step 4's sign-off.** Instead, self-check: re-verify the dimension
+carry-through table against the spec, and every chapter brief's POV,
+scenes, characters, and world-building elements against what the spec
+actually committed to. If a carry-through row can't be filled without
+inflating the spec (see this skill's own red flag on that), don't invent
+the missing specificity yourself — go back to the signed-off spec text and
+pick the narrowest reading that stays inside its literal wording, note
+that reasoning inline in the plan, and proceed. Once every row and every
+brief checks out, treat the plan as signed off and move straight to
+`drafting-chapters` (unchanged for batch mode).
+
 ## Red Flags
 
 | Thought | Reality |
