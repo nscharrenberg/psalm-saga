@@ -31,6 +31,40 @@ Produce a findings table ordered by severity — Missing findings on core dimens
 - **Partial** is a judgement call: is it an intentional variation the brief allowed (e.g. a deliberate one-chapter POV shift, already noted in the plan), or a real gap? If unclear, ask — don't assume either answer.
 - **Source Relationship findings** (adaptations only): flag explicitly if the checklist shows the draft reading *more* evocative or similar to the source than the declared relationship intended — for example, the spec named "pastiche, homage tone" but the draft reads closer to mockery, or an intended "transformative retelling" reads as a near-scene-for-scene copy. This is exactly the kind of drift PSALM's own experiments found supervised fine-tuning induces even without any deliberate intent to copy — catching it here, at the checklist level, is the inexpensive check to run before anyone considers an actual PSALM comparison against the source.
 
+## Autonomous Mode
+
+Only active when `batch-story-generation` is the force-injected bootstrap
+for this session (a `psalm-saga-batch` run); ignore this section in every
+other session.
+
+**Save path:** write/update the findings table to
+`docs/drafts/<story_name>/<story_name>-review.md` after every pass (each
+per-chapter review and the final whole-story review), so the promoted
+directory carries a record of the review that actually passed.
+
+**Partial is never a judgement call here.** Treat every `Partial` finding
+exactly like `Missing` — a gap that gets fixed, not a "probably fine, move
+on." There's no one to ask, so don't leave ambiguity unresolved: decide
+what "fully covered" requires and fix the draft to meet it.
+
+**Fix-loop cap, per chapter:** attempt 1 is an in-context fix pass on the
+existing draft; attempts 2 and 3 are fresh `chapter-writer` redispatches
+that name the remaining gap explicitly (same escalation `drafting-chapters`
+already uses for larger gaps). If the chapter still isn't fully `Covered`
+after 3 total attempts, stop trying to fix it. Write
+`docs/drafts/<story_name>/ABANDONED.md` stating which chapter and
+dimension never converged and why, do not promote this story to
+`docs/stories/`, and end your turn — `batch-story-generation`'s CLI loop
+will generate a fresh replacement story to still reach the requested
+count. This should be rare; it exists only as a bound so a single story
+can never hang the whole batch.
+
+**Source Relationship findings (variant mode):** if the checklist shows
+the draft reading more evocative or similar to the source than the
+declared relationship intended, don't just flag it — fix it the same way
+as any other gap (a redispatch with the drift named explicitly), then
+re-check.
+
 ## Red Flags
 
 | Thought | Reality |

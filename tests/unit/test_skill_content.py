@@ -25,3 +25,10 @@ def test_writing_story_plans_has_autonomous_mode_section() -> None:
 
     assert "## Autonomous Mode" in body
     assert "docs/drafts/<story_name>/<story_name>-plan.md" in body
+
+
+def test_reviewing_story_dimensions_has_autonomous_mode_section() -> None:
+    body = _read_skill("reviewing-story-dimensions")
+
+    assert "## Autonomous Mode" in body
+    assert "ABANDONED.md" in body
