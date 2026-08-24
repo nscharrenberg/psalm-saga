@@ -36,6 +36,10 @@ pass that checks each chapter against the plan's own stated commitments.
 - **Usable outside the CLI.** The skills are plain `SKILL.md` files
   following the Agent Skills spec, so they work in Claude Code or any other
   harness that reads that format.
+- **Batch generation.** `psalm-saga-batch` generates many complete stories
+  in one session with no human interaction — from scratch, from your own
+  inspiration material, from partial templates, or as dimension-varied
+  takes on an existing source. See "Batch generation" below.
 
 ## Installation
 
@@ -147,6 +151,54 @@ never collide. Session ids are UUIDv7: their leading bits encode a
 millisecond timestamp, so the id itself sorts in creation order. No
 separate timestamp is needed in the directory name, and `ls sessions/`
 lists sessions oldest to newest.
+
+## Batch generation
+
+`psalm-saga-batch` generates many complete stories in one session with no
+human interaction at all — every dimension, sign-off, and review judgement
+call that an interactive session asks you for, a batch session decides for
+itself.
+
+```bash
+psalm-saga-batch --count 10 --mode scratch
+psalm-saga-batch --count 5 --mode context --context "a lighthouse keeper who finds a message from someone unborn"
+psalm-saga-batch --count 4 --mode template --template-path ./templates
+psalm-saga-batch --count 6 --mode variant --source-path ./drafts --variant-manifest ./drafts/variant-manifest.json
+```
+
+| Mode       | Inputs                                                       | What the system does                                                                                |
+|------------|----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
+| `scratch`  | none                                                            | Invents premise and all six dimensions freely.                                                       |
+| `context`  | `--context TEXT` and/or `--context-path PATH` (file or dir)     | Uses the given text/files as inspiration only; every dimension is still freely decided.              |
+| `template` | `--template-path PATH` (file or dir)                            | Treats each file as partial dimension answers and creatively completes the rest.                     |
+| `variant`  | `--source-path PATH` + `--variant-manifest FILE`                | Locks every dimension from the source except the manifest-named one(s), which are freshly decided.   |
+
+`--combine {mixed,separate}` controls how multiple inputs map onto
+`--count` stories: `mixed` (default for `context`/`template`) lets any
+story draw on more than one input; `separate` (the only option for
+`variant`) keeps each story anchored to exactly one input. A
+`variant-manifest.json` maps each source file to the dimension(s) to vary
+for it:
+
+```json
+[
+  {"source": "old-draft.md", "dimensions": ["character", "world-building"]}
+]
+```
+
+If `--variant-manifest` is omitted, `psalm-saga-batch` looks for
+`variant-manifest.json` inside a given `--source-path` directory.
+
+A batch session lays out `docs/` differently from an interactive one:
+`docs/drafts/<story_name>/` holds a story's spec, plan, chapters, and
+review report while its pipeline runs; `docs/stories/<story_name>/` holds
+the same files once that story's review is fully clean. `--count` is the
+target *total* stories in `docs/stories/` — re-running
+`psalm-saga-batch --session <id> --count 10` against a session that
+already has some tops up only the remainder.
+
+See `docs/superpowers/specs/2026-08-24-batch-story-generation-design.md`
+for the full design.
 
 ## The workflow
 
@@ -271,10 +323,6 @@ agent = build_agent(Settings())  # ephemeral session, in-memory state
 
 ## Roadmap
 
-- **Non-interactive mode for batch generation.** A scriptable entry point
-  that runs a full brainstorm-to-draft pipeline from a pre-filled spec
-  instead of an interactive session, for generating many stories under
-  controlled conditions without manual involvement in each one.
 - **Experiments and evaluation infrastructure.** Tooling for running
   generation at scale under varied conditions (models, dimension
   combinations, source materials) and collecting results systematically,
