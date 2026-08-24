@@ -316,3 +316,6 @@ tests/evals/.runtime/
 
 # DeepEval local test-run cache/history
 .deepeval/
+
+# Local git worktrees for isolated feature work
+.worktrees/
