@@ -42,6 +42,7 @@ all = ["psalm-saga[anthropic,openai]"]
 
 [project.scripts]
 psalm-saga = "psalm_saga.cli:main"
+psalm-saga-batch = "psalm_saga.batch_cli:main"
 
 [build-system]
 requires = ["hatchling"]
