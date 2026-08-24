@@ -63,15 +63,19 @@ not whether the process happens:
    following its `## Autonomous Mode` section, per chapter and once for
    the whole story. Produces/updates
    `docs/drafts/<story_name>/<story_name>-review.md`.
-5. **Finish** — once the whole-story review is fully clean, your work on
-   this story is done; end your turn. Promotion of
-   `docs/drafts/<story_name>/` to `docs/stories/<story_name>/` happens
-   outside this conversation, based on which draft directories exist
-   (and whether they carry an `ABANDONED.md`) when your turn ends — you
-   do not copy the files yourself. If the review never converges (see the
-   fix-loop cap in `reviewing-story-dimensions`'s Autonomous Mode), write
-   `ABANDONED.md` as that section describes and end your turn without
-   further action; a draft carrying `ABANDONED.md` is never promoted.
+5. **Finish** — once the whole-story review is fully clean, write a
+   short `docs/drafts/<story_name>/DONE.md` (a sentence is enough, e.g.
+   "Whole-story review passed clean.") as the very last action, then end
+   your turn. This file is the only thing that marks a draft as
+   promotable — promotion of `docs/drafts/<story_name>/` to
+   `docs/stories/<story_name>/` happens outside this conversation, and
+   only for a draft that carries `DONE.md`; you do not copy the files
+   yourself. If the review never converges (see the fix-loop cap in
+   `reviewing-story-dimensions`'s Autonomous Mode), write `ABANDONED.md`
+   instead — never both — and end your turn without further action. A
+   draft with neither file (e.g. one interrupted mid-pipeline by an
+   unexpected error) is simply left as-is: not abandoned, not promoted,
+   not retried.
 
 <EXTREMELY-IMPORTANT>
 Brainstorming and planning still happen directly in your own turn, never

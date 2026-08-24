@@ -55,7 +55,8 @@ the missing specificity yourself — go back to the signed-off spec text and
 pick the narrowest reading that stays inside its literal wording, note
 that reasoning inline in the plan, and proceed. Once every row and every
 brief checks out, treat the plan as signed off and move straight to
-`drafting-chapters` (unchanged for batch mode).
+`drafting-chapters` (following its own `## Autonomous Mode` section for
+the Scope Check path and save location).
 
 ## Red Flags
 

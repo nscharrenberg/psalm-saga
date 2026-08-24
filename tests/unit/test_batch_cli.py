@@ -16,7 +16,7 @@ from rich.console import Console
 
 from psalm_saga import batch_cli
 from psalm_saga.batch_cli import _build_story_instruction, _parse_args
-from psalm_saga.batch_session import promoted_story_count, stories_dir
+from psalm_saga.batch_session import promoted_story_count, stories_dir, story_draft_dir
 from psalm_saga.settings import Settings
 
 
@@ -148,6 +148,68 @@ def test_run_batch_gives_up_after_the_attempt_cap(
 
     assert len(calls) == 2 * batch_cli.MAX_ATTEMPT_MULTIPLIER
     assert promoted_story_count(settings, session_id) == 0
+
+
+def test_promote_finished_drafts_promotes_a_draft_with_done_marker(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    session_id = "session-1"
+    draft = story_draft_dir(settings, session_id, "story-a")
+    draft.mkdir(parents=True)
+    (draft / "DONE.md").write_text("Whole-story review passed clean.")
+    (draft / "story-a-spec.md").write_text("spec content")
+
+    batch_cli._promote_finished_drafts(settings, session_id, _quiet_console())  # noqa: SLF001
+
+    final = stories_dir(settings, session_id) / "story-a"
+    assert final.is_dir()
+    assert (final / "DONE.md").is_file()
+    assert (final / "story-a-spec.md").read_text() == "spec content"
+
+
+def test_promote_finished_drafts_skips_abandoned_draft(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    session_id = "session-1"
+    draft = story_draft_dir(settings, session_id, "story-b")
+    draft.mkdir(parents=True)
+    (draft / "ABANDONED.md").write_text("Review never converged.")
+
+    batch_cli._promote_finished_drafts(settings, session_id, _quiet_console())  # noqa: SLF001
+
+    assert not (stories_dir(settings, session_id) / "story-b").exists()
+
+
+def test_promote_finished_drafts_skips_draft_with_neither_marker(tmp_path: Path) -> None:
+    """Simulates a story whose turn crashed mid-pipeline (e.g. right after
+    the spec file was written, before ABANDONED.md or DONE.md could ever
+    be written) — this draft must be left alone, not promoted.
+    """
+    settings = _settings(tmp_path)
+    session_id = "session-1"
+    draft = story_draft_dir(settings, session_id, "story-c")
+    draft.mkdir(parents=True)
+    (draft / "story-c-spec.md").write_text("spec content, nothing else written")
+
+    batch_cli._promote_finished_drafts(settings, session_id, _quiet_console())  # noqa: SLF001
+
+    assert not (stories_dir(settings, session_id) / "story-c").exists()
+    assert (draft / "story-c-spec.md").is_file()  # draft left untouched on disk
+
+
+def test_promote_finished_drafts_does_not_re_promote_or_error(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    session_id = "session-1"
+    draft = story_draft_dir(settings, session_id, "story-d")
+    draft.mkdir(parents=True)
+    (draft / "DONE.md").write_text("done")
+    final = stories_dir(settings, session_id) / "story-d"
+    final.mkdir(parents=True)
+    (final / "marker-of-original-promotion.md").write_text("already promoted")
+
+    batch_cli._promote_finished_drafts(settings, session_id, _quiet_console())  # noqa: SLF001
+
+    # No error, and the already-promoted directory wasn't clobbered/re-copied over.
+    assert (final / "marker-of-original-promotion.md").is_file()
+    assert not (final / "DONE.md").exists()
 
 
 def test_run_batch_resumes_and_only_tops_up_the_remainder(

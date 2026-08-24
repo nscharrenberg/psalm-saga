@@ -149,13 +149,13 @@ def _build_story_instruction(  # noqa: PLR0913, PLR0917
 
 
 def _promote_finished_drafts(settings: Settings, session_id: str, console: Console) -> None:
-    """Promote every draft directory that's done and not abandoned.
+    """Promote every draft directory carrying a `DONE.md` marker.
 
-    A draft counts as done once this function is called (after each
-    per-story agent turn) if it isn't already promoted and doesn't carry
-    an `ABANDONED.md` — the per-story instruction dispatches exactly one
-    story per turn, so any new, non-abandoned draft directory after a
-    turn is one this turn just finished.
+    `DONE.md`, not merely the absence of `ABANDONED.md`, is what marks a
+    draft as promotable — a story whose turn ends abnormally (a caught
+    exception mid-pipeline) leaves a draft with neither file, and that
+    must never be mistaken for finished. Such a draft is simply skipped:
+    not promoted, not abandoned, left as an inert partial on disk.
     """
     drafts = drafts_dir(settings, session_id)
     if not drafts.is_dir():
@@ -163,7 +163,7 @@ def _promote_finished_drafts(settings: Settings, session_id: str, console: Conso
     stories = stories_dir(settings, session_id)
     already_promoted = {p.name for p in stories.iterdir() if p.is_dir()} if stories.is_dir() else set()
     for draft in sorted(p for p in drafts.iterdir() if p.is_dir()):
-        if draft.name in already_promoted or (draft / "ABANDONED.md").is_file():
+        if draft.name in already_promoted or not (draft / "DONE.md").is_file():
             continue
         promote_story(settings, session_id, draft.name)
         console.print(f"[dim]Promoted:[/dim] {draft.name}")
