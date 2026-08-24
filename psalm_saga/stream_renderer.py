@@ -51,6 +51,32 @@ def extract_text(content: Any) -> str:
     return "".join(parts)
 
 
+def extract_tool_call_lines(update: dict[str, Any]) -> list[str]:
+    """Best-effort extraction of tool-call announcements from a LangGraph
+    `updates`-mode payload for the main agent's `model` node.
+
+    This is a convenience for terminal feedback, not load-bearing — if the
+    update shape doesn't match what's expected (e.g. a deepagents internal
+    change), it returns nothing rather than raising.
+    """
+    lines: list[str] = []
+    try:
+        model_output = update.get("model")
+        if not model_output:
+            return lines
+        for message in model_output.get("messages", []):
+            for tool_call in getattr(message, "tool_calls", None) or []:
+                name = tool_call.get("name", "tool")
+                if name == "task":
+                    subagent = tool_call.get("args", {}).get("subagent_type", "?")
+                    lines.append(f"dispatching {subagent}")
+                else:
+                    lines.append(name)
+    except Exception:  # noqa: BLE001 — status lines are best-effort only
+        return lines
+    return lines
+
+
 class StreamRenderer:
     """Renders a streamed agent turn: Markdown segments in a live-updating
     region, with tool-dispatch status lines printed as static scrollback

@@ -110,6 +110,53 @@ Do this yourself, directly in the conversation with your human partner. Never di
 | "This detail belongs to World-Building, not my problem while I'm on Character" | Dimensions aren't independent — a Character answer can make an already-locked World-Building or Plot detail impossible (a wild animal in tailored clothing, a duel in a world that just banned weapons). Check it, don't wait for Step 5 to catch what a moment's thought would have caught here. |
 | "The source already establishes this, no need to re-check it" | A locked/unchanged dimension is only safe until something else changes underneath it. Re-run the compatibility check whenever an open dimension's answer could touch it, even if the locked value itself never gets re-asked. |
 
+## Autonomous Mode
+
+Only active when `batch-story-generation` is the force-injected bootstrap
+for this session (a `psalm-saga-batch` run). In every other session,
+ignore this section — the hard gates above (ask, don't propose; get
+explicit sign-off) are the only rule you follow.
+
+**Save path override:** save the spec to
+`docs/drafts/<story_name>/<story_name>-spec.md` instead of
+`docs/psalm-saga/<slug>-spec.md` — `story_name` is this story's own
+kebab-case slug (see `batch-story-generation`'s naming convention),
+consistent across its spec, plan, and chapter files.
+
+**Decide, don't ask.** Every dimension question in the Process above still
+gets answered — concretely, not vaguely — but you answer it yourself.
+Which input mode you're working from changes what you're answering *from*:
+
+- **Scratch:** invent the premise and all six dimensions freely. Read
+  `docs/drafts/_batch-log.md` first (see `batch-story-generation`) and
+  reroll before locking anything that reads as a near-duplicate of an
+  already-logged story.
+- **Context:** the CLI gives you one or more inspiration texts (inline or
+  from files). Read them for premise-grounding only — they don't fix any
+  dimension by themselves; every dimension is still yours to decide,
+  informed by that material.
+- **Template:** the CLI gives you one or more template documents. Each one
+  states some dimensions explicitly (or partially) and leaves the rest
+  unstated. Keep every explicitly-templated answer exactly as given; for
+  whatever's left unstated, decide it yourself, staying consistent with
+  what the template already committed to.
+- **Variant:** the CLI names one source file and the specific dimension(s)
+  to change for it (from the run's variant manifest). Follow the
+  Source-Derived Variance Check in the Process above exactly, with one
+  change: skip "present the baseline to your human partner and get
+  confirmation or edits" — draft the baseline faithfully from the source
+  and lock it immediately. Only the manifest-named dimension(s) get
+  freshly decided; walk those the normal way, just deciding instead of
+  asking.
+
+**Self-approve instead of getting sign-off.** Still run the
+cross-dimension consistency pass (Step 5) in full. If you find a
+contradiction, resolve it yourself and say so in the spec's own text (e.g.
+"World-Building's material detail was narrowed from X to Y to stay
+consistent with Character's Z") rather than stopping to ask which side to
+revise. Once the spec is internally consistent, treat it as signed off and
+move straight to `writing-story-plans` (its own Autonomous Mode section).
+
 ## Handoff
 
 End by stating explicitly: "Spec complete. [Invoking adapting-existing-work next. / Ready for writing-story-plans.]"

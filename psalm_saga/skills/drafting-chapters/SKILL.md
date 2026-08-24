@@ -15,6 +15,28 @@ Execute the plan by dispatching a fresh writer subagent per chapter, reviewing e
 
 If `docs/psalm-saga/<slug>-plan.md` doesn't exist or wasn't signed off, stop and invoke `writing-story-plans` first.
 
+## Autonomous Mode
+
+Only active when `batch-story-generation` is the force-injected bootstrap
+for this session (a `psalm-saga-batch` run); ignore this section in every
+other session.
+
+**Scope Check override:** check for
+`docs/drafts/<story_name>/<story_name>-plan.md` instead of
+`docs/psalm-saga/<slug>-plan.md`.
+
+**Save chapter files under `docs/drafts/<story_name>/`**, alongside the
+spec, plan, and (later) review report for this story.
+
+**Step 3's "ask your human partner if genuinely unclear" does not apply
+here.** There is no one to ask. `reviewing-story-dimensions`'s Autonomous
+Mode section is the authority on how `Partial`/`Missing` findings are
+handled and when a chapter fix attempt is exhausted (its 3-attempt cap
+and `ABANDONED.md` rule) — follow that instead of pausing for a judgement
+call. Everything else in this skill (dispatching `chapter-writer`,
+dispatching `reviewing-story-dimensions` after each chapter, updating the
+continuity summary, the final whole-story review) is unchanged.
+
 ## The Loop, Per Chapter
 
 1. **Dispatch a chapter-writer subagent** with: the dimension spec (or the relevant excerpts if it's long), the whole-story plan's dimension carry-through table, this chapter's brief in full, and the continuity summary from the plan (not every prior chapter's full prose, unless the brief specifically calls for re-reading an earlier chapter for a callback). The writer's only job is to draft this chapter's prose — it does not dispatch its own subagents and does not review its own work against the spec.

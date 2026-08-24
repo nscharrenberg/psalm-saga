@@ -58,7 +58,7 @@ from langchain_core.rate_limiters import InMemoryRateLimiter
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from psalm_saga.bootstrap import SKILLS_DIR, compose_system_prompt
+from psalm_saga.bootstrap import BOOTSTRAP_SKILL, SKILLS_DIR, compose_system_prompt
 from psalm_saga.middleware import init_middleware, init_subagent_middleware
 from psalm_saga.session import checkpoint_db_path, generate_session_id, session_directory
 from psalm_saga.settings import Settings
@@ -246,6 +246,7 @@ def build_agent(  # noqa: PLR0913
     system_prompt: str = "",
     subagents: Sequence[SubAgent] | None = None,
     checkpointer: Any = None,
+    bootstrap_skill: str = BOOTSTRAP_SKILL,
     **create_deep_agent_kwargs: Any,
 ):
     """Construct the compiled psalm-saga deep agent.
@@ -269,6 +270,10 @@ def build_agent(  # noqa: PLR0913
             bootstrap is appended after this.
         subagents: Additional named subagents beyond `chapter-writer` and
             `dimension-reviewer`, which are always registered.
+        bootstrap_skill: Which skill's `SKILL.md` to force-inject as the
+            bootstrap. Defaults to `using-psalm-saga` (interactive mode).
+            `batch_cli.py` passes `psalm_saga.bootstrap.BATCH_BOOTSTRAP_SKILL`
+            here for a `psalm-saga-batch` session.
         checkpointer: Passed to `create_deep_agent`. Defaults to `None`, in
             which case an in-memory `InMemorySaver` is provisioned — state
             lives only for this process's lifetime. For state that survives
@@ -300,7 +305,9 @@ def build_agent(  # noqa: PLR0913
         *(subagents or []),
     ]
 
-    full_system_prompt = compose_system_prompt(application_prompt=system_prompt)
+    full_system_prompt = compose_system_prompt(
+        application_prompt=system_prompt, bootstrap_skill=bootstrap_skill
+    )
 
     middleware = list(create_deep_agent_kwargs.pop("middleware", ()))
     middleware.append(TodoListMiddleware())
