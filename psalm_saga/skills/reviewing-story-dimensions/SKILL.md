@@ -19,6 +19,7 @@ For each dimension the spec covers (Writing Style, Narrative Voice, Character, P
 
 1. Mark **Covered / Partial / Missing** against what the spec (and, if reviewing a specific chapter, that chapter's brief) committed to.
 2. Give a one-line note that cites the relevant passage (quote sparingly and briefly, or paraphrase) and names the spec commitment it's being checked against.
+3. **If the spec locked any dimensions from a source text** (`story-brainstorming`'s Source-Derived Variance Check was used — the spec will say a dimension is "preserved"/"unchanged" from a named source), re-read the source text itself for those dimensions and check the draft against the source's actual register directly, not only against the spec's paraphrase of it. A paraphrase can drift from what the source actually does (e.g. "understandable communication" quietly permitting dialogue the source never had) without the draft ever contradicting the paraphrase's own wording — checking only against the paraphrase would mark that "Covered" when it isn't faithful to the locked dimension at all. Treat a locked dimension's sub-dimensions (discourse form, dialogue density, rhetorical pattern, etc.) as findings against the source text, same severity as any other Missing/Partial.
 
 Produce a findings table ordered by severity — Missing findings on core dimensions first, then Partial, then any Source Relationship findings if applicable.
 
@@ -37,3 +38,4 @@ Produce a findings table ordered by severity — Missing findings on core dimens
 | "It's close enough to what the spec wanted" | "Close enough" was already decided when the spec was signed off. Check the draft against what was actually written down, not against a looser mental version of it. |
 | "I can just fix it myself while reviewing" | If dispatched as a review subagent, report findings only — fixing is `drafting-chapters`' job, so the fix goes through the same review loop as everything else. |
 | "This dimension barely matters for this story" | If the spec covered it, check it. If it genuinely doesn't apply, that should have been noted explicitly in the spec (see `story-brainstorming`'s red flags) — not silently skipped at review time. |
+| "The draft matches the spec's wording, so it's Covered" | Matching the spec's wording isn't the same as matching the source, for any dimension the spec locked as preserved/unchanged. Re-check those against the actual source text — the spec's paraphrase of it may already have drifted. |
