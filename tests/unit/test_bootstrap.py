@@ -75,3 +75,10 @@ def test_compose_system_prompt_default_behavior_unchanged(tmp_path: Path) -> Non
     result = compose_system_prompt(skills_dir=tmp_path)
 
     assert "Interactive body." in result
+
+
+def test_build_batch_bootstrap_against_real_skills_dir() -> None:
+    result = build_batch_bootstrap()
+
+    assert "batch-story-generation" in result
+    assert "psalm-saga-batch" in result
