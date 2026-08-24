@@ -12,7 +12,7 @@ Do NOT invoke `writing-story-plans` or write any prose until every dimension bel
 </HARD-GATE>
 
 <HARD-GATE>
-Ask, don't propose. During this dialogue you elicit and write down *their* choices — you do not generate story content, sample scenes, named rituals/systems, "suggested" sequences, or paragraphs of worldbuilding/lore on your human partner's behalf, even as an illustration. If they ask for options, name two or three short labels (a phrase each, not developed prose) and let them pick or redirect. Catch yourself the moment a response stops being a question or a restatement of *their* stated choice and starts being invented material — that's a sign you've slipped from brainstorming into drafting, which this skill exists to prevent.
+Ask, don't propose. During this dialogue you elicit and write down *their* choices — you do not generate story content, sample scenes, named rituals/systems, "suggested" sequences, or paragraphs of worldbuilding/lore on your human partner's behalf, even as an illustration. If they ask for options, name two or three short labels (a phrase each, not developed prose) and let them pick or redirect. Catch yourself the moment a response stops being a question or a restatement of *their* stated choice and starts being invented material — that's a sign you've slipped from brainstorming into drafting, which this skill exists to prevent. Exception: when extracting a baseline from a source text your human partner already supplied (see "Source-Derived Variance Check" in the Process below), paraphrasing what the source itself already does is not inventing — but it still needs their confirmation before anything gets locked in as a fixed dimension.
 </HARD-GATE>
 
 <EXTREMELY-IMPORTANT>
@@ -28,8 +28,16 @@ Do this yourself, directly in the conversation with your human partner. Never di
 ## Process
 
 1. **Premise.** Ask what the person is trying to write and why: audience, length, genre, what a satisfying read *feels* like when it's done. Don't skip to dimensions before the premise is clear.
-2. **Derivative check.** Ask directly: is this based on, inspired by, a continuation of, or a retelling of an existing work? If yes, note it now and invoke `adapting-existing-work` after finishing Step 3 below, before presenting the spec for sign-off. Don't let "just inspired by the vibe of X" slide past this question — let your human partner decide whether that counts.
-3. **Walk the six dimensions, one at a time**, presenting each in a short chunk your human partner can actually read and react to (per-dimension, not all thirty-six sub-dimensions dumped at once). Read that dimension's reference file before asking its questions if this is the first time in the session you're covering it. For each dimension, ask about its sub-dimensions and write down the concrete choice, not a vague aspiration ("wry, understated" beats "funny").
+2. **Derivative check.** Ask directly: is this based on, inspired by, a continuation of, or a retelling of an existing work? If yes, note it now and invoke `adapting-existing-work` after finishing Step 4 below, before presenting the spec for sign-off. Don't let "just inspired by the vibe of X" slide past this question — let your human partner decide whether that counts.
+3. **Source-derived variance check.** If your human partner has supplied a source text (their own prior draft or an existing work) and wants "the same story" with only some named dimension(s) changed — e.g. same plot and world, different characters — this is a distinct mode from Step 2's legal/relationship question and can apply regardless of how that was answered:
+   - Read the source text.
+   - Draft baseline answers for all six dimensions as the source text actually exercises them — paraphrase, don't embellish (see the hard-gate exception above).
+   - Present the full baseline to your human partner in one pass and get confirmation or edits before locking anything.
+   - Lock every dimension they confirm as unchanged. Mark only the dimension(s) they named as open — those are the only ones Step 4 actually elicits; walk them normally.
+   - Every answer given for an open dimension must be checked against every locked dimension per Step 4's compatibility check below — a locked "preserve the coat" is not safe just because it's locked, if the open Character dimension just made coats physically implausible.
+4. **Walk the six dimensions, one at a time**, presenting each in a short chunk your human partner can actually read and react to (per-dimension, not all thirty-six sub-dimensions dumped at once). Read that dimension's reference file before asking its questions if this is the first time in the session you're covering it. For each dimension, ask about its sub-dimensions and write down the concrete choice, not a vague aspiration ("wry, understated" beats "funny"). (In source-derived variance mode, only the dimension(s) marked open in Step 3 get walked — everything else is already locked.)
+   - **Carry constraints forward.** Before asking a dimension's questions, restate whichever choices already on record plausibly constrain it (e.g., opening World-Building by noting what Character already established about the protagonist's species, scale, or environment). This includes both dimensions answered earlier in this walk and anything locked in Step 3.
+   - **Stop on contradiction.** If a new answer contradicts a restated constraint — or contradicts a locked dimension from Step 3 — don't silently accept it and don't silently resolve it yourself. Name the contradiction plainly and ask your human partner which side to revise.
 
 ### Dimension 1 — Writing Style (`references/writing-style.md`)
 
@@ -85,8 +93,9 @@ Do this yourself, directly in the conversation with your human partner. Never di
 - **Material and Sensory Detail**: objects, flora/fauna, sensory atmosphere.
 - **World Function and Logic**: how the world stays internally coherent — the most abstract sub-dimension; brief is fine.
 
-4. **Write the spec** to `docs/psalm-saga/<slug>-spec.md` with one section per dimension, each sub-dimension as a bullet with the agreed choice in the human partner's own words wherever possible. Head the file with a one-line note that these sections mirror PSALM §3.3.
-5. **Get explicit sign-off** before invoking `adapting-existing-work` (if flagged in step 2) or `writing-story-plans`. Show the spec, don't assume silence is approval.
+5. **Cross-dimension consistency pass.** Once every dimension (open or locked) has an answer, re-read the full draft spec as a whole — not dimension-by-dimension — before writing or showing it. Check the pairs that clash most often in practice: Character against World-Building's material/behavioural detail, Character against Plot's physical feasibility, World-Building's rules against Plot's events. Surface anything you find the same way as an inline contradiction in Step 4 — name it, ask which side to revise — rather than quietly editing the spec yourself.
+6. **Write the spec** to `docs/psalm-saga/<slug>-spec.md` with one section per dimension, each sub-dimension as a bullet with the agreed choice in the human partner's own words wherever possible. Head the file with a one-line note that these sections mirror PSALM §3.3.
+7. **Get explicit sign-off** before invoking `adapting-existing-work` (if flagged in step 2) or `writing-story-plans`. Show the spec, don't assume silence is approval.
 
 ## Red Flags
 
@@ -98,6 +107,8 @@ Do this yourself, directly in the conversation with your human partner. Never di
 | "The person just wants a quick draft, skip the spec" | Ceremony scales down, not to zero — even a quick draft benefits from one sentence per dimension, and it's the cheapest possible insurance against a story that reads like nothing was decided. |
 | "I'll sketch a bit of lore/a sample scene so they have something concrete to react to" | That's drafting wearing a brainstorming costume. A sketch anchors *your* invented details in their spec instead of theirs — ask a sharper question instead of writing the illustration yourself. |
 | "I've read the dimension list before, I don't need the reference file again" | Fine to skip on repeat sessions once you've internalised it — but the first time through each dimension in a session, read the reference; the bullets alone under-specify concepts like focalisation vs. point of view that are easy to conflate. |
+| "This detail belongs to World-Building, not my problem while I'm on Character" | Dimensions aren't independent — a Character answer can make an already-locked World-Building or Plot detail impossible (a wild animal in tailored clothing, a duel in a world that just banned weapons). Check it, don't wait for Step 5 to catch what a moment's thought would have caught here. |
+| "The source already establishes this, no need to re-check it" | A locked/unchanged dimension is only safe until something else changes underneath it. Re-run the compatibility check whenever an open dimension's answer could touch it, even if the locked value itself never gets re-asked. |
 
 ## Handoff
 
