@@ -67,10 +67,15 @@ not whether the process happens:
    short `docs/drafts/<story_name>/DONE.md` (a sentence is enough, e.g.
    "Whole-story review passed clean.") as the very last action, then end
    your turn. This file is the only thing that marks a draft as
-   promotable — promotion of `docs/drafts/<story_name>/` to
-   `docs/stories/<story_name>/` happens outside this conversation, and
-   only for a draft that carries `DONE.md`; you do not copy the files
-   yourself. If the review never converges (see the fix-loop cap in
+   promotable — promotion happens outside this conversation, and only for
+   a draft that carries `DONE.md`: it reads the plan's title heading and
+   every `chapter-<N>-<slug>.md` file (in order) and assembles them into
+   a single reader-facing `docs/stories/<story_name>.md` — the title,
+   then the chapters, the way a reader gets the finished book. The spec,
+   plan, review report, and `DONE.md` itself stay only in
+   `docs/drafts/<story_name>/`; you do not write `docs/stories/` yourself
+   and nothing from the draft directory is copied there verbatim. If the
+   review never converges (see the fix-loop cap in
    `reviewing-story-dimensions`'s Autonomous Mode), write `ABANDONED.md`
    instead — never both — and end your turn without further action. A
    draft with neither file (e.g. one interrupted mid-pipeline by an

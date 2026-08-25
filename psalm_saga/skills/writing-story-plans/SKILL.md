@@ -46,6 +46,13 @@ This also changes what counts for the Scope Check above: in Autonomous
 Mode, check for `docs/drafts/<story_name>/<story_name>-spec.md` instead
 of `docs/psalm-saga/<slug>-spec.md` before proceeding.
 
+**Title heading:** start the plan file with `# <Title> — Story Plan` as
+its own first line, where `<Title>` is exactly the title decided in Step
+2 above. `psalm-saga-batch` reads this exact heading to title the
+promoted story file — a differently-formatted first line falls back to a
+title-cased version of the story's own kebab-case name instead, which is
+usually worse than the real title.
+
 **Skip Step 4's sign-off.** Instead, self-check: re-verify the dimension
 carry-through table against the spec, and every chapter brief's POV,
 scenes, characters, and world-building elements against what the spec

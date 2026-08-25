@@ -191,9 +191,11 @@ If `--variant-manifest` is omitted, `psalm-saga-batch` looks for
 
 A batch session lays out `docs/` differently from an interactive one:
 `docs/drafts/<story_name>/` holds a story's spec, plan, chapters, and
-review report while its pipeline runs; `docs/stories/<story_name>/` holds
-the same files once that story's review is fully clean. `--count` is the
-target *total* stories in `docs/stories/` — re-running
+review report while its pipeline runs; once that story's review is fully
+clean, it's promoted as a single `docs/stories/<story_name>.md` file —
+just the title and chapters, assembled the way a reader gets the finished
+book, not the working documents. `--count` is the target *total* stories
+in `docs/stories/` — re-running
 `psalm-saga-batch --session <id> --count 10` against a session that
 already has some tops up only the remainder.
 

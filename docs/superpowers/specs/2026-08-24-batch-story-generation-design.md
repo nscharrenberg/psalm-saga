@@ -123,26 +123,27 @@ sessions/<session_id>/
       <story_name>/
         <story_name>-spec.md
         <story_name>-plan.md
-        <chapter files>
+        chapter-<N>-<slug>.md (one per chapter)
         <story_name>-review.md
+        DONE.md (or ABANDONED.md)
     stories/
-      <story_name>/
-        <story_name>-spec.md
-        <story_name>-plan.md
-        <chapter files>
-        <story_name>-review.md
+      <story_name>.md
 ```
 
 `docs/drafts/<story_name>/` is a story's working directory while its
-pipeline runs. `docs/stories/<story_name>/` is populated by copying the
-draft directory once that story's whole-story review is fully clean — see
-Fix-loop safety bound below for what happens if it never gets there.
-Interactive sessions keep today's `docs/psalm-saga/<slug>-spec.md`
-convention untouched; this layout only applies to sessions started via
-`psalm-saga-batch`. Each story picks its own kebab-case `story_name` from
-its own premise (same convention as today's `<slug>`); the CLI passes the
-current set of names under both `docs/drafts/` and `docs/stories/` into
-each per-story instruction so the model never reuses a claimed name.
+pipeline runs — spec, plan, per-chapter files, review report, and a
+`DONE.md`/`ABANDONED.md` completion marker. `docs/stories/<story_name>.md`
+is a single reader-facing file: the story's title (read from the plan's
+title heading) followed by its chapters (read in numeric order from their
+`chapter-<N>-<slug>.md` filenames), assembled once a draft carries
+`DONE.md` — not a copy of the working documents. See Fix-loop safety bound
+below for what happens if a story never gets there. Interactive sessions
+keep today's `docs/psalm-saga/<slug>-spec.md` convention untouched; this
+layout only applies to sessions started via `psalm-saga-batch`. Each story
+picks its own kebab-case `story_name` from its own premise (same
+convention as today's `<slug>`); the CLI passes the current set of names
+under both `docs/drafts/` and `docs/stories/` into each per-story
+instruction so the model never reuses a claimed name.
 
 ## Per-story pipeline
 
@@ -201,9 +202,12 @@ dispatched exactly as in interactive mode):
    `Missing`" — a stricter default than interactive mode since there's no
    one to consult. Loops fix-and-re-review until every sub-dimension reads
    `Covered`.
-5. **Promote** — copy `docs/drafts/<story_name>/` to
-   `docs/stories/<story_name>/` once the whole-story review is fully
-   clean.
+5. **Finish** — once the whole-story review is fully clean, the model
+   writes `docs/drafts/<story_name>/DONE.md` as its last action and ends
+   its turn. Promotion itself happens outside that conversation: the CLI
+   assembles the story's title and chapters into
+   `docs/stories/<story_name>.md` for any draft carrying `DONE.md` — the
+   model never writes to `docs/stories/` or copies anything itself.
 
 All three "Autonomous Mode" additions are explicitly delimited sections
 within the existing skill files, activated only when the orchestrator has

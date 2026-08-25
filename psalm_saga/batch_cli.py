@@ -31,7 +31,7 @@ from psalm_saga.batch_session import (
     existing_story_names,
     promote_story,
     promoted_story_count,
-    stories_dir,
+    promoted_story_names,
 )
 from psalm_saga.bootstrap import BATCH_BOOTSTRAP_SKILL
 from psalm_saga.session import generate_session_id, session_directory
@@ -160,8 +160,7 @@ def _promote_finished_drafts(settings: Settings, session_id: str, console: Conso
     drafts = drafts_dir(settings, session_id)
     if not drafts.is_dir():
         return
-    stories = stories_dir(settings, session_id)
-    already_promoted = {p.name for p in stories.iterdir() if p.is_dir()} if stories.is_dir() else set()
+    already_promoted = promoted_story_names(settings, session_id)
     for draft in sorted(p for p in drafts.iterdir() if p.is_dir()):
         if draft.name in already_promoted or not (draft / "DONE.md").is_file():
             continue

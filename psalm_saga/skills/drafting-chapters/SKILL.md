@@ -26,7 +26,14 @@ other session.
 `docs/psalm-saga/<slug>-plan.md`.
 
 **Save chapter files under `docs/drafts/<story_name>/`**, alongside the
-spec, plan, and (later) review report for this story.
+spec, plan, and (later) review report for this story, named
+`chapter-<N>-<slug>.md` (`<N>` = chapter number, no leading zeros; `<slug>`
+a short kebab-case version of the chapter's title), each starting with its
+own `# Chapter <N>: <Title>` heading. This exact filename pattern and
+order is what `psalm-saga-batch` reads when it assembles a promoted
+story's chapters — a differently-named or unnumbered chapter file is
+silently skipped at promotion time, not an error, so get the name right
+when you save it.
 
 **Step 3's "ask your human partner if genuinely unclear" does not apply
 here.** There is no one to ask. `reviewing-story-dimensions`'s Autonomous
