@@ -127,13 +127,6 @@ consistent across its spec, plan, and chapter files.
 gets answered — concretely, not vaguely — but you answer it yourself.
 Which input mode you're working from changes what you're answering *from*:
 
-**Length directive.** The per-story instruction message may include a
-`Story length directive: ...` line. Treat it exactly like a
-template-locked dimension: state the resolved length (and chapter count,
-if explicit) back in the spec's Premise notes, and never re-decide it.
-When the chapter count is "auto", read `references/length-and-chapters.md`
-now so `writing-story-plans` has the right context later.
-
 - **Scratch:** invent the premise and all six dimensions freely. Read
   `docs/drafts/_batch-log.md` first (see `batch-story-generation`) and
   reroll before locking anything that reads as a near-duplicate of an
@@ -155,6 +148,13 @@ now so `writing-story-plans` has the right context later.
   and lock it immediately. Only the manifest-named dimension(s) get
   freshly decided; walk those the normal way, just deciding instead of
   asking.
+
+**Length directive.** The per-story instruction message always includes a
+`Story length directive: ...` line. Treat it exactly like a
+template-locked dimension: state the resolved length (and chapter count,
+if explicit) back in the spec's Premise notes, and never re-decide it.
+When the chapter count is "auto", read `references/length-and-chapters.md`
+now so `writing-story-plans` has the right context later.
 
 **Self-approve instead of getting sign-off.** Still run the
 cross-dimension consistency pass (Step 5) in full. If you find a

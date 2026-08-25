@@ -60,6 +60,12 @@ def test_parse_length_custom_exact_word_count() -> None:
     assert spec.label == "custom, 12,000 words (novelette range)"
 
 
+def test_parse_length_custom_hundred_words_resolves_to_drabble_bucket() -> None:
+    spec = parse_length("100")
+
+    assert spec.label == "custom, 100 words (drabble range)"
+
+
 def test_parse_length_custom_range_within_one_bucket() -> None:
     spec = parse_length("8000-9000")
 

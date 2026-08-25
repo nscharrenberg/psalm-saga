@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 from rich.console import Console
@@ -38,6 +38,28 @@ def test_parse_args_rejects_invalid_length() -> None:
         _parse_args(["--length", "not-a-category"])
 
 
+def test_resolve_length_directive_for_new_session_returns_empty_when_no_flags_given() -> None:
+    args = _parse_args([])
+
+    assert cli._resolve_length_directive_for_new_session(args) == ""  # noqa: SLF001
+
+
+def test_resolve_length_directive_for_new_session_builds_directive_when_length_given() -> None:
+    args = _parse_args(["--length", "novella"])
+
+    directive = cli._resolve_length_directive_for_new_session(args)  # noqa: SLF001
+
+    assert directive.startswith("Story length directive: novella")
+
+
+def test_resolve_length_directive_for_new_session_builds_directive_when_only_chapters_given() -> None:
+    args = _parse_args(["--chapters", "6"])
+
+    directive = cli._resolve_length_directive_for_new_session(args)  # noqa: SLF001
+
+    assert "Chapter count: 6 (explicit)" in directive
+
+
 class _ImmediatelyDoneSession:
     """Fakes `prompt_toolkit.PromptSession`: the first `.prompt()` call
     raises `EOFError`, so `run_session` exits right after `_run_one_session`
@@ -50,7 +72,7 @@ class _ImmediatelyDoneSession:
 
 
 class _FakeState:
-    values: dict[str, Any] = {}
+    values: ClassVar[dict[str, Any]] = {}
 
 
 class _FakeAgent:

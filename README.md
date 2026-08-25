@@ -98,16 +98,18 @@ anything.
 ## CLI reference
 
 ```
-psalm-saga [--session SESSION_ID] [--list-sessions] [--model MODEL] [--no-banner] [--no-history]
+psalm-saga [--session SESSION_ID] [--list-sessions] [--model MODEL] [--length LENGTH] [--chapters CHAPTERS] [--no-banner] [--no-history]
 ```
 
-| Flag                     | Description                                                                                                                                                                                                                        |
-|--------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--session [SESSION_ID]` | Resume a specific session. If it already exists, its full conversation history is loaded and replayed before the prompt. Omit to start a new session.                                                                              |
-| `--list-sessions`        | List existing sessions, oldest first, and exit.                                                                                                                                                                                    |
-| `--model [MODEL]`        | Override the main-loop model for this run (e.g. `anthropic:claude-sonnet-4-6`, `openai:gpt-4o`, `openai:gpt-5.6-luna`). `PSALM_SAGA_AGENT__ORCHESTRATION_MODEL_NAME` environmental variable will be ignored when `--model` is set. |
-| `--no-banner`            | Skip the startup banner. Useful when piping output.                                                                                                                                                                                |
-| `--no-history`           | Don't persist *input* history to disk for this run. Conversation history is unaffected and always persists.                                                                                                                       |
+| Flag                      | Description                                                                                                                                                                                                                        |
+|---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `--session [SESSION_ID]`  | Resume a specific session. If it already exists, its full conversation history is loaded and replayed before the prompt. Omit to start a new session.                                                                              |
+| `--list-sessions`         | List existing sessions, oldest first, and exit.                                                                                                                                                                                    |
+| `--model [MODEL]`         | Override the main-loop model for this run (e.g. `anthropic:claude-sonnet-4-6`, `openai:gpt-4o`, `openai:gpt-5.6-luna`). `PSALM_SAGA_AGENT__ORCHESTRATION_MODEL_NAME` environmental variable will be ignored when `--model` is set. |
+| `--length [LENGTH]`       | Target story length: a category (`drabble`, `flash-fiction`, `short-story`, `novelette`, `novella`, `novel`, `epic`), an alias (`flash`, `short`, `doorstopper`), an exact word count (e.g. `12000`), or a `MIN-MAX` range. Only locks the length for a **fresh** session with no prior history — omit it to be asked about length conversationally, as before. Ignored when resuming an existing session with `--session`. Defaults to `short-story` when `--chapters` is given but `--length` isn't. |
+| `--chapters [CHAPTERS]`   | Target chapter count: `auto` (default; estimated from the resolved length), an exact count (e.g. `6`), or a `MIN-MAX` range. Same fresh-session-only, ignored-on-resume behavior as `--length`. |
+| `--no-banner`             | Skip the startup banner. Useful when piping output.                                                                                                                                                                                |
+| `--no-history`            | Don't persist *input* history to disk for this run. Conversation history is unaffected and always persists.                                                                                                                       |
 
 In-session commands:
 
@@ -164,6 +166,7 @@ psalm-saga-batch --count 10 --mode scratch
 psalm-saga-batch --count 5 --mode context --context "a lighthouse keeper who finds a message from someone unborn"
 psalm-saga-batch --count 4 --mode template --template-path ./templates
 psalm-saga-batch --count 6 --mode variant --source-path ./drafts --variant-manifest ./drafts/variant-manifest.json
+psalm-saga-batch --count 5 --mode scratch --length novella --chapters 5
 ```
 
 | Mode       | Inputs                                                       | What the system does                                                                                |
@@ -188,6 +191,15 @@ for it:
 
 If `--variant-manifest` is omitted, `psalm-saga-batch` looks for
 `variant-manifest.json` inside a given `--source-path` directory.
+
+`--length {drabble,flash-fiction,short-story,novelette,novella,novel,epic}`
+(or a custom word count/`MIN-MAX` range) and `--chapters {auto,N,MIN-MAX}`
+apply uniformly to every story in the run — unlike the interactive CLI,
+batch mode always applies the resolved target (`short-story`/`auto` by
+default) since there's no human to ask. Re-targeting an existing session's
+remaining stories with a different `--length` than its earlier stories
+used is allowed but not flagged — keep it consistent within one session
+if that matters to you.
 
 A batch session lays out `docs/` differently from an interactive one:
 `docs/drafts/<story_name>/` holds a story's spec, plan, chapters, and

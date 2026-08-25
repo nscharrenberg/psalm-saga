@@ -29,9 +29,9 @@ thread, shaped like:
 
 > Generate story {i} of {count}. Mode: {scratch|context|template|variant}.
 > Combine: {mixed|separate}. Inputs: [...]. Existing names in this
-> session: [...].
+> session: [...]. Story length directive: {length directive text}.
 
-The message may also include a `Story length directive: ...` line (from
+The message always includes a `Story length directive: ...` line (from
 the run's `--length`/`--chapters` flags) — treat it as locked input
 exactly like `Mode`/`Combine`/`Inputs`: `story-brainstorming` and
 `writing-story-plans` state it back rather than deciding it themselves.

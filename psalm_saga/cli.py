@@ -279,6 +279,8 @@ def _run_one_session(
     """
     is_resuming = session_directory(settings, session_id).exists()
     system_prompt = "" if is_resuming else length_directive
+    if system_prompt:
+        console.print(f"[dim]Length target:[/dim] {system_prompt}\n")
 
     with open_sqlite_checkpointer(settings, session_id) as checkpointer:
         agent = build_agent(
@@ -291,6 +293,22 @@ def _run_one_session(
             _replay_history(agent, {"configurable": {"thread_id": session_id}}, console)
 
         return run_session(agent, session_id, console, prompt_session)
+
+
+def _resolve_length_directive_for_new_session(args: argparse.Namespace) -> str:
+    """The directive text to inject for a brand-new session, or `""` if
+    neither `--length` nor `--chapters` was passed.
+
+    `args.length_spec`/`args.chapter_spec` are always resolved (defaulting
+    to short-story/auto) so `--chapters` alone still has a length to pair
+    with — but injecting a directive on *every* fresh session regardless
+    of whether the user asked for one would make `story-brainstorming`'s
+    conversational "ask about length" fallback unreachable. Only build the
+    directive text when the user actually passed one of the two flags.
+    """
+    if args.length is None and args.chapters is None:
+        return ""
+    return format_length_directive(args.length_spec, args.chapter_spec)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -314,8 +332,7 @@ def main(argv: list[str] | None = None) -> None:
 
     prompt_session = _build_prompt_session(settings, persist_history=not args.no_history)
     session_id = args.session_id or generate_session_id()
-    length_directive = format_length_directive(args.length_spec, args.chapter_spec)
-    console.print(f"[dim]Length target:[/dim] {length_directive}\n")
+    length_directive = _resolve_length_directive_for_new_session(args)
 
     while True:
         outcome = _run_one_session(settings, session_id, console, prompt_session, length_directive)
