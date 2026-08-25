@@ -36,6 +36,11 @@ from psalm_saga.batch_session import (
 from psalm_saga.bootstrap import BATCH_BOOTSTRAP_SKILL
 from psalm_saga.session import generate_session_id, session_directory
 from psalm_saga.settings import Settings
+from psalm_saga.story_length import (
+    add_length_arguments,
+    format_length_directive,
+    resolve_length_arguments,
+)
 from psalm_saga.stream_renderer import StreamRenderer, extract_tool_call_lines
 
 MAX_ATTEMPT_MULTIPLIER = 3
@@ -79,6 +84,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--combine", choices=["mixed", "separate"], default=None,
         help="How multiple inputs map onto --count stories. Forced to 'separate' for --mode variant.",
     )
+    add_length_arguments(parser)
     parser.add_argument(
         "--session",
         dest="session_id",
@@ -103,6 +109,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     elif args.combine is None:
         args.combine = "mixed"
 
+    args.length_spec, args.chapter_spec = resolve_length_arguments(parser, args)
+
     return args
 
 
@@ -123,6 +131,7 @@ def _build_story_instruction(  # noqa: PLR0913, PLR0917
     combine: str,
     inputs: list[str] | list[VariantSource] | None,
     existing_names: set[str],
+    length_directive: str,
 ) -> str:
     if mode == "variant":
         inputs_desc = json.dumps(
@@ -144,6 +153,7 @@ def _build_story_instruction(  # noqa: PLR0913, PLR0917
         f"Generate story {story_index} of {count}. Mode: {mode}. "
         f"Combine: {combine}. Inputs: {inputs_desc}. "
         f"Existing names in this session: {sorted(existing_names)}. "
+        f"{length_directive} "
         "Use the batch-story-generation skill."
     )
 
@@ -177,6 +187,7 @@ def run_batch(settings: Settings, args: argparse.Namespace, console: Console) ->
     thing that decides whether the loop continues.
     """
     inputs = _resolve_inputs(args)
+    length_directive = format_length_directive(args.length_spec, args.chapter_spec)
 
     session_id = args.session_id or generate_session_id()
     console.print(f"[dim]Session:[/dim] {session_id}")
@@ -202,7 +213,7 @@ def run_batch(settings: Settings, args: argparse.Namespace, console: Console) ->
             if args.combine == "separate" and inputs:
                 story_inputs = [inputs[done % len(inputs)]]
             message = _build_story_instruction(
-                done + 1, args.count, args.mode, args.combine, story_inputs, names
+                done + 1, args.count, args.mode, args.combine, story_inputs, names, length_directive
             )
             console.print(f"[bold magenta]batch>[/bold magenta] attempt {attempts}: {message}\n")
 

@@ -69,16 +69,42 @@ def test_parse_args_collects_repeated_context_paths() -> None:
 
 
 def test_build_story_instruction_for_scratch_mode() -> None:
-    message = _build_story_instruction(1, 5, "scratch", "mixed", None, set())
+    message = _build_story_instruction(
+        1, 5, "scratch", "mixed", None, set(), "Story length directive: short story."
+    )
 
     assert "story 1 of 5" in message
     assert "Mode: scratch" in message
+    assert "Story length directive: short story." in message
 
 
 def test_build_story_instruction_includes_existing_names() -> None:
-    message = _build_story_instruction(2, 5, "context", "mixed", ["a spooky forest"], {"story-a"})
+    message = _build_story_instruction(
+        2, 5, "context", "mixed", ["a spooky forest"], {"story-a"}, "Story length directive: novella."
+    )
 
     assert "story-a" in message
+
+
+def test_parse_args_defaults_length_and_chapters() -> None:
+    args = _parse_args(["--count", "1", "--mode", "scratch"])
+
+    assert args.length_spec.category == "short-story"
+    assert args.chapter_spec.mode == "auto"
+
+
+def test_parse_args_resolves_explicit_length_and_chapters() -> None:
+    args = _parse_args(
+        ["--count", "1", "--mode", "scratch", "--length", "novella", "--chapters", "5"]
+    )
+
+    assert args.length_spec.category == "novella"
+    assert args.chapter_spec.count == 5
+
+
+def test_parse_args_rejects_invalid_length() -> None:
+    with pytest.raises(SystemExit):
+        _parse_args(["--count", "1", "--mode", "scratch", "--length", "not-a-category"])
 
 
 class _FakeAgent:
@@ -134,6 +160,34 @@ def test_run_batch_stops_once_count_is_reached(
     assert len(calls) == 3
     assert promoted_story_count(settings, session_id) == 3
     assert captured_kwargs["bootstrap_skill"] == batch_cli.BATCH_BOOTSTRAP_SKILL
+
+
+def test_run_batch_includes_length_directive_in_every_story_instruction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = _settings(tmp_path)
+    session_id = "session-1"
+    sent_messages: list[str] = []
+
+    class _CapturingAgent:
+        def stream(self, payload: Any, **_kwargs: Any) -> Iterator[Any]:
+            sent_messages.append(payload["messages"][0]["content"])
+            n = len(sent_messages)
+            final = stories_dir(settings, session_id) / f"story-{n}.md"
+            final.parent.mkdir(parents=True, exist_ok=True)
+            final.write_text(f"# Story {n}\n", encoding="utf-8")
+            return iter(())
+
+    monkeypatch.setattr(batch_cli, "open_sqlite_checkpointer", _fake_checkpointer)
+    monkeypatch.setattr(batch_cli, "build_agent", lambda *_a, **_kw: _CapturingAgent())
+
+    args = _parse_args(
+        ["--count", "1", "--mode", "scratch", "--session", session_id, "--length", "novella"]
+    )
+    batch_cli.run_batch(settings, args, _quiet_console())
+
+    assert len(sent_messages) == 1
+    assert "Story length directive: novella" in sent_messages[0]
 
 
 def test_run_batch_gives_up_after_the_attempt_cap(
