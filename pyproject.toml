@@ -99,6 +99,7 @@ ignore = [
 ]
 "psalm_saga/story_length.py" = ["RUF001"]
 "tests/unit/test_story_length.py" = ["RUF001"]
+"tests/unit/test_cli.py" = ["RUF012"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

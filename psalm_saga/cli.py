@@ -31,6 +31,11 @@ from rich.panel import Panel
 from psalm_saga.agent import build_agent, open_sqlite_checkpointer
 from psalm_saga.session import generate_session_id, list_sessions, session_directory
 from psalm_saga.settings import Settings
+from psalm_saga.story_length import (
+    add_length_arguments,
+    format_length_directive,
+    resolve_length_arguments,
+)
 from psalm_saga.stream_renderer import StreamRenderer, extract_text, extract_tool_call_lines
 
 _BANNER = r"""[bold cyan]
@@ -92,6 +97,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Override the main-loop model (e.g. anthropic:claude-sonnet-4-6, "
         "openai:gpt-4o). Overrides PSALM_SAGA_AGENT__ORCHESTRATION_MODEL_NAME.",
     )
+    add_length_arguments(parser)
     parser.add_argument(
         "--no-banner",
         action="store_true",
@@ -102,7 +108,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Don't persist input history to disk for this session.",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    args.length_spec, args.chapter_spec = resolve_length_arguments(parser, args)
+    return args
 
 
 def _build_key_bindings() -> KeyBindings:
@@ -252,17 +260,30 @@ def run_session(
 
 
 def _run_one_session(
-    settings: Settings, session_id: str, console: Console, prompt_session: PromptSession
+    settings: Settings,
+    session_id: str,
+    console: Console,
+    prompt_session: PromptSession,
+    length_directive: str,
 ) -> str:
     """Open this session's checkpointer, build its agent, replay history if
     resuming, and run the interactive loop — all within one `with` block so
     the SQLite connection is always closed on the way out, however the loop
     ends (normal exit, `/reset`, or an exception).
+
+    `length_directive` (from `--length`/`--chapters`, resolved in
+    `_parse_args`) is only passed into the agent's `system_prompt` for a
+    brand-new session — a resumed session's length dimension is either
+    already decided or already mid-conversation, and re-injecting it risks
+    contradicting a choice the human partner already made.
     """
     is_resuming = session_directory(settings, session_id).exists()
+    system_prompt = "" if is_resuming else length_directive
 
     with open_sqlite_checkpointer(settings, session_id) as checkpointer:
-        agent = build_agent(settings, session_id=session_id, checkpointer=checkpointer)
+        agent = build_agent(
+            settings, session_id=session_id, checkpointer=checkpointer, system_prompt=system_prompt
+        )
 
         console.print(f"[dim]Session directory:[/dim] {session_directory(settings, session_id)}\n")
 
@@ -293,9 +314,11 @@ def main(argv: list[str] | None = None) -> None:
 
     prompt_session = _build_prompt_session(settings, persist_history=not args.no_history)
     session_id = args.session_id or generate_session_id()
+    length_directive = format_length_directive(args.length_spec, args.chapter_spec)
+    console.print(f"[dim]Length target:[/dim] {length_directive}\n")
 
     while True:
-        outcome = _run_one_session(settings, session_id, console, prompt_session)
+        outcome = _run_one_session(settings, session_id, console, prompt_session, length_directive)
         if outcome == "exit":
             return
         # outcome == "reset": start a brand new session and loop.
