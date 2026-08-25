@@ -50,3 +50,10 @@ def test_story_brainstorming_treats_a_length_directive_as_locked() -> None:
 
     assert "length-and-chapters.md" in body
     assert "length directive" in body.lower()
+
+
+def test_writing_story_plans_decides_chapter_count_from_directive_or_auto() -> None:
+    body = _read_skill("writing-story-plans")
+
+    assert "length-and-chapters.md" in body
+    assert "chapter-count directive" in body.lower()
