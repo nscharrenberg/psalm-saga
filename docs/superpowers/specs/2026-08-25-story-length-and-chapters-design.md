@@ -101,10 +101,13 @@ with a clear message, before any agent turn runs.
 
 - `LengthSpec` — resolved category (if any), `min_words`, `max_words`
   (`None` = open-ended, only `epic` uses this), and a display label. A
-  custom number/range also carries which category bucket it falls into
-  (by its midpoint, or "spans X–Y" if the range crosses more than one
-  bucket) purely as a hint for the length-and-chapters reference's
-  chapter guidance — it does not restrict what the user can type.
+  custom number/range also carries which category bucket it falls into:
+  its low end and high end are each looked up independently — the same
+  bucket for both resolves to that bucket's label (e.g. "novelette
+  range"), different buckets resolve to "spans X–Y" (e.g. "spans
+  novelette–novella") — purely as a hint for the length-and-chapters
+  reference's chapter guidance. It does not restrict what the user can
+  type.
 - `ChapterSpec` — `mode: "auto" | "exact" | "range"` plus the resolved
   count/range.
 - `parse_length(raw: str | None) -> LengthSpec`, `raw=None` → the
@@ -120,8 +123,8 @@ with a clear message, before any agent turn runs.
 
   or, for a fully explicit case:
 
-  > Story length directive: custom, target 12,000–18,000 words (novelette
-  > range). Chapter count: 4 (explicit).
+  > Story length directive: custom, target 12,000–18,000 words (spans
+  > novelette–novella). Chapter count: 4 (explicit).
 
 ## Threading the directive into each entry point
 
@@ -225,6 +228,3 @@ execute or check whatever `writing-story-plans` already committed to.
   `story-brainstorming` Step 1 and the auto-chapter-count reasoning note
   in `writing-story-plans` Step 2 — drafted during implementation,
   reviewed the same way any skill edit is.
-- Whether the custom-length bucket hint (used only for chapter-guidance
-  purposes) needs any refinement once real runs are observed using a
-  custom range that spans multiple categories.
