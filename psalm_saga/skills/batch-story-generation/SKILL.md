@@ -31,6 +31,11 @@ thread, shaped like:
 > Combine: {mixed|separate}. Inputs: [...]. Existing names in this
 > session: [...].
 
+The message may also include a `Story length directive: ...` line (from
+the run's `--length`/`--chapters` flags) — treat it as locked input
+exactly like `Mode`/`Combine`/`Inputs`: `story-brainstorming` and
+`writing-story-plans` state it back rather than deciding it themselves.
+
 `Combine: separate` means the `Inputs` you were given for this specific
 story are already narrowed to just this story's share — treat them as the
 whole pool for this story, don't expect to see the rest. `Combine: mixed`

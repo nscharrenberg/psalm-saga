@@ -57,3 +57,9 @@ def test_writing_story_plans_decides_chapter_count_from_directive_or_auto() -> N
 
     assert "length-and-chapters.md" in body
     assert "chapter-count directive" in body.lower()
+
+
+def test_batch_story_generation_documents_the_length_directive_line() -> None:
+    body = _read_skill("batch-story-generation")
+
+    assert "length directive" in body.lower()
