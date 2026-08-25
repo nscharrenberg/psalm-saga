@@ -54,13 +54,29 @@ def find_chapter_files(draft_dir: Path) -> list[Path]:
     return [path for _, path in chapters]
 
 
+def _demote_leading_heading(chapter_text: str) -> str:
+    """Demote a chapter's own top-level `# ` heading to `##`.
+
+    Chapter files are written as standalone documents, each with its own
+    `# Chapter <N>: <Title>` (H1) heading. Folded into the assembled book
+    unchanged, that would put every chapter heading at the same level as
+    the book's own title. Demoting it one level keeps the book title the
+    document's only H1. A chapter with no leading `# ` heading is left
+    untouched rather than guessed at.
+    """
+    if chapter_text.startswith("# "):
+        return "#" + chapter_text
+    return chapter_text
+
+
 def assemble_story(draft_dir: Path, story_name: str) -> str:
     """Build the single reader-facing Markdown document for one story.
 
     Reads `<story_name>-plan.md` for the title (falling back to
     `story_name` if the plan is missing or its title heading isn't
     found) and every `chapter-<N>-*.md` file, in chapter order, for the
-    prose.
+    prose — each chapter's own leading heading demoted to `##` so the
+    book title is the document's only `#`.
 
     Raises `ValueError` if no chapter files are found — an empty "story"
     is a defect to surface, not something to promote silently.
@@ -76,6 +92,7 @@ def assemble_story(draft_dir: Path, story_name: str) -> str:
         raise ValueError(f"No chapter files found in {draft_dir}")
 
     chapters_text = "\n\n".join(
-        path.read_text(encoding="utf-8").strip() for path in chapter_files
+        _demote_leading_heading(path.read_text(encoding="utf-8").strip())
+        for path in chapter_files
     )
     return f"# {title}\n\n{chapters_text}\n"

@@ -63,9 +63,45 @@ def test_assemble_story_combines_title_and_chapters_in_order(tmp_path: Path) -> 
     result = assemble_story(tmp_path, "my-story")
 
     assert result.startswith("# My Story\n\n")
-    assert result.index("# Chapter 1: Beginning") < result.index("# Chapter 2: End")
+    assert result.index("## Chapter 1: Beginning") < result.index("## Chapter 2: End")
     assert "Once upon a time." in result
     assert "The end." in result
+
+
+def test_assemble_story_demotes_chapter_headings_below_the_book_title(
+    tmp_path: Path,
+) -> None:
+    """The book title is the only `#` (H1) in the assembled document —
+    each chapter's own `# Chapter N: ...` heading is demoted to `##` so it
+    reads as a section of the book, not a second book title."""
+    (tmp_path / "my-story-plan.md").write_text(
+        "# My Story — Story Plan\n", encoding="utf-8"
+    )
+    (tmp_path / "chapter-1-only.md").write_text(
+        "# Chapter 1: Only\n\nText.", encoding="utf-8"
+    )
+
+    result = assemble_story(tmp_path, "my-story")
+
+    h1_lines = [line for line in result.splitlines() if line.startswith("# ") and not line.startswith("## ")]
+    assert h1_lines == ["# My Story"]
+    assert "## Chapter 1: Only" in result
+
+
+def test_assemble_story_leaves_a_chapter_with_no_leading_heading_unchanged(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "my-story-plan.md").write_text(
+        "# My Story — Story Plan\n", encoding="utf-8"
+    )
+    (tmp_path / "chapter-1-only.md").write_text(
+        "Once upon a time, with no heading at all.", encoding="utf-8"
+    )
+
+    result = assemble_story(tmp_path, "my-story")
+
+    assert "Once upon a time, with no heading at all." in result
+    assert "## " not in result
 
 
 def test_assemble_story_falls_back_to_story_name_when_plan_missing(tmp_path: Path) -> None:
