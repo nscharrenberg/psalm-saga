@@ -32,3 +32,21 @@ def test_reviewing_story_dimensions_has_autonomous_mode_section() -> None:
 
     assert "## Autonomous Mode" in body
     assert "ABANDONED.md" in body
+
+
+def test_length_and_chapters_reference_exists_with_full_taxonomy() -> None:
+    reference = (
+        SKILLS_DIR / "story-brainstorming" / "references" / "length-and-chapters.md"
+    ).read_text(encoding="utf-8")
+
+    for label in ("Drabble", "Flash Fiction", "Short Story", "Novelette", "Novella", "Novel", "Epic"):
+        assert label in reference
+    assert "1,500" in reference  # the ~1,500-5,000 words/chapter novel norm
+    assert "auto" in reference.lower()
+
+
+def test_story_brainstorming_treats_a_length_directive_as_locked() -> None:
+    body = _read_skill("story-brainstorming")
+
+    assert "length-and-chapters.md" in body
+    assert "length directive" in body.lower()

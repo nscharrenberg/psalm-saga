@@ -27,7 +27,7 @@ Do this yourself, directly in the conversation with your human partner. Never di
 
 ## Process
 
-1. **Premise.** Ask what the person is trying to write and why: audience, length, genre, what a satisfying read *feels* like when it's done. Don't skip to dimensions before the premise is clear.
+1. **Premise.** Ask what the person is trying to write and why: audience, genre, what a satisfying read *feels* like when it's done. For length: if a length directive was already injected into this session (a `--length`/`--chapters` flag resolved at startup), state it back rather than asking — e.g. "This session is targeting a novella (17,500–39,999 words)." — and treat it as decided; the conversation can still revise it later like any other spec choice. Otherwise ask about length as usual, defaulting to short story (1,000–7,499 words) if the person has no strong preference. Read `references/length-and-chapters.md` the first time length comes up in a session. Don't skip to dimensions before the premise is clear.
 2. **Derivative check.** Ask directly: is this based on, inspired by, a continuation of, or a retelling of an existing work? If yes, note it now and invoke `adapting-existing-work` after finishing Step 4 below, before presenting the spec for sign-off. Don't let "just inspired by the vibe of X" slide past this question — let your human partner decide whether that counts.
 3. **Source-derived variance check.** If your human partner has supplied a source text (their own prior draft or an existing work) and wants "the same story" with only some named dimension(s) changed — e.g. same plot and world, different characters — this is a distinct mode from Step 2's legal/relationship question and can apply regardless of how that was answered:
    - Read the source text.
@@ -126,6 +126,13 @@ consistent across its spec, plan, and chapter files.
 **Decide, don't ask.** Every dimension question in the Process above still
 gets answered — concretely, not vaguely — but you answer it yourself.
 Which input mode you're working from changes what you're answering *from*:
+
+**Length directive.** The per-story instruction message may include a
+`Story length directive: ...` line. Treat it exactly like a
+template-locked dimension: state the resolved length (and chapter count,
+if explicit) back in the spec's Premise notes, and never re-decide it.
+When the chapter count is "auto", read `references/length-and-chapters.md`
+now so `writing-story-plans` has the right context later.
 
 - **Scratch:** invent the premise and all six dimensions freely. Read
   `docs/drafts/_batch-log.md` first (see `batch-story-generation`) and
