@@ -11,14 +11,20 @@
 - **H1c.** Adherence varies across dimensions, with lower identification accuracy for the six functional sub-dimensions
   than for the concrete ones.
 - **H1d.** Manipulation is specific. When a judge identifies the regenerated dimension correctly, that judge reports no
-  change in the five locked dimensions at a rate above the false-alarm baseline.
+  change in the five locked dimensions at a rate above the false-alarm baseline. This test is conditional on a correct
+  A1 response, so its usable sample is a subset of A1's; see Section 9 for the minimum-n check and fallback.
 
 **RQ2 (Contribution of the specification).** Does the specification stage do work the rest of the pipeline does not?
 
 - **H2a.** Stories from the full pipeline instantiate a target specification more often than stories from the
   no-specification ablation given the same premise.
 - **H2b.** Stories from the full pipeline instantiate a supplied specification more often than a single-call baseline
-  given the same specification in its prompt.
+  given the same specification in its prompt. C1 draws on substantially more inference-time compute than C3 (a
+  multi-stage pipeline against a single call), and no compute-matched C3 variant is run. A positive result is therefore
+  reported as "the full pipeline, architecture and compute combined, outperforms a single-call baseline" rather than as
+  evidence that pipeline structure alone is responsible; this scoping should be stated in the paper's limitations rather
+  than
+  left implicit.
 - **H2c.** The review-and-repair loop improves adherence over the no-review ablation.
 
 **RQ3 (Specification production).** When the system writes a specification from a human-written story, does it recover
@@ -28,7 +34,10 @@ the properties a human annotator recorded for that story?
   The human ceiling, not an absolute threshold, is the comparison.
 - **H3b.** Recovery is lower for the six functional sub-dimensions than for the concrete ones, mirroring H1c. Agreement
   between H1c and H3b would locate the difficulty in the taxonomy; divergence would locate it in the pipeline.
-- **H3c.** Recovery is lower in Dutch than in English.
+- **H3c.** Recovery is lower in Dutch than in English. The expected mechanism, stated here rather than after the fact,
+  is generator training-data asymmetry (English overrepresentation relative to Dutch) consistent with findings from our
+  prior work in PSALM experiments. Registering this expectation in advance keeps a confirming result from reading as
+  post hoc rationalization.
 
 **RQ4 (Quality guardrail).** Is specification-driven output non-inferior in quality to the unstructured baselines?
 
@@ -50,7 +59,7 @@ the properties a human annotator recorded for that story?
 RQ1 and RQ2 are primary. RQ3 and RQ5 are secondary and diagnostic. RQ4 is a guardrail whose failure would qualify the
 other results without its success being a contribution.
 
-## 2. Corpus
+## 2. Corpus / Dataset
 
 ### 2.1. Source Stories
 
@@ -107,6 +116,9 @@ language, are translated into the other language, with Writing Style sub-dimensi
 language-specific features and every adaptation logged. Generation then runs from matched specification content in both
 languages. A specification is a fraction of a story's length, so this costs six translations rather than six stories.
 
+This subset controls for item difficulty; it is not designed to adjudicate the training-data-asymmetry mechanism
+proposed for H3c in Section 1, which rests on prior findings rather than on evidence internal to this study.
+
 ## 3. Conditions
 
 | ID                  | Input         | Pipeline                                                                                                           |
@@ -121,7 +133,10 @@ languages. A specification is a fraction of a story's length, so this costs six 
 
 C3 isolates the pipeline's contribution most sharply. It receives the same specification as C1 with no plan stage, no
 per-chapter verification and no repair. If C1 does not beat C3 on adherence, the pipeline adds nothing over pasting the
-specification into a prompt, which would be the most consequential negative result the study could produce.
+specification into a prompt, which would be the most consequential negative result the study could produce. The reverse
+result (C1 beating C3) is not by itself evidence that the pipeline's architecture is responsible, since C1 also
+spends more inference-time compute than a single call can; Section 1's H2b discussion states how that result should be
+scoped, and no compute-matched C3 is run to separate the two.
 
 C4 is matched to C1 on review iterations and token budget, so the C1–C4 contrast tests the taxonomy and not the compute.
 
@@ -150,7 +165,12 @@ faithfully would be indistinguishable from one that writes sharp specifications 
 were measured.
 
 **Task C** has C1 extract a specification from the human text, then produce six variants, one per dimension, each
-regenerating that dimension and locking the other five.
+regenerating that dimension and locking the other five. Every repair-loop edit made during variant production is logged
+against the lock map for that variant, and any edit touching a nominally locked dimension is flagged for audit even
+where the audit judges the edit semantically inert. This is a narrower check than the C1–C2 contrast in H2c: that
+contrast tests whether review-repair improves adherence in aggregate, while this log tests specifically whether repair
+is silently patching drift on dimensions the task requires to stay untouched, a failure mode the aggregate contrast is
+not built to isolate.
 
 **Task D** repeats Task C's variant procedure on the scratch sub-corpus, where the specification was authored rather
 than extracted.
@@ -176,9 +196,13 @@ purpose, so unlocked values are additionally screened for semantic non-equivalen
 threshold, with 10% audited by an author.
 
 **M2: Verbatim overlap.** Shared 8-gram rate between each generated story and its source item, against a matched
-non-source baseline, with a pre-registered exclusion threshold. Public-domain literature is likely present in
-pretraining data, so this distinguishes generation from recall. Task D items require no screening, which is part of
-their value.
+non-source baseline, with a pre-registered exclusion threshold. The threshold is set from the data rather than fixed by
+convention: the matched non-source baseline's overlap distribution is reported first, and the exclusion threshold is set
+a stated number of standard deviations above that baseline's mean, so a flagged item is one that departs from the level
+of incidental phrase reuse the baseline already exhibits, not one exceeding an arbitrary count. C7 items are excluded
+from M2 by construction — a human source item cannot be scored for overlap against itself — and this is stated here
+rather than left to be inferred from the table in Section 5.6. Task D items require no screening, which is part of their
+value.
 
 ### 5.2. Specification-level instruments
 
@@ -232,6 +256,12 @@ a hit rate on the manipulated dimension and a false-alarm rate on the locked one
 accuracy. It supplies H1d. Keeping it as a follow-up rather than converting A1 into a select-all task preserves A1's
 clean scoring.
 
+Because A2 is scored only on items where A1 was answered correctly, its usable sample shrinks with A1 accuracy rather
+than tracking the full item count in Section 5.6's budget. If the conditional subset falls below the minimum-n set in
+Section 9, the pre-registered fallback is to additionally report an unconditional drift rate — computed over all A1
+items regardless of whether the dimension was correctly identified — clearly labelled as a secondary analysis rather
+than a test of H1d as stated.
+
 **A3: Specification-story matching.** A judge sees a specification and two stories, one generated from it and one from
 a different specification in the same language and genre bucket, and identifies which story was written from it. Chance
 is $\frac{1}{2}$, presentation order counterbalanced.
@@ -241,7 +271,7 @@ neither system having seen it, it yields H2a: how much adherence a premise alone
 
 **A4: Story-specification attribution.** The converse direction. A judge sees one story and three candidate
 specifications, the true one and two from the same language and genre bucket, and identifies which the story was written
-from. Chance is $\frac{1]{3}$.
+from. Chance is $\frac{1}{3}$.
 
 A4 measures the same underlying construct as A3 from the opposite side, which makes the pair a convergent-validity check
 when run on an overlapping sample. It is also far cheaper in human time: reading one story and three short
@@ -259,14 +289,16 @@ This is the only instrument reaching sub-dimension resolution. Human validation 
 this scale, so results are automatic-only and reported as descriptive.
 
 **A6: Premise attribution.** A judge sees one story and three premises, the true one and two from the same language and
-genre bucket, and identifies which the story was written from. Chance is $\frac{1]{3}$.
+genre bucket, and identifies which the story was written from. Chance is $\frac{1}{3}$.
 
-A6 is not a result. Every condition should approach ceiling, since being about the right premise is basic
+However, A6 is not a result. Every condition should approach ceiling, since being about the right premise is basic
 prompt-following. Its function is calibration: an accuracy of $0.40$ on a six-way dimension task means nothing to a
-reader
-who does not know what a judge's ceiling looks like on this corpus. Reporting that judges reach $0.94$ on premise
-attribution and 0.40 on dimension identification frames the second number properly, and a condition falling below
-ceiling on A6 signals a generation failure that would otherwise be misread as poor adherence.
+reader who does not know what a judge's ceiling looks like on this
+corpus. Drawing distractor premises from the same bucket as the true premise, rather than from the full corpus, is what
+makes this ceiling comparable in difficulty to A1 and A4 (an out-of-bucket distractor would be solvable on content
+alone and would inflate the ceiling artificially). Reporting that judges reach $0.94$ on premise attribution and 0.40 on
+dimension identification frames the second number properly, and a condition
+falling below ceiling on A6 signals a generation failure that would otherwise be misread as poor adherence.
 
 ### 5.4. Quality instrument
 
@@ -327,7 +359,9 @@ The pilot settles whether the smaller open-weight models can produce coherent $1
 specifications at all; whether candidate judges clear the Section 6 gates; the observed abstention rate on A1, which
 drives the sample-size check; and the median human time per item, which converts the rater budget into an item count. A
 model failing the pilot is dropped and the pilot report states why. This is the mechanism for deciding on the EU
-multilingual models, in place of committing to them in advance.
+multilingual models, in place of committing to them in advance. The pilot is also where the C6 feasibility check
+(Section 3: run as published, else reimplement, else drop) is executed, so that condition's status is settled before
+the confirmatory run rather than discovered mid-study.
 
 ## 8. Analysis
 
@@ -379,7 +413,12 @@ whether either measures it.
 A judge that is $80\%$ accurate reports an accuracy that is a biased estimate of the true rate. Where judge and human
 labels coexist, accuracy is therefore additionally reported with the Rogan-Gladen correction, using sensitivity and
 specificity estimated from the human subset. This is what allows roughly $150$ human labels to support valid statements
-about more than a thousand automatic ones.
+about more than a thousand automatic ones. The human subset feeding this correction is not drawn at random from the
+full item pool — allocation proceeds by instrument (A1, then A4, then Q1, per Section 5.6) rather than by a single
+random draw across all instruments at once. To keep the correction's validity assumption checkable rather than
+implicit, the subset of human labels used specifically for Rogan-Gladen correction within each instrument is an
+explicit random sample drawn from that instrument's allocated human-rated items, rather than simply whichever items
+happened to be rated first under the allocation order.
 
 H4a and H3a are tested by two one-sided tests against their pre-registered margins. H4b is a within-condition
 correlation between quality and adherence outcomes.
@@ -407,35 +446,46 @@ volume.
 Pairwise condition contrasts are less well powered than the against-chance tests. We pre-register a smallest effect size
 of interest of $15$ percentage points for those contrasts and state that the study cannot detect effects below it.
 
+H1d's test (A2, conditional on correct A1 response) draws on a subset of the A1 sample rather than the full $480$ items,
+and its size depends on observed A1 accuracy, which is not known in advance. We set a minimum-n of $60$ conditional
+items for the d′ estimate to be reported as a confirmatory test of H1d; below that, the pilot's observed A1 accuracy is
+used to project the expected conditional-subset size ahead of the confirmatory run, and if the projection falls short,
+A2 is reported as the unconditional drift rate described in Section 5.3 instead, with H1d itself reported as
+inconclusive rather than confirmed or disconfirmed.
+
 The design is deliberately better powered for RQ1 than for RQ2. Establishing that specifications control output is the
 prior question, and we would rather report a well-estimated primary result with a wide interval on the ablation ordering
 than underpower both.
 
 ## 10. Threats and Controls
 
-| Threat                                        | Control                                                                                                       |
-|-----------------------------------------------|---------------------------------------------------------------------------------------------------------------|
-| Circularity between generator and evaluator   | PSALM is used nowhere in this evaluation; internal verifier verdicts are never reported as results            |
-| Self-preference                               | Judge families disjoint from generator families                                                               |
-| Shared authorship of gold specs and judges    | The drafting model's family is excluded from the S2 judge pool                                                |
-| Constraint self-selection                     | Scratch sub-corpus and RQ5 measure it directly instead of controlling it away                                 |
-| Extraction error contaminating variant chains | Task D repeats Task C without an extraction step                                                              |
-| Survivorship from the repair loop             | Abandonment rate reported; analyses rerun including last drafts of abandoned runs                             |
-| Length confound                               | Target band enforced; realised length reported per condition and entered as a covariate where medians diverge |
-| Position bias                                 | Pairwise items run in both orders; inconsistency rate reported                                                |
-| Memorisation of public-domain sources         | M2, with Task D as the memorisation-free replication                                                          |
-| Compute confound in C4                        | C4 matched to C1 on review iterations and token budget                                                        |
-| Distractor artefacts                          | Distractors drawn from real specifications within language and genre bucket, embedding-filtered, 10% audited  |
-| Judge ceiling unknown                         | A6 establishes it on this corpus                                                                              |
-| Language-difficulty confound                  | Parallel-specification subset (Section 2.4)                                                                   |
+| Threat                                                                     | Control                                                                                                                     |
+|----------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| Circularity between generator and evaluator                                | PSALM is used nowhere in this evaluation; internal verifier verdicts are never reported as results                          |
+| Self-preference                                                            | Judge families disjoint from generator families                                                                             |
+| Shared authorship of gold specs and judges                                 | The drafting model's family is excluded from the S2 judge pool                                                              |
+| Constraint self-selection                                                  | Scratch sub-corpus and RQ5 measure it directly instead of controlling it away                                               |
+| Extraction error contaminating variant chains                              | Task D repeats Task C without an extraction step                                                                            |
+| Silent repair-loop edits on locked dimensions                              | Task C repair-loop edits logged against the lock map; edits touching locked dimensions flagged for audit, separate from H2c |
+| Survivorship from the repair loop                                          | Abandonment rate reported; analyses rerun including last drafts of abandoned runs                                           |
+| Length confound                                                            | Target band enforced; realised length reported per condition and entered as a covariate where medians diverge               |
+| Position bias                                                              | Pairwise items run in both orders; inconsistency rate reported                                                              |
+| Memorisation of public-domain sources; C7 excluded from M2 by construction | M2, with Task D as the memorisation-free replication                                                                        |
+| Compute confound in C4                                                     | C4 matched to C1 on review iterations and token budget                                                                      |
+| Compute confound in C1 vs. C3 (H2b)                                        | Not controlled; C1's advantage, if found, is reported as architecture-plus-compute rather than architecture-isolated        |
+| Distractor artefacts                                                       | Distractors drawn from real specifications within language and genre bucket, embedding-filtered, 10% audited                |
+| Judge ceiling unknown                                                      | A6 establishes it on this corpus, using same-bucket distractors so the ceiling is comparable in difficulty to A1/A4         |
+| Language-difficulty confound                                               | Parallel-specification subset (Section 2.4)                                                                                 |
+| Training-data asymmetry confound in H3c                                    | Not controlled by design; expected direction and mechanism pre-registered in Section 1 based on prior findings              |
+| Non-representative human subset for Rogan-Gladen                           | Correction subset drawn as an explicit random sample within each instrument's allocated human-rated items (Section 8)       |
 
 ## 11. Reproducibility
 
 Frozen and published before the confirmatory run:
 
 - Hypotheses with primary/secondary designation, smallest effect size of interest, non-inferiority margins, and the
-  analysis plan including convergence fallback, abstention handling and exclusion rules, timestamped on a public
-  registry
+  analysis plan including convergence fallback, abstention handling, exclusion rules, the H1d/A2 minimum-n and fallback,
+  the C6 feasibility outcome, and the Rogan-Gladen sampling scheme, timestamped on a public registry
 - The $30$ source items with provenance and licence, both gold specification sets, the double-annotated subset, the
   scratch sub-corpus, and the parallel-specification translations with their adaptation log
 - Model identifiers with exact revisions, decoding parameters per stage, seeds, and the repair bound k_max and
@@ -445,7 +495,7 @@ Frozen and published before the confirmatory run:
 - Item construction and randomisation scripts, distractor generation with its threshold, rater instructions, training
   items and catch trials
 - Raw per-judge and per-rater responses at item level, not aggregates
-- Full generation traces, including abandoned runs
+- Full generation traces, including abandoned runs and the Task C repair-loop lock-diagnostic log
 - Analysis code with an environment lockfile
 
 ## 12. Reduction Path
@@ -455,7 +505,8 @@ under all circumstances, since they carry RQ1 and RQ5. Task B with A3 and A4 goe
 Q1, then C6, then A5, then the second generator family on Tasks C and D, then the corpus from $15$ to $10$ items per
 language. A6 is cheap enough to retain throughout, since without it the primary number cannot be interpreted.
 
-A study consisting of Tasks C and D, dimension identification with drift across three model judges, and a $150$-item human
+A study consisting of Tasks C and D, dimension identification with drift across three model judges, and a $150$-item
+human
 subset is publishable on its own. It answers whether a specification controls what a generator produces, which is the
 question the contribution rests on.
 

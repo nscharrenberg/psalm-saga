@@ -30,11 +30,12 @@ Run three generation tasks across seven conditions:
 - C6: Agents' Room baseline (if feasible; otherwise drop)
 - C7: Human source items (gold standard)
 
+
 **Tasks:**
 - Task A: Premise → Story. All conditions generate. C1/C2 write their own spec first.
 - Task B: Specification → Story. Only C1/C2/C3. Gold spec supplied directly to test spec-following without confounding it with spec-writing.
 - Task C: Source story → Variants. C1 only. Extract spec from human story, generate 6 variants (one per dimension, lock the rest).
-- Task D: Scratch spec → Variants. C1 only. Same as C3 but starting from an authored spec, with no extraction step. Lets you isolate extraction error and test self-selection.
+- Task D: Scratch spec → Variants. C1 only. Same as C3 but starting from an authored spec, with no extraction step. Isolates extraction error and test self-selection.
 
 Run with 2 generator families minimum (frontier API + open-weight), optionally a 3rd EU multilingual model if it clears the pilot.
 
@@ -130,19 +131,9 @@ Pilot determines: whether open-weight models produce coherent stories and valid 
 **Sample-size justification:**
 - Dimension ID against 1/6 chance: 80 items per dimension (480 total from Tasks C+D) adequately powered for 0.35 accuracy after correction
 - Spec-story matching against 1/2 chance: 80 items per condition across 3 conditions powered for 0.70 accuracy
-- Pairwise contrasts: pre-register SESOI at 15 percentage points, stating study not powered below it
+- Pairwise contrasts: pre-register smallest effect size of interest (SESOI) at 15 percentage points, stating study not powered below it
 - Design is deliberately better powered for RQ1 than ablation ordering (RQ2)
 
 ## Reproducibility
 
 Freeze and publish before confirmatory run: hypotheses with primary/secondary status, SESOI, non-inferiority margins, full analysis plan (including convergence fallback and abstention handling), all source items with provenance, both gold-spec sets, double-annotated subset, scratch corpus, parallel-spec translations, model identifiers with exact revisions and decoding parameters, all prompts versioned with content hashes, item construction scripts with seeds, rater materials, raw per-judge/per-rater responses, full generation traces including abandoned runs, analysis code with environment lockfile.
-
-## Reduction path
-
-If capacity contracts, priority order:
-1. **Never cut:** Tasks C and D + A1/A2 (dimension ID with drift). Carries RQ1 and RQ5.
-2. **Second cut:** Task B + A3/A4. Carries RQ2.
-3. **Third cut:** Q1 (quality), then C6 (Agents' Room), then A5 (sub-dimension recovery), then second generator family on C/D, then corpus down to 10 items per language.
-4. **Keep to end:** A6 (premise attribution). Without it the primary measure is uninterpretable.
-
-**Minimum publishable study:** Tasks C and D, dimension identification with drift across 3 model judges, 150-item human subset. Answers the core question: does a specification control what a generator produces?
