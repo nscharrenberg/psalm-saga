@@ -9,9 +9,9 @@ files or join against the CSV separately.
 
 Usage::
 
-    uv run python experiments/scripts/build_corpus_dataset.py
-    uv run python experiments/scripts/build_corpus_dataset.py --format feather
-    uv run python experiments/scripts/build_corpus_dataset.py --output-dir data/stories --format parquet
+    uv run python experiments/build_corpus_dataset.py
+    uv run python experiments/build_corpus_dataset.py --format feather
+    uv run python experiments/build_corpus_dataset.py --output-dir data/stories --format parquet
 """
 
 from __future__ import annotations
@@ -22,8 +22,9 @@ from pathlib import Path
 
 import pandas as pd
 
-DEFAULT_STORIES_DIR = Path(__file__).resolve().parent.parent / "data" / "stories"
-DEFAULT_CSV_NAME = "corpus.csv"
+DEFAULT_STORIES_DIR = Path(__file__).resolve().parent / "data" / "stories"
+DEFAULT_FILE_NAME = "pilot_corpus"
+DEFAULT_CSV_NAME = f"{DEFAULT_FILE_NAME}.csv"
 
 
 def load_corpus(stories_dir: Path, csv_name: str) -> pd.DataFrame:
@@ -32,7 +33,10 @@ def load_corpus(stories_dir: Path, csv_name: str) -> pd.DataFrame:
     if not csv_path.exists():
         raise FileNotFoundError(f"corpus CSV not found: {csv_path}")
 
-    df = pd.read_csv(csv_path)
+    # sep=None + engine="python" auto-detects comma vs semicolon (e.g. Excel
+    # exports use ';'); utf-8-sig strips a BOM if present, and is otherwise
+    # identical to utf-8.
+    df = pd.read_csv(csv_path, sep=None, engine="python", encoding="utf-8-sig")
 
     texts: list[str] = []
     mismatches: list[str] = []
@@ -116,7 +120,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     stories_dir: Path = args.stories_dir
     output_dir: Path = args.output_dir or stories_dir
-    filename = args.filename or f"corpus.{EXTENSIONS[args.format]}"
+    filename = args.filename or f"{DEFAULT_FILE_NAME}.{EXTENSIONS[args.format]}"
     output_path = output_dir / filename
 
     df = load_corpus(stories_dir, args.csv_name)
