@@ -30,6 +30,11 @@ dev = [
     "psalm-saga[all]",
     "deepeval>=4.1.8",
 ]
+experiments = [
+    "pandas>=3.0.6",
+    "pyarrow>=25.0.1",
+    "pyyaml>=6.0.3",
+]
 
 [project.optional-dependencies]
 anthropic = [
