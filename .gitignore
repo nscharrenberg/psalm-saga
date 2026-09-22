@@ -319,3 +319,5 @@ tests/evals/.runtime/
 
 # Local git worktrees for isolated feature work
 .worktrees/
+
+experiments/data/stories/
