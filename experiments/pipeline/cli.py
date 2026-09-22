@@ -6,18 +6,25 @@ import argparse
 from pathlib import Path
 
 import pandas as pd
+from dotenv import load_dotenv
 
 from experiments.pipeline.plan import expand_jobs, load_plan
 from experiments.pipeline.registry import Registry
 from experiments.pipeline.resolver import InputResolver
 from experiments.pipeline.runner import run_pending
 
-DEFAULT_CORPUS_PATH = Path("experiments/data/stories/corpus.parquet")
+DEFAULT_CORPUS_PATH = Path("experiments/data/stories/pilot_corpus.parquet")
 DEFAULT_DATA_DIR = Path("experiments/data")
 DEFAULT_RUNS_DIR = Path("experiments/runs")
 
 
 def _load_corpus(corpus_path: Path) -> pd.DataFrame:
+    if not corpus_path.is_file():
+        raise FileNotFoundError(
+            f"Corpus file not found: {corpus_path}. Build it with "
+            "`uv run python experiments/build_corpus_dataset.py`, or pass --corpus "
+            "to point at an existing one."
+        )
     return pd.read_parquet(corpus_path)
 
 
@@ -105,6 +112,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     """Entry point for `python -m experiments.pipeline.cli`."""
+    load_dotenv()
     args = _parse_args(argv)
     args.func(args)
 

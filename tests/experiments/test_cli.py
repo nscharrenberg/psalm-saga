@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from experiments.pipeline import cli
+from experiments.pipeline.models import GenerationJob
 from experiments.pipeline.registry import Registry
 
 
@@ -71,7 +72,7 @@ def test_run_command_expands_then_delegates_to_run_pending(
     runs_dir = tmp_path / "runs"
     captured: dict[str, Any] = {}
 
-    def fake_run_pending(registry, plan_name, resolver, run_dir, workers) -> None:  # noqa: ANN001
+    def fake_run_pending(_registry, plan_name, _resolver, run_dir, workers) -> None:
         captured["plan_name"] = plan_name
         captured["run_dir"] = run_dir
         captured["workers"] = workers
@@ -103,7 +104,6 @@ def test_status_command_prints_counts_by_status(tmp_path: Path) -> None:
 def test_retry_command_requeues_failed_jobs(tmp_path: Path) -> None:
     runs_dir = tmp_path / "runs"
     registry = Registry(runs_dir / "runs.db")
-    from experiments.pipeline.models import GenerationJob
 
     job = GenerationJob(
         plan_name="pilot", task="A", condition="C1", item_id="a",

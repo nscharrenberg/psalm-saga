@@ -28,9 +28,10 @@ class _FakeBackend:
     def __init__(self, *, fail: bool = False) -> None:
         self._fail = fail
 
-    def run(self, job: GenerationJob, input_ref) -> GenerationResult:  # noqa: ANN001
+    def run(self, job: GenerationJob, input_ref) -> GenerationResult:
         if self._fail:
-            raise RuntimeError("simulated backend failure")
+            message = "simulated backend failure"
+            raise RuntimeError(message)
         return GenerationResult(
             artifacts={"story.md": f"# Story for {job.item_id}\n\nfrom: {input_ref.content}"},
             trace=[{"type": "AIMessage", "content": "ok"}],

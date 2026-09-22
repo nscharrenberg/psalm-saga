@@ -124,12 +124,19 @@ class Registry:
             ).fetchone()
             if row is None:
                 return None
+            stored_job_id = row[0]
             record = _row_to_record(row)
-            self._conn.execute(
-                "UPDATE jobs SET status = 'running', started_at = ? WHERE job_id = ?",
-                (datetime.now(UTC).isoformat(), record.job.job_id),
+            cursor = self._conn.execute(
+                "UPDATE jobs SET status = 'running', started_at = ? "
+                "WHERE job_id = ? AND status = 'pending'",
+                (datetime.now(UTC).isoformat(), stored_job_id),
             )
             self._conn.commit()
+            if cursor.rowcount == 0:
+                # Claimed by another connection between the SELECT and this
+                # UPDATE (or the row no longer matches) — never return a job
+                # this call didn't actually claim.
+                return None
             return record.job
 
     def mark_done(self, job_id: str, *, output_dir: str, config: dict[str, Any]) -> None:
