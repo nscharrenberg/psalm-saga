@@ -129,7 +129,7 @@ Pilot determines: whether open-weight models produce coherent stories and valid 
 - Sub-dimension results from A5 flagged as exploratory
 
 **Sample-size justification:**
-- Dimension ID against 1/6 chance: 80 items per dimension (480 total from Tasks C+D) adequately powered for 0.35 accuracy after correction
+- Dimension ID against 1/6 chance: 78 items per dimension (468 total from Tasks C+D) adequately powered for 0.35 accuracy after correction
 - Spec-story matching against 1/2 chance: 80 items per condition across 3 conditions powered for 0.70 accuracy
 - Pairwise contrasts: pre-register smallest effect size of interest (SESOI) at 15 percentage points, stating study not powered below it
 - Design is deliberately better powered for RQ1 than ablation ordering (RQ2)

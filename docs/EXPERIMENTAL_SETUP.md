@@ -76,9 +76,9 @@ full specification.
 
 Sources are stratified across five genre buckets per language, three items each, fixed before selection. Dutch
 Detective/Mystery is the exception, with two items: the genre has no public-domain, full-text representation in DBNL,
-whose catalogue does not include the genre's founding author, Ivans. Distractors for that bucket in the attribution
-instruments are drawn from a pool of two rather than three; bucket membership otherwise matters downstream in the same
-way, since distractors in the attribution instruments are drawn from within bucket.
+whose catalogue does not include the genre's founding author, Ivans. Bucket membership matters downstream, since
+distractors in the attribution instruments are drawn from within bucket — for Dutch Detective/Mystery, from a pool of
+two rather than three.
 
 ### 2.2. Gold Specifications
 
@@ -184,9 +184,10 @@ than extracted.
 Two generator families run every task: a frontier API model and a smaller open-weight model. A third from the
 EU-oriented multilingual family is included only if it clears the pilot gate of Section 7.
 
-Story counts: Task A, $29 \times 6 \times 2 = 348$; Task B, $29 \times 3 \times 2 = 174$; Task
-C, $29 \times 6 \times 2 = 348$; Task D, $10 \times 7 \times 2 = 140$.
-The corpus totals $1010$ generated stories, alongside $29$ human items.
+Story counts: Task A, $29 \times 5 \times 2 = 290$; Task B, $29 \times 3 \times 2 = 174$; Task C, $29 \times 6 \times 2 =
+348$; Task D, $10 \times 7 \times 2 = 140$. Task A's multiplier counts its five generating conditions — C1, C2, C4,
+C5, C6 — since C7 contributes the source item itself rather than a generated story; those human items are counted
+separately below. The corpus totals $952$ generated stories, alongside $29$ human items.
 
 ## 5. Instruments
 
@@ -207,14 +208,24 @@ convention: the matched non-source baseline's overlap distribution is reported f
 a stated number of standard deviations above that baseline's mean, so a flagged item is one that departs from the level
 of incidental phrase reuse the baseline already exhibits, not one exceeding an arbitrary count. C7 items are excluded
 from M2 by construction — a human source item cannot be scored for overlap against itself — and this is stated here
-rather than left to be inferred from the table in Section 5.6. Task D items require no screening, which is part of their
-value.
+rather than left to be inferred from the table in Section 5.6. Task D items have no source item to compare against and
+are excluded from M2 for the same structural reason; their contribution to the memorisation threat is the independent,
+source-free replication of the adherence result described in Section 2.3, not a contribution to M2's own count. M2
+therefore covers Tasks A, B, and C only.
 
 ### 5.2. Specification-level instruments
 
 **S1: Specificity screening.** Three binary checks per specification value, taken from the dimension criteria:
 does the value name a realised property, is it testable against text, does it commit where the sub-dimension admits a
-spectrum. Applied to every specification the system writes and to the gold specifications.
+spectrum. The question S1 answers is whether a spec-writing mechanism, not an individual item, tends toward vague or
+sharp specifications, so it samples by mechanism rather than covering every specification produced. Twelve items are
+drawn from each of the three mechanisms that write a specification directly into a pipeline with no human review in
+between — Task A's C1 (full pipeline) and C2 (no-review) self-written specs, and Task C's C1 extraction from the
+human text — pooled across both generator families, plus all twenty-nine gold specifications as the human-authored
+reference point: $(12 \times 3) + 29 = 65$ specifications, $65 \times 36 = 2340$ values. Task D's scratch
+specifications are excluded, since an author already reviews and rewrites them before generation proceeds, placing
+them closer in kind to the gold specifications S1 already covers than to the raw, unreviewed output S1 exists to
+catch.
 
 This closes a weakness conceded in the methodology, where specification quality is applied by judgement with no
 independent
@@ -295,10 +306,14 @@ This is the only instrument reaching sub-dimension resolution. Human validation 
 this scale, so results are automatic-only and reported as descriptive.
 
 **A6: Premise attribution.** A judge sees one story and three premises, the true one and two from the same language and
-genre bucket, and identifies which the story was written from. Chance is $\frac{1}{3}$.
+genre bucket, and identifies which the story was written from. Chance is $\frac{1}{3}$. Twelve of the twenty-nine items
+are sampled per generating condition (C1, C2, C4, C5, C6), across both generator families: $12 \times 5 \times 2 = 120$
+trials.
 
 However, A6 is not a result. Every condition should approach ceiling, since being about the right premise is basic
-prompt-following. Its function is calibration: an accuracy of $0.40$ on a six-way dimension task means nothing to a
+prompt-following, and the twelve-item sample per condition exists precisely so that a single underperforming condition
+is visible rather than averaged away. Its function is calibration: an accuracy of $0.40$ on a six-way dimension task
+means nothing to a
 reader who does not know what a judge's ceiling looks like on this
 corpus. Drawing distractor premises from the same bucket as the true premise, rather than from the full corpus, is what
 makes this ceiling comparable in difficulty to A1 and A4 (an out-of-bucket distractor would be solvable on content
@@ -318,13 +333,22 @@ against C5. H4b is tested by correlating each story's Q1 outcome with its A3 and
 
 ### 5.6. Instrument budget
 
+The item counts below carry four distinct meanings. For M1, M2, A1, and Q1, an item is one generated story. For S2, an
+item is a sub-dimension cell — one source item's extracted specification compared against its gold specification on
+one of the 36 sub-dimensions, so its count is source items times 36. For S1, an item is a specification sub-dimension
+value; Section 5.2 gives the sampling scheme by which it is drawn from a fixed set per spec-writing mechanism rather
+than from every specification the system produces. For A3, A4, A5, and A6, an item is a judged trial: a generated
+story paired with one or more distractors, and the same story can anchor more than one trial. Trial counts for these
+four instruments are sized to the power targets in Section 9, not to the number of stories any generation task
+produces.
+
 | Instrument          | Items         | Model-judge calls | Human share | RQ          |
 |---------------------|---------------|-------------------|-------------|-------------|
-| M1 lock             | $480$         | $0$               | —           | RQ1         |
-| M2 overlap          | $1040$        | $0$               | —           | threat      |
-| S1 specificity      | $1440$ values | $\approx 2880$    | small audit | RQ3         |
-| S2 gold recovery    | $1080$ cells  | $\approx 2160$    | audit       | RQ3         |
-| A1 dimension ID     | $480$         | $1440$            | **largest** | RQ1, RQ5    |
+| M1 lock             | $468$         | $0$               | —           | RQ1         |
+| M2 overlap          | $812$         | $0$               | —           | threat      |
+| S1 specificity      | $2340$ values | $\approx 4680$    | small audit | RQ3         |
+| S2 gold recovery    | $1044$ cells  | $\approx 2088$    | audit       | RQ3         |
+| A1 dimension ID     | $468$         | $1404$            | **largest** | RQ1, RQ5    |
 | A2 drift            | (with A1)     | $0$ extra         | with A1     | RQ1         |
 | A3 matching         | $240$         | $720$             | small       | RQ1, RQ2    |
 | A4 attribution      | $240$         | $720$             | **large**   | RQ1, RQ2    |
@@ -332,7 +356,7 @@ against C5. H4b is tested by correlating each story's Q1 outcome with its A3 and
 | A6 premise anchor   | $120$         | $360$             | small       | calibration |
 | Q1 quality          | $174$         | $1044$            | small       | RQ4         |
 
-Roughly $11000$ model-judge calls, each short. The human subset is $150$ items at floor and $300$ at target, allocated
+Roughly $12600$ model-judge calls, each short. The human subset is $150$ items at floor and $300$ at target, allocated
 first
 to A1, then A4, then Q1.
 
@@ -373,7 +397,7 @@ the confirmatory run rather than discovered mid-study.
 
 This section states how a pile of judge verdicts becomes a defensible result. The obstacles are these.
 
-**Judgements are not independent.** Twelve of the $480$ dimension-identification items come from the same source item,
+**Judgements are not independent.** Twelve of the $468$ dimension-identification items come from the same source item,
 and
 a third of all items are seen by the same judge. Some items are inherently easier, and some judges are more accurate
 than others. Treating every judgement as an independent observation would understate the true uncertainty and produce
@@ -437,22 +461,21 @@ advance is what makes a null interpretable.
 
 Dimension identification against a chance level of $0.167$, at $\alpha = 0.05$ and $80\%$ power, requires $28$
 independent items to
-detect an accuracy of $0.40$ and $43$ to detect $0.35$. Tasks C and D together supply $480$ items, $80$ per dimension,
+detect an accuracy of $0.40$ and $43$ to detect $0.35$. Tasks C and D together supply $468$ items, $78$ per dimension,
 so
 per-dimension tests are adequately powered for effects at or above $0.35$ even after correction. The pooled test is
 powered far beyond requirement.
 
-Matching against a chance level of $0.5$ requires $47$ items to detect $0.70$ and $98$ to detect $0.65$. Task B
-supplies $240$ items
-across three conditions, $80$ per condition, powering the design for adherence at or above $0.70$ per condition.
-Attribution
-against a chance level of $\frac{1}{3}$ requires $36$ items to detect $0.60$, so A4 is comfortably powered at the same
-volume.
+Matching against a chance level of $0.5$ requires $47$ items to detect $0.70$ and $98$ to detect $0.65$. Task B's $174$
+generated stories ($58$ per condition) supply the trials for A3; drawing repeated distractor pairs from that pool
+builds a budget of $240$ trials across three conditions, $80$ per condition, which powers the design for adherence at
+or above $0.70$ per condition. Attribution against a chance level of $\frac{1}{3}$ requires $36$ items to detect
+$0.60$, so A4 is comfortably powered at the same trial volume.
 
 Pairwise condition contrasts are less well powered than the against-chance tests. We pre-register a smallest effect size
 of interest of $15$ percentage points for those contrasts and state that the study cannot detect effects below it.
 
-H1d's test (A2, conditional on correct A1 response) draws on a subset of the A1 sample rather than the full $480$ items,
+H1d's test (A2, conditional on correct A1 response) draws on a subset of the A1 sample rather than the full $468$ items,
 and its size depends on observed A1 accuracy, which is not known in advance. We set a minimum-n of $60$ conditional
 items for the d′ estimate to be reported as a confirmatory test of H1d; below that, the pilot's observed A1 accuracy is
 used to project the expected conditional-subset size ahead of the confirmatory run, and if the projection falls short,
