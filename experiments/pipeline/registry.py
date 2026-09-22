@@ -119,7 +119,7 @@ class Registry:
         """
         with self._lock:
             row = self._conn.execute(
-                f"SELECT {_SELECT_COLUMNS} FROM jobs WHERE plan_name = ? AND status = 'pending' LIMIT 1",
+                f"SELECT {_SELECT_COLUMNS} FROM jobs WHERE plan_name = ? AND status = 'pending' LIMIT 1",  # noqa: S608 (_SELECT_COLUMNS is a constant, plan_name is parameterized)
                 (plan_name,),
             ).fetchone()
             if row is None:

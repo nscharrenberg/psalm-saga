@@ -8,14 +8,13 @@ one session generating many stories) — see spec §5.
 
 from __future__ import annotations
 
+from experiments.pipeline.generators import resolve_model
+from experiments.pipeline.models import GenerationJob, GenerationResult
+from experiments.pipeline.resolver import ResolvedInput
 from psalm_saga.agent import build_agent, open_sqlite_checkpointer
 from psalm_saga.bootstrap import BATCH_BOOTSTRAP_SKILL
 from psalm_saga.session import generate_session_id, session_directory
 from psalm_saga.settings import Settings
-
-from experiments.pipeline.generators import resolve_model
-from experiments.pipeline.models import GenerationJob, GenerationResult
-from experiments.pipeline.resolver import ResolvedInput
 
 _TASK_INSTRUCTIONS: dict[str, str] = {
     "A": "Generate a complete story from this premise, using the batch-story-generation skill:\n\n{content}",

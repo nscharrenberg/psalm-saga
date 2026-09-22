@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import pandas as pd
+import pandas as pd  # noqa: TC002 (used at runtime in _apply_corpus_filter)
 import yaml
 
 from experiments.pipeline.models import Condition, GenerationJob, Task

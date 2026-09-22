@@ -28,7 +28,7 @@ def _cmd_expand(args: argparse.Namespace) -> None:
     registry = Registry(args.runs_dir / "runs.db")
     try:
         inserted = registry.insert_jobs(jobs)
-        print(f"Plan {plan.name!r}: {len(jobs)} jobs described, {inserted} newly inserted.")
+        print(f"Plan {plan.name!r}: {len(jobs)} jobs described, {inserted} newly inserted.")  # noqa: T201
     finally:
         registry.close()
 
@@ -57,16 +57,16 @@ def _cmd_status(args: argparse.Namespace) -> None:
 def print_status(registry: Registry, plan_name: str) -> None:
     """Print job counts by status for `plan_name`."""
     counts = registry.status_counts(plan_name)
-    print(f"Plan {plan_name!r}:")
+    print(f"Plan {plan_name!r}:")  # noqa: T201
     for status, count in sorted(counts.items()):
-        print(f"  {status}: {count}")
+        print(f"  {status}: {count}")  # noqa: T201
 
 
 def _cmd_retry(args: argparse.Namespace) -> None:
     registry = Registry(args.runs_dir / "runs.db")
     try:
         n = registry.requeue_failed(args.plan_name)
-        print(f"Requeued {n} failed job(s) for plan {args.plan_name!r}.")
+        print(f"Requeued {n} failed job(s) for plan {args.plan_name!r}.")  # noqa: T201
     finally:
         registry.close()
 
