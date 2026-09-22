@@ -29,6 +29,12 @@ _TASK_INSTRUCTIONS: dict[str, str] = {
         "variants — one per dimension — each regenerating exactly one dimension and "
         "locking the other five. Use the batch-story-generation skill:\n\n{content}"
     ),
+    "D": (
+        "Produce six variants of a story from this already-authored specification — "
+        "one per dimension, each regenerating exactly one dimension and locking the "
+        "other five. No extraction step is needed; the specification below is already "
+        "final. Use the batch-story-generation skill:\n\n{content}"
+    ),
 }
 
 

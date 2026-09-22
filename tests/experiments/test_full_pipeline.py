@@ -132,3 +132,24 @@ def test_run_uses_the_batch_bootstrap_skill(monkeypatch: pytest.MonkeyPatch, tmp
     backend.run(_job(), input_ref)
 
     assert captured_kwargs["bootstrap_skill"] == full_pipeline.BATCH_BOOTSTRAP_SKILL
+
+
+def test_run_handles_task_d_without_a_missing_instruction_template(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = Settings()
+    settings.backend.root_dir = tmp_path
+    docs_dir = session_directory(settings, "session-fixed") / "docs"
+
+    monkeypatch.setattr(full_pipeline, "Settings", lambda: settings)
+    monkeypatch.setattr(full_pipeline, "generate_session_id", lambda: "session-fixed")
+    monkeypatch.setattr(full_pipeline, "open_sqlite_checkpointer", _fake_checkpointer)
+    monkeypatch.setattr(full_pipeline, "build_agent", lambda *_a, **_kw: _FakeAgent(docs_dir, {}))
+
+    backend = full_pipeline.FullPipelineBackend()
+    input_ref = ResolvedInput(kind="scratch_spec", content="# Scratch spec content", source_path=tmp_path)
+
+    result = backend.run(_job(task="D"), input_ref)
+
+    assert "# Scratch spec content" in result.trace[0]["content"]
+    assert result.config["task"] == "D"
