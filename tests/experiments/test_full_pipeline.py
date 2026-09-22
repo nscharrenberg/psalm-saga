@@ -33,7 +33,7 @@ class _FakeAgent:
         self._docs_dir = docs_dir
         self._docs_to_write = docs_to_write
 
-    def invoke(self, payload: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    def invoke(self, payload: dict[str, Any], **_kwargs: Any) -> dict[str, Any]:
         for rel_path, content in self._docs_to_write.items():
             target = self._docs_dir / rel_path
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +57,13 @@ def _job(task: str = "A") -> GenerationJob:
     )
 
 
+_FINISHED_DRAFT = {
+    "drafts/story/story-plan.md": "# The Statue — Story Plan\n",
+    "drafts/story/chapter-1-only.md": "# Chapter 1: Only\n\nOnce upon a time.",
+    "drafts/story/DONE.md": "Whole-story review passed clean.",
+}
+
+
 def test_run_writes_docs_dir_contents_as_artifacts_and_records_the_trace(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -69,9 +76,7 @@ def test_run_writes_docs_dir_contents_as_artifacts_and_records_the_trace(
     monkeypatch.setattr(full_pipeline, "generate_session_id", lambda: fixed_session_id)
     monkeypatch.setattr(full_pipeline, "open_sqlite_checkpointer", _fake_checkpointer)
     monkeypatch.setattr(
-        full_pipeline,
-        "build_agent",
-        lambda *_a, **_kw: _FakeAgent(docs_dir, {"drafts/story/story-spec.md": "# Spec"}),
+        full_pipeline, "build_agent", lambda *_a, **_kw: _FakeAgent(docs_dir, dict(_FINISHED_DRAFT))
     )
 
     backend = full_pipeline.FullPipelineBackend()
@@ -79,13 +84,36 @@ def test_run_writes_docs_dir_contents_as_artifacts_and_records_the_trace(
 
     result = backend.run(_job(), input_ref)
 
-    assert result.artifacts == {"drafts/story/story-spec.md": "# Spec"}
+    assert result.artifacts["drafts/story/DONE.md"] == "Whole-story review passed clean."
+    assert "stories/story.md" in result.artifacts
+    assert "Once upon a time." in result.artifacts["stories/story.md"]
     assert len(result.trace) == 2
-    # The backend wraps the raw premise in a task-specific instruction template
-    # (see `_TASK_INSTRUCTIONS`) before sending it as the message content, so
-    # this checks the premise made it through rather than exact equality.
     assert "A statue learns to give." in result.trace[0]["content"]
     assert result.trace[1]["content"] == "done"
+    assert result.config["promoted_stories"] == ["story"]
+
+
+def test_run_raises_when_no_draft_carries_a_done_marker(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = Settings()
+    settings.backend.root_dir = tmp_path
+    docs_dir = session_directory(settings, "session-fixed") / "docs"
+
+    monkeypatch.setattr(full_pipeline, "Settings", lambda: settings)
+    monkeypatch.setattr(full_pipeline, "generate_session_id", lambda: "session-fixed")
+    monkeypatch.setattr(full_pipeline, "open_sqlite_checkpointer", _fake_checkpointer)
+    monkeypatch.setattr(
+        full_pipeline,
+        "build_agent",
+        lambda *_a, **_kw: _FakeAgent(docs_dir, {"drafts/story/story-plan.md": "# Story — Story Plan\n"}),
+    )
+
+    backend = full_pipeline.FullPipelineBackend()
+    input_ref = ResolvedInput(kind="premise", content="premise text", source_path=tmp_path)
+
+    with pytest.raises(RuntimeError, match="No story was completed"):
+        backend.run(_job(), input_ref)
 
 
 def test_run_resolves_generator_family_and_records_the_model_id_in_config(
@@ -98,7 +126,9 @@ def test_run_resolves_generator_family_and_records_the_model_id_in_config(
     monkeypatch.setattr(full_pipeline, "Settings", lambda: settings)
     monkeypatch.setattr(full_pipeline, "generate_session_id", lambda: "session-fixed")
     monkeypatch.setattr(full_pipeline, "open_sqlite_checkpointer", _fake_checkpointer)
-    monkeypatch.setattr(full_pipeline, "build_agent", lambda *_a, **_kw: _FakeAgent(docs_dir, {}))
+    monkeypatch.setattr(
+        full_pipeline, "build_agent", lambda *_a, **_kw: _FakeAgent(docs_dir, dict(_FINISHED_DRAFT))
+    )
 
     backend = full_pipeline.FullPipelineBackend()
     input_ref = ResolvedInput(kind="premise", content="premise text", source_path=tmp_path)
@@ -109,6 +139,7 @@ def test_run_resolves_generator_family_and_records_the_model_id_in_config(
     assert result.config["subagent_model_name"] == "anthropic:claude-sonnet-4-6"
     assert result.config["task"] == "A"
     assert result.config["condition"] == "C1"
+    assert "prompt_template_sha256" in result.config
 
 
 def test_run_uses_the_batch_bootstrap_skill(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -119,7 +150,7 @@ def test_run_uses_the_batch_bootstrap_skill(monkeypatch: pytest.MonkeyPatch, tmp
 
     def fake_build_agent(*_args: Any, **kwargs: Any) -> _FakeAgent:
         captured_kwargs.update(kwargs)
-        return _FakeAgent(docs_dir, {})
+        return _FakeAgent(docs_dir, dict(_FINISHED_DRAFT))
 
     monkeypatch.setattr(full_pipeline, "Settings", lambda: settings)
     monkeypatch.setattr(full_pipeline, "generate_session_id", lambda: "session-fixed")
@@ -144,7 +175,9 @@ def test_run_handles_task_d_without_a_missing_instruction_template(
     monkeypatch.setattr(full_pipeline, "Settings", lambda: settings)
     monkeypatch.setattr(full_pipeline, "generate_session_id", lambda: "session-fixed")
     monkeypatch.setattr(full_pipeline, "open_sqlite_checkpointer", _fake_checkpointer)
-    monkeypatch.setattr(full_pipeline, "build_agent", lambda *_a, **_kw: _FakeAgent(docs_dir, {}))
+    monkeypatch.setattr(
+        full_pipeline, "build_agent", lambda *_a, **_kw: _FakeAgent(docs_dir, dict(_FINISHED_DRAFT))
+    )
 
     backend = full_pipeline.FullPipelineBackend()
     input_ref = ResolvedInput(kind="scratch_spec", content="# Scratch spec content", source_path=tmp_path)
