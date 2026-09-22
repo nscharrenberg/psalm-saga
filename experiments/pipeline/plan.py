@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import pandas as pd  # noqa: TC002 (used at runtime in _apply_corpus_filter)
 import yaml
 
 from experiments.pipeline.models import Condition, GenerationJob, Task
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 # EXPERIMENTAL_SETUP.md §4: which conditions ever run under which task.
 TASK_CONDITION_ELIGIBILITY: dict[Task, frozenset[Condition]] = {
