@@ -63,16 +63,22 @@ other results without its success being a contribution.
 
 ### 2.1. Source Stories
 
-Fifteen English and fifteen Dutch source items, thirty in total. English sources come from Project Gutenberg, Dutch
-sources from the Digital Library of Dutch Literature (DBNL), all public domain within the European Union. Each item is a
-self-contained short story, a single chapter, or a coherent excerpt, normalised to $1200-2000$ words.
+Fifteen English and fourteen Dutch source items, twenty-nine in total. English sources come from Project Gutenberg,
+Dutch sources from the Digital Library of Dutch Literature (DBNL), all public domain within the European Union. Each
+item is a self-contained short story, a single chapter, or a coherent excerpt, normalised to approximately 7,000 words
+(≈41,000 characters). Every item was read in full to confirm it stands as a complete scene or arc at that length.
+Item selection, authorship, and per-item rationale are catalogued in the Appendix (CORPUS.md).
 
-The short target length is deliberate. It keeps generation costs within reach of a small team, and it keeps items short
-enough for a human rater to read one in full instead of judging from an excerpt, which removes an entire class of
-confound from the human study.
+A shorter item bounds generation cost and lets a human rater finish one in a single sitting, which removes a source of
+confound from the human study. The 7,000-word ceiling trades some of that economy for narrative material sufficient to
+carry all 36 sub-dimensions of the taxonomy: public-domain candidates under roughly 2,000 words rarely supported the
+full specification.
 
-Sources are stratified across five genre buckets per language, three items each, fixed before selection. Bucket
-membership matters downstream, since distractors in the attribution instruments are drawn from within bucket.
+Sources are stratified across five genre buckets per language, three items each, fixed before selection. Dutch
+Detective/Mystery is the exception, with two items: the genre has no public-domain, full-text representation in DBNL,
+whose catalogue does not include the genre's founding author, Ivans. Distractors for that bucket in the attribution
+instruments are drawn from a pool of two rather than three; bucket membership otherwise matters downstream in the same
+way, since distractors in the attribution instruments are drawn from within bucket.
 
 ### 2.2. Gold Specifications
 
@@ -178,9 +184,9 @@ than extracted.
 Two generator families run every task: a frontier API model and a smaller open-weight model. A third from the
 EU-oriented multilingual family is included only if it clears the pilot gate of Section 7.
 
-Story counts: Task A, $30 \times 6 \times 2 = 360$; Task B, $30 \times 3 \times 2 = 180$; Task
-C, $30 \times 6 \times 2 = 360$; Task D, $10 \times 7 \times 2 = 140$.
-The corpus totals $1040$ generated stories of $1200–2000$ words, alongside $30$ human items.
+Story counts: Task A, $29 \times 6 \times 2 = 348$; Task B, $29 \times 3 \times 2 = 174$; Task
+C, $29 \times 6 \times 2 = 348$; Task D, $10 \times 7 \times 2 = 140$.
+The corpus totals $1010$ generated stories, alongside $29$ human items.
 
 ## 5. Instruments
 
@@ -302,7 +308,7 @@ falling below ceiling on A6 signals a generation failure that would otherwise be
 
 ### 5.4. Quality instrument
 
-**Q1: Pairwise preference.** Thirty items $\times$ 3 contrasts (C1–C5, C1–C4, C1–C7) $\times 2$ generators $= 180$
+**Q1: Pairwise preference.** Twenty-nine items $\times$ 3 contrasts (C1–C5, C1–C4, C1–C7) $\times 2$ generators $= 174$
 comparisons, both
 orders, condition labels stripped. Judges answer which story they would rather read and, separately, which is more
 internally consistent.
@@ -324,7 +330,7 @@ against C5. H4b is tested by correlating each story's Q1 outcome with its A3 and
 | A4 attribution      | $240$         | $720$             | **large**   | RQ1, RQ2    |
 | A5 sub-dim recovery | $540$         | $1620$            | none        | RQ1         |
 | A6 premise anchor   | $120$         | $360$             | small       | calibration |
-| Q1 quality          | $180$         | $1080$            | small       | RQ4         |
+| Q1 quality          | $174$         | $1044$            | small       | RQ4         |
 
 Roughly $11000$ model-judge calls, each short. The human subset is $150$ items at floor and $300$ at target, allocated
 first

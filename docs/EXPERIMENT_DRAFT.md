@@ -3,12 +3,12 @@
 ## Corpus design
 
 **Source materials:**
-- 15 English stories from Project Gutenberg + 15 Dutch stories from DBNL, all public domain. Each 1,200–2,000 words (self-contained short stories, single chapters, or coherent excerpts).
-- Stratify into 5 genre buckets per language, 3 items each. Fixed before selection.
+- 15 English stories from Project Gutenberg + 14 Dutch stories from DBNL (29 total), all public domain. Self-contained short stories, single chapters, or coherent excerpts, normalised to ~7,000 words (~41k characters); each read in full to confirm it stands as a complete scene/arc. Item list and per-item rationale: **CORPUS.md (Appendix)**.
+- Stratify into 5 genre buckets per language, 3 items each, fixed before selection. Dutch Detective/Mystery has 2 items — DBNL's public-domain catalogue has no full-text representation of the genre (see CORPUS.md).
 - 10 additional scratch-mode items (5 English, 5 Dutch) where the system elicits and authors a specification with human review, then generates variants. No source text.
 
 **Specification annotation:**
-- Gold specifications for all 30 source items: model draft + author rewrite for all 36 sub-dimensions
+- Gold specifications for all 29 source items: model draft + author rewrite for all 36 sub-dimensions
 - Double-annotation on 10 items (5 per language) to establish human-to-human agreement as a ceiling for RQ3
 - Log what fraction of each gold spec was machine-drafted versus human-rewritten, per sub-dimension
 
@@ -87,7 +87,7 @@ Design instruments to be objective and economical. Every primary measure must ha
 - Premise attribution (A6, calibration only): Show story + 3 premises, identify true one. Chance = 1/3. Not a result; establishes judge ceiling so readers can interpret the dimension-ID score.
 
 **Quality:**
-- Pairwise preference (Q1): Subset of 180 comparisons (3 contrasts × 30 items × 2 generators, both orders). Non-inferiority margin pre-registered. Test H4b via within-condition correlation with adherence outcomes.
+- Pairwise preference (Q1): Subset of ~174 comparisons (3 contrasts × 29 items × 2 generators, both orders). Non-inferiority margin pre-registered. Test H4b via within-condition correlation with adherence outcomes.
 
 **Note on design:**
 - All instruments with ground truth (A1–A6) run identically for model judges and humans, so agreement is directly interpretable
