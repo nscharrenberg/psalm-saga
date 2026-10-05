@@ -30,7 +30,7 @@ class _FakeBackend:
     def __init__(self, *, fail: bool = False) -> None:
         self._fail = fail
 
-    def run(self, job: GenerationJob, input_ref, progress) -> GenerationResult:
+    def run(self, job: GenerationJob, input_ref, _progress) -> GenerationResult:
         if self._fail:
             message = "simulated backend failure"
             raise RuntimeError(message)
@@ -42,10 +42,11 @@ class _FakeBackend:
 
 
 class _AbandoningBackend:
-    def run(self, job, input_ref, progress):
+    def run(self, _job, _input_ref, progress):
         progress.stage("abandoned")
+        message = "fix-loop cap reached"
         raise JobAbandoned(
-            "fix-loop cap reached",
+            message,
             artifacts={"attempts/1/drafts/story/ABANDONED.md": "cap"},
             trace=[{"type": "AIMessage", "content": "stuck"}],
             config={"attempts": 1},
@@ -53,9 +54,10 @@ class _AbandoningBackend:
 
 
 class _JobFailingBackend:
-    def run(self, job, input_ref, progress):
+    def run(self, _job, _input_ref, _progress):
+        message = "story attempt errored"
         raise JobFailed(
-            "story attempt errored",
+            message,
             artifacts={"attempts/1/drafts/story/partial.md": "partial"},
             trace=[{"type": "AIMessage", "content": "boom"}],
             config={"attempts": 1},
@@ -201,7 +203,7 @@ def test_run_pending_with_an_empty_item_filter_does_nothing_and_prints_nothing(
 
 
 def _error_of(registry: Registry, job_id: str) -> str | None:
-    row = registry._conn.execute("SELECT error FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+    row = registry._conn.execute("SELECT error FROM jobs WHERE job_id = ?", (job_id,)).fetchone()  # noqa: SLF001 — the registry has no public getter for error text
     return row[0]
 
 

@@ -94,10 +94,11 @@ def test_run_command_passes_repeated_items_through(monkeypatch, tmp_path) -> Non
     corpus_path = _write_corpus(tmp_path)
     plan_path = _write_plan(tmp_path)
     captured: dict[str, Any] = {}
-    monkeypatch.setattr(
-        cli, "run_pending",
-        lambda _r, _p, _res, _d, workers=None, item_ids=None: captured.update(item_ids=item_ids),
-    )
+    def _fake_run_pending(_r, _p, _res, _d, *, workers=None, item_ids=None):
+        del workers  # the CLI passes it by keyword; this fake ignores it
+        captured.update(item_ids=item_ids)
+
+    monkeypatch.setattr(cli, "run_pending", _fake_run_pending)
 
     cli.main([
         "run", "--plan", str(plan_path), "--corpus", str(corpus_path),

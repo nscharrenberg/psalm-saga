@@ -5,6 +5,7 @@ See `docs/superpowers/specs/2026-09-22-generation-pipeline-design.md` §3.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -150,12 +151,19 @@ def expand_jobs(plan: Plan, corpus: pd.DataFrame) -> list[GenerationJob]:
     return jobs
 
 
+def _is_missing(value: Any) -> bool:
+    """True for None, NaN, and pandas' NA scalar, without importing pandas at runtime."""
+    try:
+        return math.isnan(float(value))
+    except TypeError:  # None and pd.NA cannot be converted to float
+        return True
+
+
 def _length_range_for(plan: Plan, row: pd.Series) -> str:
     """The plan's `length` if set, else the band from the item's `word_count`."""
     if plan.length is not None:
         return plan.length
-    import pandas as pd  # runtime import; the module keeps pandas under TYPE_CHECKING
 
-    if "word_count" not in row or pd.isna(row["word_count"]):
+    if "word_count" not in row or _is_missing(row["word_count"]):
         raise PlanError(f"item {row['id']!r} has no word_count and the plan sets no `length`")
     return band_for_word_count(int(row["word_count"]))

@@ -1,8 +1,6 @@
 # tests/experiments/test_length.py
 from __future__ import annotations
 
-import pytest
-
 from experiments.pipeline.length import band_for_word_count, directive_for
 
 
@@ -16,4 +14,5 @@ def test_band_never_goes_below_one_word() -> None:
 
 def test_directive_names_the_word_range() -> None:
     directive = directive_for("270-330")
-    assert "270" in directive and "330" in directive
+    assert "270" in directive
+    assert "330" in directive

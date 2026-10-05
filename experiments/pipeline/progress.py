@@ -16,6 +16,8 @@ WRITE_TOOLS = frozenset({"write_file", "edit_file"})
 
 
 class ProgressSink(Protocol):
+    """Receives stage-change labels from a generation backend."""
+
     def stage(self, label: str) -> None: ...
 
 
@@ -23,7 +25,7 @@ class NullProgress:
     """A sink that ignores every stage. Used when no one is watching."""
 
     def stage(self, label: str) -> None:
-        return None
+        del label
 
 
 class JobProgress:
@@ -43,7 +45,7 @@ class JobProgress:
             handle.write(text + "\n")
 
 
-def stage_for_tool_call(name: str, args: dict[str, Any]) -> str | None:
+def stage_for_tool_call(name: str, args: dict[str, Any]) -> str | None:  # noqa: PLR0911 — the mapping is one branch per tool and file kind
     """Map one tool call to a human-readable stage, or None if it is not a stage change."""
     if name == "task":
         subagent = args.get("subagent_type")

@@ -31,7 +31,8 @@ def test_claim_respects_item_filter_and_skips_done_jobs(tmp_path: Path) -> None:
     registry = Registry(tmp_path / "runs.db")
     registry.insert_jobs([_job("a"), _job("b")])
     first = registry.claim_next_pending("pilot", item_ids={"b"})
-    assert first is not None and first.item_id == "b"
+    assert first is not None
+    assert first.item_id == "b"
     registry.mark_done(first.job_id, output_dir="x", config={})
     assert registry.claim_next_pending("pilot", item_ids={"b"}) is None
     assert registry.count_pending("pilot") == 1

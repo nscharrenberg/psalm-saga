@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from experiments.pipeline.generators import _DEFAULT_MODELS, UnknownGeneratorFamilyError, resolve_model
+from experiments.pipeline.generators import (
+    _DEFAULT_MODELS,
+    UnknownGeneratorFamilyError,
+    resolve_model,
+)
 
 
 def test_resolve_model_returns_the_default_for_a_known_family() -> None:
