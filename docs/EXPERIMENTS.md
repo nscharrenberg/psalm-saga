@@ -243,6 +243,26 @@ Fields:
   `sample_per_language: N`. The sample is deterministic: first N by item id
   within each language.
 - `tasks` maps each task to its `conditions` and `generators`.
+- `length` (optional) sets the word-count range every job in the plan is asked
+  to hit. Without it, each item gets a band of ±10% around its own
+  `word_count` from the corpus. With it, the same range applies to every item
+  and the corpus `word_count` is not used. It accepts the same values as the
+  interactive `--length` flag:
+  - a `MIN-MAX` string, for example `"500-600"`;
+  - a bare word count, for example `500`, which is an exact target (not a
+    band);
+  - a category slug, for example `short-story`;
+  - a mapping with exactly the keys `min` and `max`, both integers, for
+    example `{min: 500, max: 600}`. Any other key is rejected with `PlanError`,
+    and so is a missing key or a non-integer bound.
+
+  Task D needs `length:`. Its scratch items have no source story to measure,
+  so the plan must give the range. Expansion raises `PlanError` for any item
+  that has no `word_count` when the plan sets no `length`.
+
+  The range is stored on each job when the plan is first expanded, and later
+  `expand` or `run` calls do not change it. To run the same items at a
+  different length, give the plan a new `name`.
 
 The harness rejects ineligible pairings when it loads the plan. For example,
 `C3` under Task A raises `PlanError`, and so does `C6` under Task B. Eligibility
@@ -306,6 +326,22 @@ uv run python -m experiments.pipeline.cli run \
   on.
 - Re-running `run` is safe: finished (`done`) jobs are never repeated.
 
+To run only some items, repeat `--item` with a corpus id:
+
+```bash
+uv run python -m experiments.pipeline.cli run \
+  --plan experiments/plans/pilot.yaml \
+  --corpus experiments/data/stories/pilot_corpus.parquet \
+  --item adventure_two_years_before_the_mast_ch6
+```
+
+- `--item` limits the run to pending jobs for the listed items. The plan is
+  still expanded in full, so the registry holds every job, but only the listed
+  items run. Jobs for other items stay `pending`.
+- An id that is not in the corpus stops the command before any job starts. The
+  error lists the valid ids.
+- Done jobs are never repeated, with or without `--item`.
+
 For the full corpus, pass `--corpus experiments/data/stories/corpus.parquet`.
 The CLI defaults to `pilot_corpus.parquet`, so omitting the flag silently runs
 against the pilot subset.
@@ -320,15 +356,17 @@ Prints the count of jobs in each status for that plan (§6.1).
 
 ### 5.4 Retry
 
-Requeues every `failed` job for the plan as `pending`:
+Requeues every `failed` and every `abandoned` job for the plan as `pending`:
 
 ```bash
 uv run python -m experiments.pipeline.cli retry --failed --plan-name pilot
 ```
 
-Failed jobs never retry on their own. This is deliberate: a broken setting (a
-bad key, a malformed prompt) should show up as a block of failures to
-investigate, not burn budget in a loop. Fix the cause first, then retry.
+Failed and abandoned jobs never retry on their own. This is deliberate: a
+broken setting (a bad key, a malformed prompt) should show up as a block of
+failures to investigate, not burn budget in a loop. Fix the cause first, then
+retry. A requeued job runs again from its first attempt, so it costs model
+calls again. `retry` does not requeue `running` jobs; see §8 for those.
 
 ### 5.5 Other flags
 
@@ -342,6 +380,47 @@ All subcommands accept:
 Use a throwaway `--runs-dir` for a dry run, so a test does not pollute the
 real registry.
 
+### 5.6 Progress output
+
+`run` prints progress to the console. Each line is also appended to
+`progress.log` in that job's folder (§6.2). For one job, with one worker, the
+output looks like this:
+
+```
+[1/2] adventure_two_years_before_the_mast_ch6 start
+[1/2] adventure_two_years_before_the_mast_ch6 attempt 1/3
+[1/2] adventure_two_years_before_the_mast_ch6 spec
+[1/2] adventure_two_years_before_the_mast_ch6 plan
+[1/2] adventure_two_years_before_the_mast_ch6 draft
+[1/2] adventure_two_years_before_the_mast_ch6 chapter 1
+[1/2] adventure_two_years_before_the_mast_ch6 review
+[1/2] adventure_two_years_before_the_mast_ch6 done
+[1/2] adventure_two_years_before_the_mast_ch6 done (MM:SS)
+```
+
+- **`[i/N]`** numbers the jobs. `i` is the order in which this run claimed
+  them, and `N` is the number of pending jobs when the run started (with
+  `--item`, only those items are counted). With `--workers` above 1, lines from
+  different jobs interleave, and the prefix shows which job a line belongs to.
+- **`start`** is printed when a job is claimed.
+- **Stage lines** name what the job is doing. `attempt k/3` starts one of up to
+  three fresh-session attempts (§6.2). `spec` and `plan` are printed when the
+  spec or plan file is written. `draft` means a chapter-writer started.
+  `review` means a dimension reviewer started, or its report was written.
+  `chapter N` means chapter N's file was written. The count of chapters
+  is not known in advance, so there is no total: `chapter 2`, not `chapter 2/5`.
+  `fix attempt k` means review-fix cycle k has started in this attempt.
+  `abandoned` and `done` mean the abandonment or completion marker was written.
+  A stage line is printed each time its trigger happens, so a label can repeat.
+- **The final line** is `done`, `abandoned`, or `failed`, with the job's
+  wall-clock time as `MM:SS`. The `done` stage line (the story's completion
+  marker) comes just before it and is a different line.
+
+`progress.log` is created when the job starts, so a failed job has one too. A
+job that fails on a missing input has only the `start` and `failed` lines in
+its folder. A requeued job appends to the same `progress.log`, so the file
+holds every run of that job.
+
 ## 6. Where the output goes
 
 ### 6.1 The registry
@@ -352,10 +431,15 @@ row per job:
 | Status | Meaning |
 |---|---|
 | `pending` | Expanded, not yet run. |
-| `running` | Claimed by a worker. If this persists after a run ends, the process died mid-job. Inspect before retrying. |
+| `running` | Claimed by a worker. It stays `running` if the process died mid-job, or if the outcome could not be written to the registry (§8). `run` does not reclaim it and `retry` does not requeue it. Inspect before requeuing. |
 | `done` | Finished. `output_dir` and `config_json` are set. |
-| `failed` | Raised an error. `error` holds the message. |
-| `abandoned` | Defined in the schema but no code sets it yet. |
+| `failed` | An attempt raised an error, or ended with neither a `DONE.md` nor an `ABANDONED.md` marker. `error` holds the message. A missing input also ends here, with an `error` that starts with `No <kind> input`. |
+| `abandoned` | Every attempt (up to three, each a fresh session) was abandoned by the review loop. `error` holds the last attempt's reason, and `config_json` is set. `output_dir` is not set; the evidence is in the job folder (§6.2). |
+
+A job runs its attempts one after another. An attempt that ends with an
+abandonment marker is followed by a new attempt, and the job becomes
+`abandoned` only after the last one. An attempt that raises an error, or ends
+with neither marker, fails the job at once and no further attempt runs.
 
 The design spec calls for `status` to separate "blocked on missing input" from
 other failures. The current `status` command does not. Inputs that are missing
@@ -370,30 +454,57 @@ uv run python -c "import sqlite3; c=sqlite3.connect('experiments/runs/runs.db');
 
 ### 6.2 Each job's folder
 
-Every `done` job writes `experiments/runs/<job_id>/`:
+Every job that reaches its backend writes `experiments/runs/<job_id>/`. That
+covers `done`, `abandoned`, and `failed` jobs. A job whose input is missing
+writes only `progress.log`.
 
 ```
 experiments/runs/<job_id>/
-  metadata.json     # identity fields plus `config`: what was actually run
-  trace.jsonl       # one line per message in the agent's run, in order
-  drafts/           # per-story working area: spec, plan, chapters, review report
-  stories/          # promoted, finished stories: <story_name>.md
-  ...               # any other files from the session's docs/ tree
+  metadata.json     # identity fields, `length_range`, and `config`: what was actually run
+  trace.jsonl       # one line per message in the agent's run, in order, tagged with `attempt`
+  progress.log      # the progress lines for this job (§5.6)
+  attempts.jsonl    # one line per attempt event, in order (below)
+  attempts/<n>/     # everything attempt n wrote under its docs/: drafts/, stories/, and any other files
+  drafts/           # done jobs only: the winning attempt's working area (spec, plan, chapters, review report)
+  stories/          # done jobs only: the promoted story, <story_name>.md
 ```
 
 `job_id` is a 16-character hash of the job's identity fields, so the same
-job always lands in the same folder.
+job always lands in the same folder. A requeued job writes into the same
+folder. `metadata.json` and `attempts.jsonl` are overwritten, and `progress.log`
+is appended to. Files from an earlier run that the new run does not write are
+left in place.
+
+`attempts.jsonl` holds the attempt timeline. Each line has `event`, `attempt`,
+and `at` (a UTC timestamp), plus these fields by event:
+
+| `event` | Extra fields | Meaning |
+|---|---|---|
+| `attempt_started` | `session_id` | A fresh session began. |
+| `fix_loop_activated` | `chapter`, `cycle`, `review_file` | A review-fix cycle started: a chapter was rewritten after an earlier review. `cycle` counts within the attempt. |
+| `attempt_done` | `promoted` | The attempt finished a story. |
+| `attempt_abandoned` | `reason` | The attempt was abandoned. `reason` is the text of its `ABANDONED.md`, or the draft's name if that file is empty. |
+
+`fix_loop_activated` does not record which dimensions failed. That is by
+design: the event marks where a fix cycle happened. To see the failing
+dimensions, read the review report under `attempts/<n>/`.
 
 `metadata.json` `config` records the reproducibility snapshot:
 
 - `orchestration_model_name`, `subagent_model_name`, `model_kwargs`,
   `subagent_model_kwargs`: the models and provider options used.
 - `task`, `condition`: what ran.
-- `promoted_stories`: names of stories the run finished. Empty means no story.
+- `length_range`: the word-count range the job was asked to hit. The same value
+  is also at the top level of `metadata.json`.
+- `attempts`: how many attempts started.
 - `prompt_template_sha256`: a hash of the instruction template for this task.
   Two jobs with the same hash were sent the same instruction text.
+- `promoted_stories`: names of stories the run finished. Done jobs only.
+- `winning_attempt`: the attempt that finished the story. Done jobs only.
+- `realised_words`: the whitespace word count of the promoted story. Done jobs
+  only. It is `null` if the story file is missing from the output.
 - `psalm_saga_session_id`: the session directory with the full checkpoint
-  database, if you need to replay the run.
+  database, if you need to replay the run. Done jobs only.
 
 ## 7. Reading the results
 
@@ -402,8 +513,9 @@ job always lands in the same folder.
 There is no judge yet, so there are no scores. For each `done` job you can
 read:
 
-1. **Did it finish?** `promoted_stories` in `metadata.json` is non-empty, or
-   the job would have failed. A story exists under `stories/`.
+1. **Did it finish?** The job's status is `done`, and `promoted_stories` in
+   `metadata.json` is non-empty. A story exists under `stories/`. An
+   `abandoned` or `failed` job has no `stories/` folder.
 2. **What did the agent do?** `trace.jsonl` is the full message sequence. Read
    the last few entries to see how the run ended.
 3. **What did the spec and plan commit to?** The draft spec and plan under
@@ -473,11 +585,13 @@ item. Do not mix pilot and confirmatory output in one analysis.
 | `Corpus file not found: .../pilot_corpus.parquet` | Build step not run (§3.1). | Run `build_corpus_dataset.py`. |
 | `No premise input for job ... expected experiments\data\premises\<id>.md` | Task A needs premises, which are not authored yet. | Author the premise file, or use a Task C plan (§4.1). |
 | `No gold_spec / scratch_spec input ...` | Task B or D needs specs, which are not authored yet. | Author the spec file. |
-| `No story was completed for job ...: no draft ... carries a DONE.md marker` | The agent ran but did not finish a story. It may have hit a model-call or tool-call limit, or stopped early. | Read `trace.jsonl`'s last entries to see where it stopped. Raise the limits in `psalm_saga/settings.py` if they are the cause, then `retry --failed`. |
+| Status `abandoned` | Every attempt (up to three) was abandoned by the review loop. `error` holds the last attempt's reason. | Read the job's `error`, then `attempts.jsonl` in its folder. It lists each attempt's `attempt_abandoned` reason and any `fix_loop_activated` events, and `attempts/<n>/` holds what each attempt wrote. Decide whether the setup needs changing before you requeue. Requeuing runs all attempts again. |
+| Status `failed` with `No story was completed for job ... (attempt N): no draft ... carries a DONE.md marker` | An attempt ended with neither `DONE.md` nor `ABANDONED.md`. It may have hit a model-call or tool-call limit, or stopped early. The job fails at once, so later attempts do not run. | Read the last entries of `trace.jsonl`, which are tagged with `attempt`, to see where it stopped. If a limit is the cause, raise `model_call_limit` or `tool_call_limit` in `psalm_saga/settings.py`. Then `retry --failed`. |
 | `C2 backend is not yet implemented` (or C3–C7) | A plan names an unbuilt condition. | Use C1 only. |
+| `Unknown corpus id(s): ...` | `--item` names an id that is not in the corpus. | Use one of the ids the error lists. No job starts. |
 | `Plan ...: Task A does not run condition C3` (`PlanError`) | Ineligible task/condition pairing. | See the eligibility table in §4. |
 | `No model configured for generator family 'x'` | Unknown family. | Use `frontier` or `open_weight`, or add an override env var. |
-| Job stuck as `running` after the process stopped | Process died mid-job. | Check nothing is still running, then `UPDATE jobs SET status='pending' WHERE status='running'` (direct SQLite) and re-run. |
+| Job stuck as `running` | Either the process died mid-job, or the job finished but its outcome could not be written to the registry. In the second case the runner logs `Could not record outcome for job <job_id>` and the status stays `running`. `run` does not reclaim it, and `retry --failed` does not requeue it. | Confirm no `run` is active. If the job folder's `metadata.json` was written by this run (its modification time falls within the run), the job got through its run and only the registry write failed. Requeue it by hand with `UPDATE jobs SET status='pending' WHERE job_id='<job_id>' AND status='running';` (direct SQLite), find the id with `select job_id, item_id from jobs where status='running'`, and re-run. Requeuing runs the job again, so it costs model calls again. |
 | `status` shows `failed` with no hint why | Inspect the error text. | `select item_id, error from jobs where status='failed'` (see §6.1). |
 
 ## 9. Reproducibility
