@@ -28,6 +28,22 @@ def _load_corpus(corpus_path: Path) -> pd.DataFrame:
     return pd.read_parquet(corpus_path)
 
 
+def _validated_items(items: list[str] | None, corpus: pd.DataFrame) -> set[str] | None:
+    """Return the requested corpus ids, or None when no `--item` was given.
+
+    Raises SystemExit listing the valid ids if any requested id is not in the corpus.
+    """
+    if not items:
+        return None
+    valid = set(corpus["id"])
+    unknown = sorted(set(items) - valid)
+    if unknown:
+        raise SystemExit(
+            f"Unknown corpus id(s): {', '.join(unknown)}. Valid ids: {', '.join(sorted(valid))}"
+        )
+    return set(items)
+
+
 def _cmd_expand(args: argparse.Namespace) -> None:
     plan = load_plan(args.plan)
     corpus = _load_corpus(args.corpus)
@@ -43,11 +59,12 @@ def _cmd_expand(args: argparse.Namespace) -> None:
 def _cmd_run(args: argparse.Namespace) -> None:
     plan = load_plan(args.plan)
     corpus = _load_corpus(args.corpus)
+    item_ids = _validated_items(args.items, corpus)
     registry = Registry(args.runs_dir / "runs.db")
     try:
         registry.insert_jobs(expand_jobs(plan, corpus))
         resolver = InputResolver(args.data_dir)
-        run_pending(registry, plan.name, resolver, args.runs_dir, workers=args.workers)
+        run_pending(registry, plan.name, resolver, args.runs_dir, workers=args.workers, item_ids=item_ids)
         print_status(registry, plan.name)
     finally:
         registry.close()
@@ -96,6 +113,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     run_parser = subparsers.add_parser("run", parents=[common])
     run_parser.add_argument("--plan", type=Path, required=True)
     run_parser.add_argument("--workers", type=int, default=1)
+    run_parser.add_argument(
+        "--item",
+        action="append",
+        dest="items",
+        default=None,
+        metavar="CORPUS_ID",
+        help="Run only this corpus item (repeatable). Done jobs are never repeated.",
+    )
     run_parser.set_defaults(func=_cmd_run)
 
     status_parser = subparsers.add_parser("status", parents=[common])

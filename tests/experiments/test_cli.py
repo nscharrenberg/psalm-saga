@@ -72,10 +72,11 @@ def test_run_command_expands_then_delegates_to_run_pending(
     runs_dir = tmp_path / "runs"
     captured: dict[str, Any] = {}
 
-    def fake_run_pending(_registry, plan_name, _resolver, run_dir, workers) -> None:
+    def fake_run_pending(_registry, plan_name, _resolver, run_dir, workers, item_ids=None) -> None:
         captured["plan_name"] = plan_name
         captured["run_dir"] = run_dir
         captured["workers"] = workers
+        captured["item_ids"] = item_ids
 
     monkeypatch.setattr(cli, "run_pending", fake_run_pending)
 
@@ -86,6 +87,35 @@ def test_run_command_expands_then_delegates_to_run_pending(
     assert captured["plan_name"] == "pilot"
     assert captured["run_dir"] == runs_dir
     assert captured["workers"] == 3
+    assert captured["item_ids"] is None
+
+
+def test_run_command_passes_repeated_items_through(monkeypatch, tmp_path) -> None:
+    corpus_path = _write_corpus(tmp_path)
+    plan_path = _write_plan(tmp_path)
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(
+        cli, "run_pending",
+        lambda _r, _p, _res, _d, workers=None, item_ids=None: captured.update(item_ids=item_ids),
+    )
+
+    cli.main([
+        "run", "--plan", str(plan_path), "--corpus", str(corpus_path),
+        "--runs-dir", str(tmp_path / "runs"), "--item", "satire_a", "--item", "gothic_a",
+    ])
+
+    assert captured["item_ids"] == {"satire_a", "gothic_a"}
+
+
+def test_run_command_rejects_an_unknown_item_and_lists_valid_ids(tmp_path) -> None:
+    corpus_path = _write_corpus(tmp_path)
+    plan_path = _write_plan(tmp_path)
+
+    with pytest.raises(SystemExit, match="satire_a"):
+        cli.main([
+            "run", "--plan", str(plan_path), "--corpus", str(corpus_path),
+            "--runs-dir", str(tmp_path / "runs"), "--item", "not_a_real_id",
+        ])
 
 
 def test_status_command_prints_counts_by_status(tmp_path: Path) -> None:
