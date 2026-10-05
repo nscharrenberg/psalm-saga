@@ -19,14 +19,16 @@ import pytest
 from experiments.pipeline.backends import full_pipeline
 from experiments.pipeline.generators import _DEFAULT_MODELS
 from experiments.pipeline.models import GenerationJob
+from experiments.pipeline.progress import NullProgress
 from experiments.pipeline.resolver import ResolvedInput
 from psalm_saga.session import session_directory
 from psalm_saga.settings import Settings
 
 
-class _FakeMessage:
-    def __init__(self, content: str) -> None:
+class _FakeAI:
+    def __init__(self, content: str = "", tool_calls: list[dict[str, Any]] | None = None) -> None:
         self.content = content
+        self.tool_calls = tool_calls or []
 
 
 class _FakeAgent:
@@ -34,12 +36,15 @@ class _FakeAgent:
         self._docs_dir = docs_dir
         self._docs_to_write = docs_to_write
 
-    def invoke(self, payload: dict[str, Any], **_kwargs: Any) -> dict[str, Any]:
+    def stream(self, payload: dict[str, Any], **_kwargs: Any) -> Iterator[tuple[str, Any]]:
         for rel_path, content in self._docs_to_write.items():
             target = self._docs_dir / rel_path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(content, encoding="utf-8")
-        return {"messages": [_FakeMessage(payload["messages"][0]["content"]), _FakeMessage("done")]}
+            yield ("updates", {"model": {"messages": [_FakeAI(tool_calls=[
+                {"name": "write_file", "args": {"file_path": rel_path}}
+            ])]}})
+        yield ("updates", {"model": {"messages": [_FakeAI(content="done")]}})
 
 
 @contextmanager
@@ -83,15 +88,41 @@ def test_run_writes_docs_dir_contents_as_artifacts_and_records_the_trace(
     backend = full_pipeline.FullPipelineBackend()
     input_ref = ResolvedInput(kind="premise", content="A statue learns to give.", source_path=tmp_path)
 
-    result = backend.run(_job(), input_ref)
+    result = backend.run(_job(), input_ref, NullProgress())
 
     assert result.artifacts["drafts/story/DONE.md"] == "Whole-story review passed clean."
     assert "stories/story.md" in result.artifacts
     assert "Once upon a time." in result.artifacts["stories/story.md"]
-    assert len(result.trace) == 2
+    assert len(result.trace) >= 2
+    assert result.trace[0]["type"] == "HumanMessage"
     assert "A statue learns to give." in result.trace[0]["content"]
-    assert result.trace[1]["content"] == "done"
+    assert result.trace[-1]["content"] == "done"
     assert result.config["promoted_stories"] == ["story"]
+
+
+def test_run_reports_stage_changes_from_the_stream(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    settings = Settings()
+    settings.backend.root_dir = tmp_path
+    docs_dir = session_directory(settings, "session-fixed") / "docs"
+    stages: list[str] = []
+
+    class _Sink:
+        def stage(self, label: str) -> None:
+            stages.append(label)
+
+    monkeypatch.setattr(full_pipeline, "Settings", lambda: settings)
+    monkeypatch.setattr(full_pipeline, "generate_session_id", lambda: "session-fixed")
+    monkeypatch.setattr(full_pipeline, "open_sqlite_checkpointer", _fake_checkpointer)
+    monkeypatch.setattr(
+        full_pipeline, "build_agent", lambda *_a, **_kw: _FakeAgent(docs_dir, dict(_FINISHED_DRAFT))
+    )
+
+    full_pipeline.FullPipelineBackend().run(
+        _job(), ResolvedInput(kind="premise", content="premise", source_path=tmp_path), _Sink()
+    )
+
+    assert "plan" in stages
+    assert "done" in stages
 
 
 def test_run_raises_when_no_draft_carries_a_done_marker(
@@ -114,7 +145,7 @@ def test_run_raises_when_no_draft_carries_a_done_marker(
     input_ref = ResolvedInput(kind="premise", content="premise text", source_path=tmp_path)
 
     with pytest.raises(RuntimeError, match="No story was completed"):
-        backend.run(_job(), input_ref)
+        backend.run(_job(), input_ref, NullProgress())
 
 
 def test_run_resolves_generator_family_and_records_the_model_id_in_config(
@@ -134,7 +165,7 @@ def test_run_resolves_generator_family_and_records_the_model_id_in_config(
     backend = full_pipeline.FullPipelineBackend()
     input_ref = ResolvedInput(kind="premise", content="premise text", source_path=tmp_path)
 
-    result = backend.run(_job(), input_ref)
+    result = backend.run(_job(), input_ref, NullProgress())
 
     assert result.config["orchestration_model_name"] == _DEFAULT_MODELS["frontier"]
     assert result.config["subagent_model_name"] == _DEFAULT_MODELS["frontier"]
@@ -161,7 +192,7 @@ def test_run_uses_the_batch_bootstrap_skill(monkeypatch: pytest.MonkeyPatch, tmp
     backend = full_pipeline.FullPipelineBackend()
     input_ref = ResolvedInput(kind="premise", content="premise text", source_path=tmp_path)
 
-    backend.run(_job(), input_ref)
+    backend.run(_job(), input_ref, NullProgress())
 
     assert captured_kwargs["bootstrap_skill"] == full_pipeline.BATCH_BOOTSTRAP_SKILL
 
@@ -183,7 +214,7 @@ def test_run_handles_task_d_without_a_missing_instruction_template(
     backend = full_pipeline.FullPipelineBackend()
     input_ref = ResolvedInput(kind="scratch_spec", content="# Scratch spec content", source_path=tmp_path)
 
-    result = backend.run(_job(task="D"), input_ref)
+    result = backend.run(_job(task="D"), input_ref, NullProgress())
 
     assert "# Scratch spec content" in result.trace[0]["content"]
     assert result.config["task"] == "D"

@@ -5,13 +5,19 @@ from __future__ import annotations
 from typing import Protocol
 
 from experiments.pipeline.models import Condition, GenerationJob, GenerationResult
+from experiments.pipeline.progress import ProgressSink
 from experiments.pipeline.resolver import ResolvedInput
 
 
 class GenerationBackend(Protocol):
-    """Runs one `GenerationJob` given its resolved input and returns a `GenerationResult`."""
+    """Runs one `GenerationJob` given its resolved input and returns a `GenerationResult`.
 
-    def run(self, job: GenerationJob, input_ref: ResolvedInput) -> GenerationResult: ...
+    The backend reports stage changes through `progress` as the run advances.
+    """
+
+    def run(
+        self, job: GenerationJob, input_ref: ResolvedInput, progress: ProgressSink
+    ) -> GenerationResult: ...
 
 
 class NotImplementedBackend:
@@ -25,5 +31,7 @@ class NotImplementedBackend:
     def __init__(self, condition: Condition) -> None:
         self._condition = condition
 
-    def run(self, job: GenerationJob, input_ref: ResolvedInput) -> GenerationResult:
+    def run(
+        self, job: GenerationJob, input_ref: ResolvedInput, progress: ProgressSink
+    ) -> GenerationResult:
         raise NotImplementedError(f"{self._condition} backend is not yet implemented")

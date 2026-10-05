@@ -9,9 +9,12 @@ one session generating many stories) — see spec §5.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterator
+from typing import Any
 
 from experiments.pipeline.generators import resolve_model
 from experiments.pipeline.models import GenerationJob, GenerationResult
+from experiments.pipeline.progress import ProgressSink, stage_for_tool_call, tool_calls_from_update
 from experiments.pipeline.resolver import ResolvedInput
 from psalm_saga.agent import build_agent, open_sqlite_checkpointer
 from psalm_saga.batch_session import drafts_dir, promote_story
@@ -43,7 +46,9 @@ _TASK_INSTRUCTIONS: dict[str, str] = {
 class FullPipelineBackend:
     """Runs one job through the full `psalm_saga` agent pipeline (C1)."""
 
-    def run(self, job: GenerationJob, input_ref: ResolvedInput) -> GenerationResult:
+    def run(
+        self, job: GenerationJob, input_ref: ResolvedInput, progress: ProgressSink
+    ) -> GenerationResult:
         settings = Settings()
         model_id = resolve_model(job.generator_family)
         settings.agent.orchestration_model_name = model_id
@@ -60,14 +65,9 @@ class FullPipelineBackend:
                 checkpointer=checkpointer,
                 bootstrap_skill=BATCH_BOOTSTRAP_SKILL,
             )
-            result = agent.invoke(
-                {"messages": [{"role": "user", "content": instruction}]},
-                config={"configurable": {"thread_id": session_id}},
-            )
-            trace = [
-                {"type": message.__class__.__name__, "content": getattr(message, "content", "")}
-                for message in result["messages"]
-            ]
+            trace = [{"type": "HumanMessage", "content": instruction}]
+            for entry in self._stream_run(agent, session_id, instruction, progress):
+                trace.append(entry)
 
             promoted = self._promote_finished_drafts(settings, session_id)
             if not promoted:
@@ -96,6 +96,30 @@ class FullPipelineBackend:
                 ).hexdigest(),
             },
         )
+
+    def _stream_run(
+        self, agent: Any, session_id: str, instruction: str, progress: ProgressSink
+    ) -> Iterator[dict[str, Any]]:
+        """Run the agent, reporting stage changes and yielding one trace entry per message."""
+        for mode, payload in agent.stream(
+            {"messages": [{"role": "user", "content": instruction}]},
+            config={"configurable": {"thread_id": session_id}},
+            stream_mode=["messages", "updates"],
+        ):
+            if mode != "updates":
+                continue
+            for node_update in payload.values() if isinstance(payload, dict) else []:
+                if not isinstance(node_update, dict):
+                    continue
+                for message in node_update.get("messages", []) or []:
+                    yield {
+                        "type": message.__class__.__name__,
+                        "content": getattr(message, "content", ""),
+                    }
+            for name, args in tool_calls_from_update(payload):
+                stage = stage_for_tool_call(name, args)
+                if stage is not None:
+                    progress.stage(stage)
 
     def _promote_finished_drafts(self, settings: Settings, session_id: str) -> list[str]:
         """Promote every draft directory carrying a `DONE.md` marker; return the promoted names.
