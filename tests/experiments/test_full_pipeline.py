@@ -20,7 +20,7 @@ import pytest
 from experiments.pipeline.backends import full_pipeline
 from experiments.pipeline.generators import _DEFAULT_MODELS
 from experiments.pipeline.length import directive_for
-from experiments.pipeline.models import GenerationJob, JobAbandoned
+from experiments.pipeline.models import GenerationJob, JobAbandoned, JobFailed
 from experiments.pipeline.progress import NullProgress
 from experiments.pipeline.resolver import ResolvedInput
 from psalm_saga.session import session_directory
@@ -65,6 +65,19 @@ class _FakeAgent:
                 {"name": "write_file", "args": {"file_path": rel_path}}
             ])]}})
         yield ((), "updates", {"model": {"messages": [_FakeAI(content="done")]}})
+
+
+class _RaisingAgent:
+    """An agent whose stream fails before producing anything, as a model-call error would."""
+
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+
+    def stream(
+        self, _payload: dict[str, Any], **_kwargs: Any
+    ) -> Iterator[tuple[tuple[str, ...], str, Any]]:
+        raise self._error
+        yield  # pragma: no cover — makes this a generator
 
 
 @contextmanager
@@ -336,9 +349,12 @@ def _run_with_attempt_sequence(
 
     attempts = iter(drafts_per_attempt)
 
-    def fake_build_agent(_settings: Settings, *, session_id: str, **_kw: Any) -> _FakeAgent:
+    def fake_build_agent(_settings: Settings, *, session_id: str, **_kw: Any) -> Any:
+        item = next(attempts)
+        if isinstance(item, Exception):
+            return _RaisingAgent(item)
         docs_dir = session_directory(settings, session_id) / "docs"
-        return _FakeAgent(docs_dir, next(attempts), namespaces)
+        return _FakeAgent(docs_dir, item, namespaces)
 
     monkeypatch.setattr(full_pipeline, "build_agent", fake_build_agent)
     input_ref = ResolvedInput(kind="premise", content="premise text", source_path=tmp_path)
@@ -444,5 +460,66 @@ def test_a_rewritten_chapter_before_a_review_is_a_fix_loop_but_new_chapters_are_
     assert fixes[0]["cycle"] == 1
     assert fixes[0]["review_file"] == "drafts/story/story-review.md"
     assert fixes[0]["attempt"] == 1
+    assert fixes[0]["chapter"] == 2
     assert sink.stages.count("fix attempt 1") == 1
     assert "fix attempt 2" not in sink.stages
+
+
+def _timeline(artifacts: dict[str, str]) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in artifacts["attempts.jsonl"].splitlines()]
+
+
+def test_a_markerless_later_attempt_raises_job_failed_keeping_earlier_attempts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    with pytest.raises(JobFailed, match="No story was completed") as info:
+        _run_with_attempt_sequence(
+            monkeypatch, tmp_path,
+            [_abandoned_draft("cap reached once"), {"drafts/story/story-plan.md": "# plan\n"}],
+        )
+    assert isinstance(info.value, RuntimeError)
+    assert info.value.artifacts["attempts/1/drafts/story/ABANDONED.md"] == "cap reached once"
+    assert "attempts/2/drafts/story/story-plan.md" in info.value.artifacts
+    events = [entry["event"] for entry in _timeline(info.value.artifacts)]
+    assert events == ["attempt_started", "attempt_abandoned", "attempt_started"]
+    assert {entry["attempt"] for entry in info.value.trace} == {1, 2}
+    assert info.value.config["attempts"] == 2
+    assert isinstance(info.value.__cause__, RuntimeError)
+
+
+def test_an_agent_stream_error_in_a_later_attempt_raises_job_failed_keeping_earlier_attempts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    boom = ConnectionError("model endpoint unreachable")
+    with pytest.raises(JobFailed, match="model endpoint unreachable") as info:
+        _run_with_attempt_sequence(
+            monkeypatch, tmp_path, [_abandoned_draft("cap reached once"), boom]
+        )
+    assert info.value.__cause__ is boom
+    assert "attempts/1/drafts/story/ABANDONED.md" in info.value.artifacts
+    timeline = _timeline(info.value.artifacts)
+    assert [entry["event"] for entry in timeline] == [
+        "attempt_started", "attempt_abandoned", "attempt_started"
+    ]
+    assert timeline[1]["reason"] == "cap reached once"
+    assert 1 in {entry["attempt"] for entry in info.value.trace}
+
+
+def test_first_reviews_of_chapters_in_separate_stories_are_not_fix_loops(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    sink = _RecordingSink()
+    writes = [
+        ("drafts/variant-1/variant-1-plan.md", "# Plan\n"),
+        ("drafts/variant-1/chapter-1-a.md", "# Chapter 1\n\nOne."),
+        ("drafts/variant-1/variant-1-review.md", "Covered"),
+        ("drafts/variant-2/variant-2-plan.md", "# Plan\n"),
+        ("drafts/variant-2/chapter-1-a.md", "# Chapter 1\n\nUno."),
+        ("drafts/variant-2/variant-2-review.md", "Covered"),
+        ("drafts/variant-1/DONE.md", "Clean."),
+        ("drafts/variant-2/DONE.md", "Clean."),
+    ]
+    result = _run_with_attempt_sequence(monkeypatch, tmp_path, [writes], progress=sink)
+    fixes = [e for e in _timeline(result.artifacts) if e["event"] == "fix_loop_activated"]
+    assert fixes == []
+    assert not any(stage.startswith("fix attempt") for stage in sink.stages)

@@ -10,17 +10,25 @@ abandons is retried from scratch.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+from collections import defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import PurePosixPath
 from typing import Any
 
 from experiments.pipeline.generators import resolve_model
 from experiments.pipeline.length import directive_for
-from experiments.pipeline.models import GenerationJob, GenerationResult, JobAbandoned
-from experiments.pipeline.progress import ProgressSink, stage_for_tool_call, tool_calls_from_update
+from experiments.pipeline.models import GenerationJob, GenerationResult, JobAbandoned, JobFailed
+from experiments.pipeline.progress import (
+    WRITE_TOOLS,
+    ProgressSink,
+    stage_for_tool_call,
+    tool_calls_from_update,
+)
 from experiments.pipeline.resolver import ResolvedInput
 from psalm_saga.agent import build_agent, open_sqlite_checkpointer
 from psalm_saga.batch_session import drafts_dir, promote_story
@@ -51,8 +59,6 @@ _TASK_INSTRUCTIONS: dict[str, str] = {
 MAX_STORY_ATTEMPTS = 3
 """Story attempts per job. Matches the per-chapter fix-loop cap in `reviewing-story-dimensions`."""
 
-_WRITE_TOOLS = frozenset({"write_file", "edit_file"})
-
 
 @dataclass
 class _AttemptOutcome:
@@ -62,7 +68,6 @@ class _AttemptOutcome:
     promoted: list[str]
     abandoned_reason: str
     artifacts: dict[str, str]
-    trace: list[dict[str, Any]]
 
 
 class _FixLoopDetector:
@@ -71,30 +76,35 @@ class _FixLoopDetector:
     `reviewing-story-dimensions` rewrites one `<story>-review.md` after every
     pass, so a second review write alone is not a fix: it is usually the next
     chapter's first review. A review starts a fix cycle when a chapter written
-    since the previous review had already been written before that review.
+    since that story's previous review had already been written before it.
+
+    One session can draft several stories (tasks B-D produce variants), each in
+    its own draft directory, so chapters are tracked per draft directory: a
+    review only counts chapters that live beside its own review file.
     """
 
     def __init__(self) -> None:
-        self._reviewed: set[int] = set()
-        self._since_review: set[int] = set()
+        self._reviewed: defaultdict[str, set[int]] = defaultdict(set)
+        self._since_review: defaultdict[str, set[int]] = defaultdict(set)
         self.cycles = 0
 
-    def observe(self, name: str, args: dict[str, Any]) -> str | None:
-        """Feed one tool call; return the review file path when it starts a fix cycle."""
+    def observe(self, name: str, args: dict[str, Any]) -> tuple[str, int] | None:
+        """Feed one tool call; return `(review file, chapter)` when it starts a fix cycle."""
+        path = str(args.get("file_path", ""))
+        draft_dir = str(PurePosixPath(path.replace("\\", "/")).parent)
         stage = stage_for_tool_call(name, args)
         if stage is not None and stage.startswith("chapter "):
-            self._since_review.add(int(stage.removeprefix("chapter ")))
+            self._since_review[draft_dir].add(int(stage.removeprefix("chapter ")))
             return None
-        path = str(args.get("file_path", ""))
-        if name not in _WRITE_TOOLS or not path.endswith("-review.md"):
+        if name not in WRITE_TOOLS or not path.endswith("-review.md"):
             return None
-        is_fix = bool(self._since_review & self._reviewed)
-        self._reviewed |= self._since_review
-        self._since_review = set()
-        if not is_fix:
+        since_review = self._since_review.pop(draft_dir, set())
+        rewritten = since_review & self._reviewed[draft_dir]
+        self._reviewed[draft_dir] |= since_review
+        if not rewritten:
             return None
         self.cycles += 1
-        return path
+        return path, min(rewritten)
 
 
 class FullPipelineBackend:
@@ -117,50 +127,52 @@ class FullPipelineBackend:
         trace: list[dict[str, Any]] = []
         all_artifacts: dict[str, str] = {}
         last_reason = ""
-        winner: tuple[int, str, list[str]] | None = None
+        winner: tuple[int, _AttemptOutcome] | None = None
 
-        for attempt in range(1, MAX_STORY_ATTEMPTS + 1):
-            progress.stage(f"attempt {attempt}/{MAX_STORY_ATTEMPTS}")
-            outcome = self._run_attempt(
-                settings, job, instruction, attempt=attempt, progress=progress, timeline=timeline
-            )
-            trace.extend({**entry, "attempt": attempt} for entry in outcome.trace)
-            all_artifacts.update(
-                {f"attempts/{attempt}/{path}": text for path, text in outcome.artifacts.items()}
-            )
-            if outcome.promoted:
-                winner = (attempt, outcome.session_id, outcome.promoted)
-                timeline.append(_event("attempt_done", attempt, promoted=outcome.promoted))
-                break
-            last_reason = outcome.abandoned_reason
-            timeline.append(_event("attempt_abandoned", attempt, reason=last_reason))
+        try:
+            for attempt in range(1, MAX_STORY_ATTEMPTS + 1):
+                progress.stage(f"attempt {attempt}/{MAX_STORY_ATTEMPTS}")
+                outcome = self._run_attempt(
+                    settings,
+                    job,
+                    instruction,
+                    attempt=attempt,
+                    progress=progress,
+                    timeline=timeline,
+                    trace=trace,
+                )
+                all_artifacts.update(_under_attempt(attempt, outcome.artifacts))
+                if outcome.promoted:
+                    winner = (attempt, outcome)
+                    timeline.append(_event("attempt_done", attempt, promoted=outcome.promoted))
+                    break
+                last_reason = outcome.abandoned_reason
+                timeline.append(_event("attempt_abandoned", attempt, reason=last_reason))
+        except Exception as exc:
+            # Keep the failing attempt's partial docs beside the earlier attempts' evidence.
+            started = [e for e in timeline if e["event"] == "attempt_started"]
+            if started:
+                with contextlib.suppress(OSError, ValueError):
+                    docs = self._collect_artifacts(settings, started[-1]["session_id"])
+                    all_artifacts.update(_under_attempt(started[-1]["attempt"], docs))
+            all_artifacts["attempts.jsonl"] = _timeline_jsonl(timeline)
+            config = _config(settings, job, instruction_template, timeline)
+            raise JobFailed(str(exc), artifacts=all_artifacts, trace=trace, config=config) from exc
 
-        all_artifacts["attempts.jsonl"] = "".join(json.dumps(e) + "\n" for e in timeline)
-        config: dict[str, Any] = {
-            "orchestration_model_name": settings.agent.orchestration_model_name,
-            "subagent_model_name": settings.agent.subagent_model_name,
-            "model_kwargs": settings.agent.model_kwargs,
-            "subagent_model_kwargs": settings.agent.subagent_model_kwargs,
-            "task": job.task,
-            "condition": job.condition,
-            "length_range": job.length_range,
-            "attempts": len([e for e in timeline if e["event"] == "attempt_started"]),
-            "prompt_template_sha256": hashlib.sha256(
-                instruction_template.encode("utf-8")
-            ).hexdigest(),
-        }
+        all_artifacts["attempts.jsonl"] = _timeline_jsonl(timeline)
+        config = _config(settings, job, instruction_template, timeline)
         if winner is None:
             raise JobAbandoned(last_reason, artifacts=all_artifacts, trace=trace, config=config)
 
-        attempt_no, session_id, promoted = winner
-        winning_docs = self._collect_artifacts(settings, session_id)
+        attempt_no, outcome = winner
+        winning_docs = outcome.artifacts
         artifacts = {**winning_docs, **all_artifacts}
         config.update(
             {
-                "psalm_saga_session_id": session_id,
-                "promoted_stories": promoted,
+                "psalm_saga_session_id": outcome.session_id,
+                "promoted_stories": outcome.promoted,
                 "winning_attempt": attempt_no,
-                "realised_words": _realised_words(winning_docs, promoted),
+                "realised_words": _realised_words(winning_docs, outcome.promoted),
             }
         )
         return GenerationResult(artifacts=artifacts, trace=trace, config=config)
@@ -174,15 +186,18 @@ class FullPipelineBackend:
         attempt: int,
         progress: ProgressSink,
         timeline: list[dict[str, Any]],
+        trace: list[dict[str, Any]],
     ) -> _AttemptOutcome:
         """Run one story attempt in a fresh session; return what it promoted or why it stopped.
 
         Appends `attempt_started` and any `fix_loop_activated` events to
-        `timeline`. The caller records `attempt_done` / `attempt_abandoned`.
+        `timeline`, and this attempt's messages (tagged with `attempt`) to
+        `trace` as they arrive, so both survive an exception. The caller
+        records `attempt_done` / `attempt_abandoned`.
         """
         session_id = generate_session_id()
         timeline.append(_event("attempt_started", attempt, session_id=session_id))
-        trace: list[dict[str, Any]] = [{"type": "HumanMessage", "content": instruction}]
+        trace.append({"type": "HumanMessage", "content": instruction, "attempt": attempt})
         fix_loop = _FixLoopDetector()
 
         with open_sqlite_checkpointer(settings, session_id) as checkpointer:
@@ -194,15 +209,17 @@ class FullPipelineBackend:
             )
             for kind, item in self._stream_run(agent, session_id, instruction, progress):
                 if kind == "trace":
-                    trace.append(item)
+                    trace.append({**item, "attempt": attempt})
                     continue
                 name, args = item
-                review_file = fix_loop.observe(name, args)
-                if review_file is not None:
+                fix = fix_loop.observe(name, args)
+                if fix is not None:
+                    review_file, chapter = fix
                     timeline.append(
                         _event(
                             "fix_loop_activated",
                             attempt,
+                            chapter=chapter,
                             cycle=fix_loop.cycles,
                             review_file=review_file,
                         )
@@ -226,7 +243,6 @@ class FullPipelineBackend:
             promoted=promoted,
             abandoned_reason=abandoned_reason,
             artifacts=self._collect_artifacts(settings, session_id),
-            trace=trace,
         )
 
     def _stream_run(
@@ -309,6 +325,36 @@ def _abandoned_reason(settings: Settings, session_id: str) -> str:
         if marker.is_file():
             return marker.read_text(encoding="utf-8").strip() or f"{marker.parent.name} abandoned"
     return ""
+
+
+def _under_attempt(attempt: int, artifacts: dict[str, str]) -> dict[str, str]:
+    """Re-key one attempt's docs under `attempts/<n>/`."""
+    return {f"attempts/{attempt}/{path}": text for path, text in artifacts.items()}
+
+
+def _timeline_jsonl(timeline: list[dict[str, Any]]) -> str:
+    """The `attempts.jsonl` text: one JSON object per timeline event."""
+    return "".join(json.dumps(event) + "\n" for event in timeline)
+
+
+def _config(
+    settings: Settings,
+    job: GenerationJob,
+    instruction_template: str,
+    timeline: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Reproducibility snapshot shared by every outcome (done, abandoned, failed)."""
+    return {
+        "orchestration_model_name": settings.agent.orchestration_model_name,
+        "subagent_model_name": settings.agent.subagent_model_name,
+        "model_kwargs": settings.agent.model_kwargs,
+        "subagent_model_kwargs": settings.agent.subagent_model_kwargs,
+        "task": job.task,
+        "condition": job.condition,
+        "length_range": job.length_range,
+        "attempts": len([e for e in timeline if e["event"] == "attempt_started"]),
+        "prompt_template_sha256": hashlib.sha256(instruction_template.encode("utf-8")).hexdigest(),
+    }
 
 
 def _event(name: str, attempt: int, **fields: Any) -> dict[str, Any]:

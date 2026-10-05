@@ -92,3 +92,24 @@ class JobAbandoned(Exception):  # noqa: N818 — named by its domain meaning, no
         self.artifacts = artifacts
         self.trace = trace
         self.config = config
+
+
+class JobFailed(RuntimeError):  # noqa: N818 — pairs with JobAbandoned; maps to status `failed`
+    """A story attempt hit a real error (an exception, or no `DONE.md`/`ABANDONED.md`).
+
+    Carries the artifacts and trace of every attempt made so far so the runner
+    can persist them as evidence before recording the job as `failed`.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        artifacts: dict[str, str],
+        trace: list[dict[str, Any]],
+        config: dict[str, Any],
+    ) -> None:
+        super().__init__(message)
+        self.artifacts = artifacts
+        self.trace = trace
+        self.config = config

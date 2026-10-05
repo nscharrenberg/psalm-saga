@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 _CHAPTER_RE = re.compile(r"chapter-(\d+)-")
-_WRITE_TOOLS = frozenset({"write_file", "edit_file"})
+WRITE_TOOLS = frozenset({"write_file", "edit_file"})
 
 
 class ProgressSink(Protocol):
@@ -49,7 +49,7 @@ def stage_for_tool_call(name: str, args: dict[str, Any]) -> str | None:
         if subagent == "dimension-reviewer":
             return "review"
         return None
-    if name in _WRITE_TOOLS:
+    if name in WRITE_TOOLS:
         path = str(args.get("file_path", ""))
         if path.endswith("ABANDONED.md"):
             return "abandoned"
