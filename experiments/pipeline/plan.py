@@ -50,6 +50,31 @@ class Plan:
     length: str | None = None
 
 
+def _plan_length(value: Any) -> str | None:
+    """Normalise a plan's `length:` value to a string `parse_length` accepts.
+
+    Accepts a word count (`500`), a `MIN-MAX` string, or a mapping
+    `{min: N, max: M}` (rendered as `N-M`). Raises `PlanError` if the value
+    is invalid.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        if set(value) != {"min", "max"}:
+            raise PlanError(f"plan length mapping must have exactly the keys min and max, got {sorted(value)}")
+        low, high = value["min"], value["max"]
+        if not all(isinstance(v, int) and not isinstance(v, bool) for v in (low, high)):
+            raise PlanError(f"plan length min and max must be integers, got min={low!r} max={high!r}")
+        length = f"{low}-{high}"
+    else:
+        length = str(value)
+    try:
+        parse_length(length)
+    except ValueError as exc:
+        raise PlanError(f"invalid plan length {length!r}: {exc}") from exc
+    return length
+
+
 def load_plan(path: Path) -> Plan:
     """Load and validate a YAML plan file.
 
@@ -69,13 +94,7 @@ def load_plan(path: Path) -> Plan:
                     f"Task {task_name} are {sorted(eligible)})"
                 )
         tasks[task_name] = TaskSpec(conditions=conditions, generators=tuple(task_raw["generators"]))
-    length = raw.get("length")
-    if length is not None:
-        length = str(length)
-        try:
-            parse_length(length)
-        except ValueError as exc:
-            raise PlanError(f"invalid plan length {length!r}: {exc}") from exc
+    length = _plan_length(raw.get("length"))
     return Plan(
         name=raw["name"],
         is_pilot=bool(raw.get("is_pilot", False)),
