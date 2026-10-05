@@ -1,0 +1,8 @@
+name: pilot
+is_pilot: true
+corpus_filter:
+  sample_per_language: 1
+tasks:
+  A:
+    conditions: [C1]
+    generators: [frontier]

@@ -321,3 +321,7 @@ tests/evals/.runtime/
 .worktrees/
 
 experiments/data/stories/
+experiments/runs/
+
+# psalm_saga agent session directories (BackendSettings.root_dir defaults to cwd)
+sessions/

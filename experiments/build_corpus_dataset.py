@@ -1,4 +1,4 @@
-# ruff: noqa: INP001, T201
+# ruff: noqa: T201
 """Build a single self-contained dataset from the stories corpus.
 
 Reads ``data/stories/corpus.csv`` plus the referenced ``.txt`` files under
