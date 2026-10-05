@@ -14,6 +14,7 @@ from experiments.pipeline.backends import (
 )
 from experiments.pipeline.backends.base import NotImplementedBackend
 from experiments.pipeline.models import GenerationJob
+from experiments.pipeline.progress import NullProgress
 
 
 def _job(condition: str) -> GenerationJob:
@@ -31,7 +32,7 @@ def test_not_implemented_backend_raises_naming_the_condition() -> None:
     backend = NotImplementedBackend("C4")
 
     with pytest.raises(NotImplementedError, match="C4"):
-        backend.run(_job("C4"), input_ref=None)  # type: ignore[arg-type]
+        backend.run(_job("C4"), input_ref=None, progress=NullProgress())  # type: ignore[arg-type]
 
 
 def test_stub_modules_export_a_backend_for_their_condition() -> None:
@@ -47,4 +48,4 @@ def test_stub_modules_export_a_backend_for_their_condition() -> None:
         (flat, "C5"), (agents_room, "C6"), (human, "C7"),
     ):
         with pytest.raises(NotImplementedError, match=condition):
-            module.BACKEND.run(_job(condition), input_ref=None)
+            module.BACKEND.run(_job(condition), input_ref=None, progress=NullProgress())
