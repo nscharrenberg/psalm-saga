@@ -20,8 +20,8 @@ def _write_corpus(tmp_path: Path) -> Path:
     path = tmp_path / "corpus.parquet"
     pd.DataFrame(
         [
-            {"id": "satire_a", "language": "english"},
-            {"id": "gothic_a", "language": "dutch"},
+            {"id": "satire_a", "language": "english", "word_count": 300},
+            {"id": "gothic_a", "language": "dutch", "word_count": 1000},
         ]
     ).to_parquet(path)
     return path

@@ -11,7 +11,9 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from experiments.pipeline.length import band_for_word_count
 from experiments.pipeline.models import Condition, GenerationJob, Task
+from psalm_saga.story_length import parse_length
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -45,6 +47,7 @@ class Plan:
     is_pilot: bool
     corpus_filter: dict[str, Any]
     tasks: dict[Task, TaskSpec]
+    length: str | None = None
 
 
 def load_plan(path: Path) -> Plan:
@@ -66,11 +69,19 @@ def load_plan(path: Path) -> Plan:
                     f"Task {task_name} are {sorted(eligible)})"
                 )
         tasks[task_name] = TaskSpec(conditions=conditions, generators=tuple(task_raw["generators"]))
+    length = raw.get("length")
+    if length is not None:
+        length = str(length)
+        try:
+            parse_length(length)
+        except ValueError as exc:
+            raise PlanError(f"invalid plan length {length!r}: {exc}") from exc
     return Plan(
         name=raw["name"],
         is_pilot=bool(raw.get("is_pilot", False)),
         corpus_filter=raw.get("corpus_filter") or {},
         tasks=tasks,
+        length=length,
     )
 
 
@@ -102,6 +113,7 @@ def expand_jobs(plan: Plan, corpus: pd.DataFrame) -> list[GenerationJob]:
     jobs: list[GenerationJob] = []
     for task, task_spec in plan.tasks.items():
         for _, row in filtered.iterrows():
+            length_range = _length_range_for(plan, row)
             for condition in task_spec.conditions:
                 for generator in task_spec.generators:
                     jobs.append(
@@ -113,6 +125,18 @@ def expand_jobs(plan: Plan, corpus: pd.DataFrame) -> list[GenerationJob]:
                             generator_family=generator,
                             language=row["language"],
                             is_pilot=plan.is_pilot,
+                            length_range=length_range,
                         )
                     )
     return jobs
+
+
+def _length_range_for(plan: Plan, row: pd.Series) -> str:
+    """The plan's `length` if set, else the band from the item's `word_count`."""
+    if plan.length is not None:
+        return plan.length
+    import pandas as pd  # runtime import; the module keeps pandas under TYPE_CHECKING
+
+    if "word_count" not in row or pd.isna(row["word_count"]):
+        raise PlanError(f"item {row['id']!r} has no word_count and the plan sets no `length`")
+    return band_for_word_count(int(row["word_count"]))

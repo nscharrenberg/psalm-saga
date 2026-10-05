@@ -20,9 +20,9 @@ def _write_plan(tmp_path: Path, raw: dict) -> Path:
 def _sample_corpus() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"id": "satire_a", "language": "english", "genre_bucket": "satire"},
-            {"id": "satire_b", "language": "english", "genre_bucket": "satire"},
-            {"id": "gothic_a", "language": "dutch", "genre_bucket": "gothic"},
+            {"id": "satire_a", "language": "english", "genre_bucket": "satire", "word_count": 300},
+            {"id": "satire_b", "language": "english", "genre_bucket": "satire", "word_count": 500},
+            {"id": "gothic_a", "language": "dutch", "genre_bucket": "gothic", "word_count": 1000},
         ]
     )
 
