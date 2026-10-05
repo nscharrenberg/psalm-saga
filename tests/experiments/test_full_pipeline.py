@@ -36,7 +36,7 @@ class _FakeAgent:
         self._docs_dir = docs_dir
         self._docs_to_write = docs_to_write
 
-    def stream(self, payload: dict[str, Any], **_kwargs: Any) -> Iterator[tuple[str, Any]]:
+    def stream(self, _payload: dict[str, Any], **_kwargs: Any) -> Iterator[tuple[str, Any]]:
         for rel_path, content in self._docs_to_write.items():
             target = self._docs_dir / rel_path
             target.parent.mkdir(parents=True, exist_ok=True)

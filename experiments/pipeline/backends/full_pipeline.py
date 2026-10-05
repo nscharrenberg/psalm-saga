@@ -66,8 +66,7 @@ class FullPipelineBackend:
                 bootstrap_skill=BATCH_BOOTSTRAP_SKILL,
             )
             trace = [{"type": "HumanMessage", "content": instruction}]
-            for entry in self._stream_run(agent, session_id, instruction, progress):
-                trace.append(entry)
+            trace.extend(self._stream_run(agent, session_id, instruction, progress))
 
             promoted = self._promote_finished_drafts(settings, session_id)
             if not promoted:
