@@ -485,8 +485,8 @@ and `at` (a UTC timestamp), plus these fields by event:
 | `attempt_done` | `promoted` | The attempt finished a story. |
 | `attempt_abandoned` | `reason` | The attempt was abandoned. `reason` is the text of its `ABANDONED.md`, or the draft's name if that file is empty. |
 
-`fix_loop_activated` does not record which dimensions failed. That is by
-design: the event marks where a fix cycle happened. To see the failing
+`fix_loop_activated` does not record which dimensions failed. That is deferred:
+the event marks where a fix cycle happened. To see the failing
 dimensions, read the review report under `attempts/<n>/`.
 
 `metadata.json` `config` records the reproducibility snapshot:

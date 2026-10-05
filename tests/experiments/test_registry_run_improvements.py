@@ -75,3 +75,32 @@ def test_opening_an_old_database_adds_the_length_column(tmp_path: Path) -> None:
     Registry(db).close()
     columns = {row[1] for row in sqlite3.connect(db).execute("PRAGMA table_info(jobs)")}
     assert "length_range" in columns
+
+
+def test_insert_jobs_backfills_length_range_on_existing_rows(tmp_path: Path) -> None:
+    db = tmp_path / "runs.db"
+    job = _job("a", "270-330")
+    old = sqlite3.connect(db)
+    old.execute(
+        "CREATE TABLE jobs (job_id TEXT PRIMARY KEY, plan_name TEXT NOT NULL, task TEXT NOT NULL, "
+        "condition TEXT NOT NULL, item_id TEXT NOT NULL, generator_family TEXT NOT NULL, "
+        "language TEXT NOT NULL, replicate INTEGER NOT NULL, is_pilot INTEGER NOT NULL, "
+        "status TEXT NOT NULL, output_dir TEXT, error TEXT, started_at TEXT, finished_at TEXT, "
+        "config_json TEXT)"
+    )
+    old.execute(
+        "INSERT INTO jobs (job_id, plan_name, task, condition, item_id, generator_family, "
+        "language, replicate, is_pilot, status) "
+        "VALUES (?, 'pilot', 'A', 'C1', 'a', 'frontier', 'english', 0, 0, 'pending')",
+        (job.job_id,),
+    )
+    old.commit()
+    old.close()
+
+    registry = Registry(db)
+    assert registry.insert_jobs([job]) == 0
+    registry.close()
+    row = sqlite3.connect(db).execute(
+        "SELECT length_range FROM jobs WHERE job_id = ?", (job.job_id,)
+    ).fetchone()
+    assert row[0] == "270-330"

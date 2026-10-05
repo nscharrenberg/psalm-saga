@@ -90,7 +90,7 @@ def _cmd_retry(args: argparse.Namespace) -> None:
     registry = Registry(args.runs_dir / "runs.db")
     try:
         n = registry.requeue_failed(args.plan_name)
-        print(f"Requeued {n} failed job(s) for plan {args.plan_name!r}.")  # noqa: T201
+        print(f"Requeued {n} failed or abandoned job(s) for plan {args.plan_name!r}.")  # noqa: T201
     finally:
         registry.close()
 

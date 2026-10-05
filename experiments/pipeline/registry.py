@@ -120,6 +120,13 @@ class Registry:
                     ),
                 )
                 inserted += cursor.rowcount
+                if job.length_range is not None:
+                    # INSERT OR IGNORE leaves rows created before the column
+                    # existed with NULL length_range; backfill them here.
+                    self._conn.execute(
+                        "UPDATE jobs SET length_range = ? WHERE job_id = ? AND length_range IS NULL",
+                        (job.length_range, job.job_id),
+                    )
             self._conn.commit()
             return inserted
 

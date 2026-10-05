@@ -157,7 +157,10 @@ class FullPipelineBackend:
                     all_artifacts.update(_under_attempt(started[-1]["attempt"], docs))
             all_artifacts["attempts.jsonl"] = _timeline_jsonl(timeline)
             config = _config(settings, job, instruction_template, timeline)
-            raise JobFailed(str(exc), artifacts=all_artifacts, trace=trace, config=config) from exc
+            # str(exc) is blank for many bare exceptions; fall back to repr so the error column is never empty.
+            raise JobFailed(
+                str(exc) or repr(exc), artifacts=all_artifacts, trace=trace, config=config
+            ) from exc
 
         all_artifacts["attempts.jsonl"] = _timeline_jsonl(timeline)
         config = _config(settings, job, instruction_template, timeline)

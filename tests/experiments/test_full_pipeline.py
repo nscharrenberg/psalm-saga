@@ -505,6 +505,15 @@ def test_an_agent_stream_error_in_a_later_attempt_raises_job_failed_keeping_earl
     assert 1 in {entry["attempt"] for entry in info.value.trace}
 
 
+def test_a_bare_exception_with_no_message_still_gives_job_failed_a_non_empty_message(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    with pytest.raises(JobFailed) as info:
+        _run_with_attempt_sequence(monkeypatch, tmp_path, [TimeoutError()])
+    assert str(info.value) != ""
+    assert "TimeoutError" in str(info.value)
+
+
 def test_first_reviews_of_chapters_in_separate_stories_are_not_fix_loops(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
