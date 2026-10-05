@@ -214,6 +214,33 @@ already has some tops up only the remainder.
 See `docs/superpowers/specs/2026-08-24-batch-story-generation-design.md`
 for the full design.
 
+## Experiments
+
+The research behind psalm-saga is a controlled study of whether a story
+generated from an explicit dimension specification actually instantiates
+the dimensions it names. The study design is in
+[`docs/EXPERIMENTAL_SETUP.md`](docs/EXPERIMENTAL_SETUP.md). Its generation
+stage runs through `experiments/pipeline/`:
+
+```bash
+uv run python -m experiments.pipeline.cli expand --plan experiments/plans/pilot.yaml
+uv run python -m experiments.pipeline.cli run --plan experiments/plans/pilot.yaml
+uv run python -m experiments.pipeline.cli status --plan-name pilot
+```
+
+The committed pilot uses premise inputs that are not authored yet, so its
+jobs fail until `experiments/data/premises/` is populated. A plan that runs
+today uses Task C (source-story inputs). See
+[`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) §3.3 and §4.1.
+
+Generation is built for the full-pipeline condition (C1) only. Judging and
+analysis are not built yet. The operator's guide covers what each experiment
+is for, what to prepare beforehand (corpus data, provider keys, and the
+premise and specification inputs that are not authored yet), how to run and
+troubleshoot a plan, how to read the output, and the reporting rules the
+study fixes in advance:
+[`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md).
+
 ## The workflow
 
 | Skill                        | Role                                                                                  | PSALM correspondence                                                    |
@@ -337,10 +364,10 @@ agent = build_agent(Settings())  # ephemeral session, in-memory state
 
 ## Roadmap
 
-- **Experiments and evaluation infrastructure.** Tooling for running
-  generation at scale under varied conditions (models, dimension
-  combinations, source materials) and collecting results systematically,
-  as a companion to the single-session interactive workflow.
+- **Experiments and evaluation infrastructure.** Generation at scale is in
+  place for condition C1. Remaining: the other six conditions (C2–C7),
+  authoring of premises and specifications, and the judging and analysis
+  instruments (see [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) §1).
 - **Prompt improvements:**
     - **Dimension matrix support:** a structured, machine-readable
       representation of dimension choices and their relative weighting,

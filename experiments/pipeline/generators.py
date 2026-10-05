@@ -10,8 +10,7 @@ from __future__ import annotations
 import os
 
 _DEFAULT_MODELS: dict[str, str] = {
-    "frontier": "anthropic:claude-sonnet-4-6",
-    "open_weight": "openai:gpt-oss-120b",
+    "frontier": "openai:gpt-6-luna",
 }
 
 _ENV_OVERRIDE_PREFIX = "PSALM_SAGA_EXPERIMENTS_GENERATOR_"

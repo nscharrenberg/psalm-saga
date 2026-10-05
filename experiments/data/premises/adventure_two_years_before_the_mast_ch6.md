@@ -1,0 +1,5 @@
+A merchant ship is sailing across the Pacific on a November morning when the crew is woken by a cry that a man has fallen overboard. A young sailor, well liked by officers and crew, has fallen from the rigging while fitting a strap to a mast. He cannot swim, is heavily dressed, and is carrying tools around his neck. The ship's boat is lowered and rows around the spot for an hour, but the man is never found, and the crew agrees there is no hope and turns back.
+
+The narrator reflects on how a death at sea differs from one on land, and how it changes the mood of the crew for a while. The dead man's clothes are auctioned off on deck that same day, as is customary.
+
+That night the narrator sits with the ship's cook, who is convinced that the carpenter, a German, is secretly a Finn and that Finns can control the wind. The cook appeals to the oldest sailor on board to settle the matter, and the story ends with the cook telling the narrator he will understand once he has been at sea long enough.

@@ -1,0 +1,5 @@
+A narrator describes a small English town where almost every householder is a woman, because the men have left for work elsewhere or stay away. The town's women run its society with strict rules for visiting, careful and unspoken poverty, and a shared pride in gentility, and they look at any man who comes among them with suspicion.
+
+A half-pay army captain moves into the town with his two daughters, one of whom is sickly and worn, the other cheerful and charming. He speaks openly about being poor, which the ladies find shocking, but over time he wins their respect through good sense and practical help. The narrator recounts a small episode in which the town rallies around a cow that has been injured, and the captain advises a remedy the whole town adopts.
+
+The narrator then describes an evening party at which the captain and his daughters appear. The evening turns into a dispute between the host and the captain about two authors, and the party ends with the hostess and the captain cool toward each other.
