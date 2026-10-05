@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from experiments.pipeline import runner
-from experiments.pipeline.models import GenerationJob, GenerationResult
+from experiments.pipeline.models import GenerationJob, GenerationResult, JobAbandoned, JobFailed
 from experiments.pipeline.registry import Registry
 from experiments.pipeline.resolver import InputResolver
 
@@ -28,7 +28,7 @@ class _FakeBackend:
     def __init__(self, *, fail: bool = False) -> None:
         self._fail = fail
 
-    def run(self, job: GenerationJob, input_ref) -> GenerationResult:
+    def run(self, job: GenerationJob, input_ref, progress) -> GenerationResult:
         if self._fail:
             message = "simulated backend failure"
             raise RuntimeError(message)
@@ -36,6 +36,27 @@ class _FakeBackend:
             artifacts={"story.md": f"# Story for {job.item_id}\n\nfrom: {input_ref.content}"},
             trace=[{"type": "AIMessage", "content": "ok"}],
             config={"model": "fake-model"},
+        )
+
+
+class _AbandoningBackend:
+    def run(self, job, input_ref, progress):
+        progress.stage("abandoned")
+        raise JobAbandoned(
+            "fix-loop cap reached",
+            artifacts={"attempts/1/drafts/story/ABANDONED.md": "cap"},
+            trace=[{"type": "AIMessage", "content": "stuck"}],
+            config={"attempts": 1},
+        )
+
+
+class _JobFailingBackend:
+    def run(self, job, input_ref, progress):
+        raise JobFailed(
+            "story attempt errored",
+            artifacts={"attempts/1/drafts/story/partial.md": "partial"},
+            trace=[{"type": "AIMessage", "content": "boom"}],
+            config={"attempts": 1},
         )
 
 
@@ -108,4 +129,86 @@ def test_run_pending_reports_missing_input_as_a_failure_not_a_crash(
     runner.run_pending(registry, "pilot", resolver, tmp_path / "runs", workers=1)
 
     assert registry.status_counts("pilot") == {"failed": 1}
+    registry.close()
+
+
+def test_run_pending_records_an_abandoned_job_and_keeps_its_evidence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setitem(runner.BACKEND_REGISTRY, "C1", _AbandoningBackend())
+    registry = Registry(tmp_path / "runs.db")
+    registry.insert_jobs([_job("a")])
+    resolver = _resolver(tmp_path, item_ids=["a"])
+    runs_dir = tmp_path / "runs"
+
+    runner.run_pending(registry, "pilot", resolver, runs_dir, workers=1)
+
+    assert registry.status_counts("pilot") == {"abandoned": 1}
+    job_dir = runs_dir / _job("a").job_id
+    assert (job_dir / "attempts" / "1" / "drafts" / "story" / "ABANDONED.md").read_text() == "cap"
+    assert (job_dir / "progress.log").exists()
+    registry.close()
+
+
+def test_run_pending_records_a_job_failure_and_keeps_its_evidence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setitem(runner.BACKEND_REGISTRY, "C1", _JobFailingBackend())
+    registry = Registry(tmp_path / "runs.db")
+    registry.insert_jobs([_job("a")])
+    resolver = _resolver(tmp_path, item_ids=["a"])
+    runs_dir = tmp_path / "runs"
+
+    runner.run_pending(registry, "pilot", resolver, runs_dir, workers=1)
+
+    assert registry.status_counts("pilot") == {"failed": 1}
+    job_dir = runs_dir / _job("a").job_id
+    assert (job_dir / "attempts" / "1" / "drafts" / "story" / "partial.md").read_text() == "partial"
+    trace = (job_dir / "trace.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert json.loads(trace[0]) == {"type": "AIMessage", "content": "boom"}
+    registry.close()
+
+
+def test_run_pending_limits_work_to_the_requested_items(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setitem(runner.BACKEND_REGISTRY, "C1", _FakeBackend())
+    registry = Registry(tmp_path / "runs.db")
+    registry.insert_jobs([_job("a"), _job("b"), _job("c")])
+    resolver = _resolver(tmp_path, item_ids=["a", "b", "c"])
+
+    runner.run_pending(registry, "pilot", resolver, tmp_path / "runs", workers=1, item_ids={"b"})
+
+    assert registry.status_counts("pilot") == {"done": 1, "pending": 2}
+    registry.close()
+
+
+def test_run_pending_with_an_empty_item_filter_does_nothing_and_prints_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setitem(runner.BACKEND_REGISTRY, "C1", _FakeBackend())
+    registry = Registry(tmp_path / "runs.db")
+    registry.insert_jobs([_job("a")])
+    resolver = _resolver(tmp_path, item_ids=["a"])
+
+    runner.run_pending(registry, "pilot", resolver, tmp_path / "runs", workers=1, item_ids=set())
+
+    assert registry.status_counts("pilot") == {"pending": 1}
+    assert capsys.readouterr().out == ""
+    registry.close()
+
+
+def test_run_pending_prints_start_and_finish_lines(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setitem(runner.BACKEND_REGISTRY, "C1", _FakeBackend())
+    registry = Registry(tmp_path / "runs.db")
+    registry.insert_jobs([_job("a")])
+    resolver = _resolver(tmp_path, item_ids=["a"])
+
+    runner.run_pending(registry, "pilot", resolver, tmp_path / "runs", workers=1)
+
+    out = capsys.readouterr().out
+    assert "[1/1] a start" in out
+    assert "[1/1] a done" in out
     registry.close()
