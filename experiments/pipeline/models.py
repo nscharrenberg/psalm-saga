@@ -31,6 +31,8 @@ class GenerationJob:
     language: str
     replicate: int = 0
     is_pilot: bool = False
+    length_range: str | None = None
+    """Word-count range (`MIN-MAX`) the story should land in. Not part of identity."""
 
     @property
     def job_id(self) -> str:
@@ -68,3 +70,25 @@ class GenerationResult:
     """The full raw message trace, one dict per model call in/out."""
     config: dict[str, Any]
     """Reproducibility snapshot: model id, decoding params, seed, prompt hash, etc."""
+
+
+class JobAbandoned(Exception):  # noqa: N818 — named by its domain meaning, not an error suffix
+    """Every story attempt for a job was abandoned by the review loop.
+
+    Carries the artifacts and trace of all attempts so the runner can persist
+    them as evidence before recording the job as `abandoned`.
+    """
+
+    def __init__(
+        self,
+        reason: str,
+        *,
+        artifacts: dict[str, str],
+        trace: list[dict[str, Any]],
+        config: dict[str, Any],
+    ) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.artifacts = artifacts
+        self.trace = trace
+        self.config = config

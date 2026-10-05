@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,15 +36,23 @@ CREATE TABLE IF NOT EXISTS jobs (
     error TEXT,
     started_at TEXT,
     finished_at TEXT,
-    config_json TEXT
+    config_json TEXT,
+    length_range TEXT
 );
 """
 
 _SELECT_COLUMNS = (
     "job_id, plan_name, task, condition, item_id, generator_family, "
     "language, replicate, is_pilot, status, output_dir, error, "
-    "started_at, finished_at, config_json"
+    "started_at, finished_at, config_json, length_range"
 )
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, declaration: str) -> None:
+    """Add `column` to `table` if an older database predates it."""
+    existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
 
 
 @dataclass(frozen=True)
@@ -62,12 +71,12 @@ def _row_to_record(row: tuple[Any, ...]) -> JobRecord:
     (
         _job_id, plan_name, task, condition, item_id, generator_family,
         language, replicate, is_pilot, status, output_dir, error,
-        _started_at, _finished_at, config_json,
+        _started_at, _finished_at, config_json, length_range,
     ) = row
     job = GenerationJob(
         plan_name=plan_name, task=task, condition=condition, item_id=item_id,
         generator_family=generator_family, language=language,
-        replicate=replicate, is_pilot=bool(is_pilot),
+        replicate=replicate, is_pilot=bool(is_pilot), length_range=length_range,
     )
     return JobRecord(
         job=job, status=status, output_dir=output_dir, error=error,
@@ -84,6 +93,7 @@ class Registry:
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         with self._lock:
             self._conn.execute(_SCHEMA)
+            _ensure_column(self._conn, "jobs", "length_range", "TEXT")
             self._conn.commit()
 
     def close(self) -> None:
@@ -100,27 +110,52 @@ class Registry:
                     """
                     INSERT OR IGNORE INTO jobs
                         (job_id, plan_name, task, condition, item_id, generator_family,
-                         language, replicate, is_pilot, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                         language, replicate, is_pilot, status, length_range)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
                     """,
                     (
                         job.job_id, job.plan_name, job.task, job.condition, job.item_id,
                         job.generator_family, job.language, job.replicate, int(job.is_pilot),
+                        job.length_range,
                     ),
                 )
                 inserted += cursor.rowcount
             self._conn.commit()
             return inserted
 
-    def claim_next_pending(self, plan_name: str) -> GenerationJob | None:
+    def _pending_filter(
+        self, plan_name: str, item_ids: Collection[str] | None
+    ) -> tuple[str, list[Any]] | None:
+        """WHERE clause for pending jobs of `plan_name`, optionally limited to `item_ids`.
+
+        Returns None when `item_ids` is empty, meaning nothing can match.
+        """
+        clause = "plan_name = ? AND status = 'pending'"
+        params: list[Any] = [plan_name]
+        if item_ids is not None:
+            ids = sorted(item_ids)
+            if not ids:
+                return None
+            clause += f" AND item_id IN ({','.join('?' * len(ids))})"
+            params.extend(ids)
+        return clause, params
+
+    def claim_next_pending(
+        self, plan_name: str, item_ids: Collection[str] | None = None
+    ) -> GenerationJob | None:
         """Atomically claim one `pending` job for `plan_name`, marking it `running`.
 
-        Returns `None` once no `pending` job remains for this plan.
+        `item_ids` limits the claim to jobs whose `item_id` is listed. Returns
+        `None` once no matching `pending` job remains.
         """
         with self._lock:
+            filtered = self._pending_filter(plan_name, item_ids)
+            if filtered is None:
+                return None
+            clause, params = filtered
             row = self._conn.execute(
-                f"SELECT {_SELECT_COLUMNS} FROM jobs WHERE plan_name = ? AND status = 'pending' LIMIT 1",  # noqa: S608 (_SELECT_COLUMNS is a constant, plan_name is parameterized)
-                (plan_name,),
+                f"SELECT {_SELECT_COLUMNS} FROM jobs WHERE {clause} LIMIT 1",  # noqa: S608 (_SELECT_COLUMNS is a constant, values are parameterized)
+                params,
             ).fetchone()
             if row is None:
                 return None
@@ -138,6 +173,16 @@ class Registry:
                 # this call didn't actually claim.
                 return None
             return record.job
+
+    def count_pending(self, plan_name: str, item_ids: Collection[str] | None = None) -> int:
+        """Count `pending` jobs for `plan_name`, optionally limited to `item_ids`."""
+        with self._lock:
+            filtered = self._pending_filter(plan_name, item_ids)
+            if filtered is None:
+                return 0
+            clause, params = filtered
+            row = self._conn.execute(f"SELECT COUNT(*) FROM jobs WHERE {clause}", params).fetchone()  # noqa: S608
+            return int(row[0])
 
     def mark_done(self, job_id: str, *, output_dir: str, config: dict[str, Any]) -> None:
         """Record a job's successful completion."""
@@ -158,6 +203,16 @@ class Registry:
             )
             self._conn.commit()
 
+    def mark_abandoned(self, job_id: str, *, reason: str, config: dict[str, Any]) -> None:
+        """Record that every story attempt for a job was abandoned, with the reason."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE jobs SET status = 'abandoned', error = ?, config_json = ?, "
+                "finished_at = ? WHERE job_id = ?",
+                (reason, json.dumps(config), datetime.now(UTC).isoformat(), job_id),
+            )
+            self._conn.commit()
+
     def status_counts(self, plan_name: str) -> dict[str, int]:
         """Count jobs for `plan_name` by status."""
         with self._lock:
@@ -168,11 +223,14 @@ class Registry:
             return dict(rows)
 
     def requeue_failed(self, plan_name: str) -> int:
-        """Reset every `failed` job for `plan_name` back to `pending`. Returns the count changed."""
+        """Reset every `failed` or `abandoned` job for `plan_name` back to `pending`.
+
+        Returns the count changed.
+        """
         with self._lock:
             cursor = self._conn.execute(
                 "UPDATE jobs SET status = 'pending', error = NULL "
-                "WHERE plan_name = ? AND status = 'failed'",
+                "WHERE plan_name = ? AND status IN ('failed', 'abandoned')",
                 (plan_name,),
             )
             self._conn.commit()
