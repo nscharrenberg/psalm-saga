@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from experiments.pipeline.backends import full_pipeline
+from experiments.pipeline.generators import _DEFAULT_MODELS
 from experiments.pipeline.models import GenerationJob
 from experiments.pipeline.resolver import ResolvedInput
 from psalm_saga.session import session_directory
@@ -135,8 +136,8 @@ def test_run_resolves_generator_family_and_records_the_model_id_in_config(
 
     result = backend.run(_job(), input_ref)
 
-    assert result.config["orchestration_model_name"] == "anthropic:claude-sonnet-4-6"
-    assert result.config["subagent_model_name"] == "anthropic:claude-sonnet-4-6"
+    assert result.config["orchestration_model_name"] == _DEFAULT_MODELS["frontier"]
+    assert result.config["subagent_model_name"] == _DEFAULT_MODELS["frontier"]
     assert result.config["task"] == "A"
     assert result.config["condition"] == "C1"
     assert "prompt_template_sha256" in result.config

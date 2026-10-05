@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from experiments.pipeline.generators import UnknownGeneratorFamilyError, resolve_model
+from experiments.pipeline.generators import _DEFAULT_MODELS, UnknownGeneratorFamilyError, resolve_model
 
 
 def test_resolve_model_returns_the_default_for_a_known_family() -> None:
-    assert resolve_model("frontier") == "anthropic:claude-sonnet-4-6"
+    assert resolve_model("frontier") == _DEFAULT_MODELS["frontier"]
 
 
 def test_resolve_model_raises_for_an_unknown_family() -> None:
