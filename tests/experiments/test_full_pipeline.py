@@ -18,6 +18,7 @@ import pytest
 
 from experiments.pipeline.backends import full_pipeline
 from experiments.pipeline.generators import _DEFAULT_MODELS
+from experiments.pipeline.length import directive_for
 from experiments.pipeline.models import GenerationJob
 from experiments.pipeline.progress import NullProgress
 from experiments.pipeline.resolver import ResolvedInput
@@ -218,3 +219,75 @@ def test_run_handles_task_d_without_a_missing_instruction_template(
 
     assert "# Scratch spec content" in result.trace[0]["content"]
     assert result.config["task"] == "D"
+
+
+def test_run_prepends_the_length_directive_when_a_range_is_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = Settings()
+    settings.backend.root_dir = tmp_path
+    docs_dir = session_directory(settings, "session-fixed") / "docs"
+    captured: dict[str, Any] = {}
+
+    class _Capture(_FakeAgent):
+        def stream(self, payload: dict[str, Any], **kwargs: Any) -> Iterator[tuple[str, Any]]:
+            captured["instruction"] = payload["messages"][0]["content"]
+            return super().stream(payload, **kwargs)
+
+    monkeypatch.setattr(full_pipeline, "Settings", lambda: settings)
+    monkeypatch.setattr(full_pipeline, "generate_session_id", lambda: "session-fixed")
+    monkeypatch.setattr(full_pipeline, "open_sqlite_checkpointer", _fake_checkpointer)
+    monkeypatch.setattr(
+        full_pipeline, "build_agent", lambda *_a, **_kw: _Capture(docs_dir, dict(_FINISHED_DRAFT))
+    )
+
+    job = GenerationJob(
+        plan_name="pilot",
+        task="A",
+        condition="C1",
+        item_id="satire_the_happy_prince",
+        generator_family="frontier",
+        language="english",
+        length_range="270-330",
+    )
+    result = full_pipeline.FullPipelineBackend().run(
+        job,
+        ResolvedInput(kind="premise", content="premise text", source_path=tmp_path),
+        NullProgress(),
+    )
+
+    assert captured["instruction"].startswith(directive_for("270-330") + "\n\n")
+    assert "270" in captured["instruction"]
+    assert "330" in captured["instruction"]
+    assert result.config["length_range"] == "270-330"
+    assert result.config["realised_words"] == len(result.artifacts["stories/story.md"].split())
+
+
+def test_run_leaves_the_instruction_unchanged_without_a_length_range(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = Settings()
+    settings.backend.root_dir = tmp_path
+    docs_dir = session_directory(settings, "session-fixed") / "docs"
+    captured: dict[str, Any] = {}
+
+    class _Capture(_FakeAgent):
+        def stream(self, payload: dict[str, Any], **kwargs: Any) -> Iterator[tuple[str, Any]]:
+            captured["instruction"] = payload["messages"][0]["content"]
+            return super().stream(payload, **kwargs)
+
+    monkeypatch.setattr(full_pipeline, "Settings", lambda: settings)
+    monkeypatch.setattr(full_pipeline, "generate_session_id", lambda: "session-fixed")
+    monkeypatch.setattr(full_pipeline, "open_sqlite_checkpointer", _fake_checkpointer)
+    monkeypatch.setattr(
+        full_pipeline, "build_agent", lambda *_a, **_kw: _Capture(docs_dir, dict(_FINISHED_DRAFT))
+    )
+
+    result = full_pipeline.FullPipelineBackend().run(
+        _job(), ResolvedInput(kind="premise", content="premise text", source_path=tmp_path), NullProgress()
+    )
+
+    assert captured["instruction"].startswith("Generate a complete story from this premise")
+    assert captured["instruction"].endswith("premise text")
+    assert result.config["length_range"] is None
+    assert result.config["realised_words"] == len(result.artifacts["stories/story.md"].split())

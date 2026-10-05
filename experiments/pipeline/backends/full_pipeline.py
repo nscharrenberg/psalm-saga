@@ -13,6 +13,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from experiments.pipeline.generators import resolve_model
+from experiments.pipeline.length import directive_for
 from experiments.pipeline.models import GenerationJob, GenerationResult
 from experiments.pipeline.progress import ProgressSink, stage_for_tool_call, tool_calls_from_update
 from experiments.pipeline.resolver import ResolvedInput
@@ -57,6 +58,8 @@ class FullPipelineBackend:
         session_id = generate_session_id()
         instruction_template = _TASK_INSTRUCTIONS[job.task]
         instruction = instruction_template.format(content=input_ref.content)
+        if job.length_range is not None:
+            instruction = f"{directive_for(job.length_range)}\n\n{instruction}"
 
         with open_sqlite_checkpointer(settings, session_id) as checkpointer:
             agent = build_agent(
@@ -90,6 +93,8 @@ class FullPipelineBackend:
                 "task": job.task,
                 "condition": job.condition,
                 "promoted_stories": promoted,
+                "length_range": job.length_range,
+                "realised_words": _realised_words(artifacts, promoted),
                 "prompt_template_sha256": hashlib.sha256(
                     instruction_template.encode("utf-8")
                 ).hexdigest(),
@@ -148,6 +153,14 @@ class FullPipelineBackend:
             for path in sorted(docs_dir.rglob("*"))
             if path.is_file()
         }
+
+
+def _realised_words(artifacts: dict[str, str], promoted: list[str]) -> int | None:
+    """Word count of the first promoted story, or None when nothing was promoted."""
+    if not promoted:
+        return None
+    text = artifacts.get(f"stories/{promoted[0]}.md")
+    return len(text.split()) if text is not None else None
 
 
 BACKEND = FullPipelineBackend()
