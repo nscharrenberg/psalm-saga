@@ -34,10 +34,13 @@ class JobProgress:
         self._log_path = log_path
 
     def stage(self, label: str) -> None:
-        line = f"{self._prefix} {label}"
-        print(line, flush=True)  # noqa: T201 — operator-facing progress output
+        self.line(f"{self._prefix} {label}")
+
+    def line(self, text: str) -> None:
+        """Print one full line and append it to the job's `progress.log`."""
+        print(text, flush=True)  # noqa: T201 — operator-facing progress output
         with self._log_path.open("a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
+            handle.write(text + "\n")
 
 
 def stage_for_tool_call(name: str, args: dict[str, Any]) -> str | None:

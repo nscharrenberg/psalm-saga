@@ -10,7 +10,7 @@ import json
 import logging
 import threading
 import time
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -58,6 +58,25 @@ def _persist(
 
 def _format_elapsed(seconds: float) -> str:
     return f"{int(seconds // 60):02d}:{int(seconds % 60):02d}"
+
+
+def _record(write: Callable[..., None], job_id: str, **fields: Any) -> None:
+    """Record one job outcome; a failed write is logged, never allowed to stop the worker."""
+    try:
+        write(job_id, **fields)
+    except Exception:  # the pool must survive a registry write failure
+        logger.exception("Could not record outcome for job %s", job_id)
+
+
+def _announce(progress: JobProgress | None, text: str) -> None:
+    """Print a runner line to the job's sink, or to the console if the job has no sink yet."""
+    if progress is None:
+        print(text, flush=True)  # noqa: T201 — operator-facing progress output
+        return
+    try:
+        progress.line(text)
+    except Exception:  # a log-append failure must not stop the worker
+        logger.exception("Could not write progress line for %r", text)
 
 
 def run_job(
@@ -118,25 +137,26 @@ def run_pending(  # noqa: PLR0913, PLR0917 — signature fixed by the runner spe
             with counter_lock:
                 index = next(counter)
             label = f"[{index}/{total}] {job.item_id}"
-            job_dir = runs_dir / job.job_id
-            job_dir.mkdir(parents=True, exist_ok=True)
-            progress = JobProgress(prefix=label, log_path=job_dir / "progress.log")
-            print(f"{label} start", flush=True)  # noqa: T201 — operator-facing progress output
             started = time.monotonic()
+            progress: JobProgress | None = None
             try:
+                job_dir = runs_dir / job.job_id
+                job_dir.mkdir(parents=True, exist_ok=True)
+                progress = JobProgress(prefix=label, log_path=job_dir / "progress.log")
+                progress.line(f"{label} start")
                 output_dir, config = run_job(job, resolver, runs_dir, progress)
             except JobAbandoned as exc:
-                registry.mark_abandoned(job.job_id, reason=exc.reason, config=exc.config)
+                _record(registry.mark_abandoned, job.job_id, reason=exc.reason, config=exc.config)
                 outcome = "abandoned"
             except Exception as exc:  # noqa: BLE001 — one bad job must never stop the pool
-                registry.mark_failed(job.job_id, error=str(exc))
+                _record(registry.mark_failed, job.job_id, error=str(exc))
                 outcome = "failed"
                 logger.warning("Job %s failed: %s", job.job_id, exc)
             else:
-                registry.mark_done(job.job_id, output_dir=output_dir, config=config)
+                _record(registry.mark_done, job.job_id, output_dir=output_dir, config=config)
                 outcome = "done"
             elapsed = _format_elapsed(time.monotonic() - started)
-            print(f"{label} {outcome} ({elapsed})", flush=True)  # noqa: T201 — operator-facing progress output
+            _announce(progress, f"{label} {outcome} ({elapsed})")
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [executor.submit(_worker_loop) for _ in range(workers)]
