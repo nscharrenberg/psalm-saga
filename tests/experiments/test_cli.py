@@ -119,6 +119,39 @@ def test_run_command_rejects_an_unknown_item_and_lists_valid_ids(tmp_path) -> No
         ])
 
 
+def test_run_command_item_overrides_the_plans_corpus_filter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    corpus_path = _write_corpus(tmp_path)
+    plan_path = tmp_path / "filtered.yaml"
+    plan_path.write_text(
+        yaml.safe_dump(
+            {
+                "name": "pilot",
+                "corpus_filter": {"languages": ["english"]},
+                "tasks": {"A": {"conditions": ["C1"], "generators": ["frontier"]}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_run_pending(registry, plan_name, _resolver, run_dir, workers, item_ids=None) -> None:
+        del run_dir, workers
+        captured["item_ids"] = item_ids
+        captured["pending"] = registry.status_counts(plan_name)
+
+    monkeypatch.setattr(cli, "run_pending", fake_run_pending)
+
+    cli.main([
+        "run", "--plan", str(plan_path), "--corpus", str(corpus_path),
+        "--runs-dir", str(tmp_path / "runs"), "--item", "gothic_a",
+    ])
+
+    assert captured["item_ids"] == {"gothic_a"}
+    assert captured["pending"] == {"pending": 1}
+
+
 def test_status_command_prints_counts_by_status(tmp_path: Path) -> None:
     corpus_path = _write_corpus(tmp_path)
     plan_path = _write_plan(tmp_path)

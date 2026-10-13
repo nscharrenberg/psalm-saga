@@ -18,14 +18,14 @@ then judging, then analysis. Only the first stage exists in code.
 
 | Stage | Status | Where |
 |---|---|---|
-| Source corpus (29 public-domain items, EN + NL) | Built, **not in git** (see §3.1) | `experiments/data/stories/` |
+| Source corpus (public-domain items, EN + NL; see CORPUS.md) | Built, **not in git** (see §3.1) | `experiments/data/stories/` |
 | Plan files and job expansion | Built | `experiments/plans/`, `experiments/pipeline/plan.py` |
 | Job registry (SQLite) and worker pool | Built | `experiments/pipeline/registry.py`, `runner.py` |
 | Generation, condition **C1** (full pipeline) | Built | `experiments/pipeline/backends/full_pipeline.py` |
 | Generation, conditions **C2–C7** | Stubs; raise `NotImplementedError` | `experiments/pipeline/backends/*.py` |
 | Premises, gold specs, scratch specs | **Not authored yet** | `experiments/data/{premises,specs}/` |
-| Judging instruments (A1–A6, Q1) | Not built | — |
-| Mechanical checks (M1 lock, M2 overlap) | Not built | — |
+| Judging instruments (A1, A1b, A2–A6, Q1) | Not built | — |
+| Mechanical checks (M1 lock, M2 overlap, M3 language and length) | Not built | — |
 | Specification instruments (S1, S2) | Not built | — |
 | Statistical analysis | Not built | — |
 
@@ -43,20 +43,21 @@ sub-dimensions) before drafting prose. The study asks whether that
 specification does anything: whether the generated story actually reflects
 the values the specification names, and whether the staged pipeline beats
 simpler alternatives. [`EXPERIMENTAL_SETUP.md` §1](EXPERIMENTAL_SETUP.md#1-research-questions)
-states five research questions:
+states six research questions:
 
 | RQ | Question | Role |
 |---|---|---|
-| RQ1 | Does a story generated from a specification instantiate the values that specification names? | Primary |
-| RQ2 | Does the specification stage do work the rest of the pipeline does not? | Primary |
-| RQ3 | When the system writes a specification from a human story, does it recover what a human annotator recorded? | Diagnostic |
-| RQ4 | Is specification-driven output non-inferior in quality to unstructured baselines? | Guardrail |
-| RQ5 | Does adherence depend on who wrote the specification? | Diagnostic |
+| RQ1 | Adherence: does a story generated from a specification instantiate the values that specification names? | Primary |
+| RQ2 | Controllability: when one dimension is regenerated and the rest locked, does the story change in that dimension and only that one? | Primary |
+| RQ3 | Does the specification stage do work the rest of the pipeline does not? | Primary |
+| RQ4 | When the system writes a specification from a human story, does it recover what a human annotator recorded? | Diagnostic |
+| RQ5 | Is specification-driven output non-inferior in quality to unstructured baselines? | Guardrail |
+| RQ6 | Do adherence and lock fidelity depend on where the specification came from (extracted vs. authored)? | Diagnostic |
 
 ### 2.2 The conditions
 
 Each condition is a different way of producing a story. Comparing them is
-how the RQ2 contrasts are drawn.
+how the RQ3 contrasts are drawn.
 
 | ID | Name | Input | Pipeline | Status |
 |---|---|---|---|---|
@@ -88,30 +89,43 @@ tasks to separate different questions.
 |---|---|---|---|
 | A | premise | C1, C2, C4, C5, C6, C7 | Whole-system comparison from a premise alone |
 | B | gold specification | C1, C2, C3 | Spec-following, separated from spec-writing |
-| C | source story | C1 | Extract a spec from a human story, then make six single-dimension variants |
-| D | scratch specification (authored) | C1 | Variants without the extraction step (isolates extraction error) |
+| C | source story | C1 | Extract a spec from a human story, then generate a base story, a null replicate, and six single-dimension variants |
+| D | scratch specification (authored, unreviewed) | C1 | Task C's procedure without the extraction step (isolates extraction error) |
 
 Task B supplies the gold specification directly so that a system that writes
 vague specs and follows them well is not confused with one that writes sharp
 specs and ignores them.
 
-Task C and D produce six variants per item, one per dimension. Each variant
-regenerates one dimension and locks the other five. Note that the harness does
-not verify the locks yet; that check is M1 (`EXPERIMENTAL_SETUP.md` §5.1), which is unbuilt.
+Task C and D produce, per item, a base story from the unchanged
+specification, a null replicate (a second story from the same unchanged
+specification), and one variant per dimension. Each variant regenerates one
+dimension and locks the rest. Judges compare each variant with the base story,
+never with the human source (`EXPERIMENTAL_SETUP.md` §4).
+
+The harness does not match this yet:
+
+- The Task C and D prompts ask for the six variants only. The base story and
+  the null replicate are not generated.
+- Task D generates from the scratch specification as given; the design
+  requires it to be the system's own unreviewed specification.
+- There is no explicit output-language directive. Dutch input has so far
+  produced Dutch prose, but with English chapter headings.
+- The locks are not verified; that check is M1 (`EXPERIMENTAL_SETUP.md` §5.1),
+  which is unbuilt.
 
 ### 2.4 The corpus
 
-29 items, 15 English and 14 Dutch, each a complete scene or arc. Lengths run
-from about 300 to about 8,500 words, so check `word_count` in `corpus.csv`
-rather than assuming a uniform length. They are stratified across five genre buckets
-(Gothic/Supernatural, Detective/Mystery, Domestic/Social Realism,
-Adventure/Sea or Travel, Satire/Moral Fable), three per language per bucket,
-except Dutch Detective/Mystery, which has two. The full item list and the
-reason each item was picked are in [`CORPUS.md`](CORPUS.md).
+English and Dutch items, each a complete scene or arc, stratified across
+five genre buckets (Gothic/Supernatural, Detective/Mystery, Domestic/Social
+Realism, Adventure/Sea or Travel, Satire/Moral Fable). Lengths vary widely, so
+check `word_count` in `corpus.csv` rather than assuming a uniform length. The
+item list, counts, length statistics and the reason each item was picked are
+in [`CORPUS.md`](CORPUS.md). The length policy is in `EXPERIMENTAL_SETUP.md`
+§2.2.
 
-A 10-item scratch sub-corpus (5 per language) has no source text. Its
-specifications are authored directly, which removes extraction error and the
-memorisation confound.
+A scratch sub-corpus (`EXPERIMENTAL_SETUP.md` §2.4) has no source text. Its
+specifications are written by the system, which removes extraction error and
+the memorisation confound.
 
 ## 3. Before you start
 
@@ -205,15 +219,17 @@ For the pilot, the two items Task A would use are
 `adventure_two_years_before_the_mast_ch6` and `domestic_de_ooievaar_komt`, so
 you need `experiments/data/premises/adventure_two_years_before_the_mast_ch6.md`
 and `experiments/data/premises/domestic_de_ooievaar_komt.md`. For the full
-study, one per item (29).
+study, one per corpus item.
 
 ### 3.4 Budget
 
 Every C1 job is a full agent session: many model calls for spec, plan,
 drafting, review, and repair. Cost scales with jobs × model price × session
-length. The confirmatory design is 952 generated stories (EXPERIMENTAL_SETUP
-§4). Estimate cost before a large run with `docs/experimental_cost_estimation.xlsx`.
-Run a pilot first and measure real cost per job.
+length. The number of generated stories in the confirmatory design is in
+`EXPERIMENTAL_SETUP.md` Appendix B. Estimate cost before a large run with
+`docs/experimental_cost_estimation.xlsx`. Run a pilot first and measure real
+cost per job: the harness does not record token usage yet (§9), and the
+per-call assumptions in the sheet undercount an agentic session.
 
 ## 4. Plans
 
@@ -257,7 +273,9 @@ Fields:
     and so is a missing key or a non-integer bound.
 
   Task D needs `length:`. Its scratch items have no source story to measure,
-  so the plan must give the range. Expansion raises `PlanError` for any item
+  so the plan must give the range. The design gives each scratch item the
+  band of a same-language, same-bucket corpus item (`EXPERIMENTAL_SETUP.md`
+  §2.2); until the harness does that itself, set it per item. Expansion raises `PlanError` for any item
   that has no `word_count` when the plan sets no `length`.
 
   The range is stored on each job when the plan is first expanded, and later
@@ -540,12 +558,13 @@ a different chance rate, and a result only means something relative to it:
 
 | Instrument | Question | Chance | What a result means |
 |---|---|---|---|
-| A1 dimension ID | Which of six dimensions was regenerated? | 1/6 ≈ 0.167 | Accuracy above 0.167 means the variant carries its regenerated dimension detectably. |
-| A2 drift | Did any locked dimension also change? | — | Reported as d′ (hit rate on the changed dimension vs false-alarm rate on locked ones). |
+| A1 dimension ID | Base story vs. variant: which of six dimensions was regenerated? (For null pairs the answer is "No difference".) | 1/6 ≈ 0.167 | Accuracy above 0.167 means the variant carries its regenerated dimension detectably. |
+| A2 drift | Did any locked dimension also change? | — | Reported as d′, with and without the expected entangled dimension pairs, and against the null-pair false-alarm rate. |
+| A1b value check | Which of two descriptions (old or new value of the regenerated dimension) does this variant realise? | 1/2 | Above 0.5 means the variant moved to the specified value, not just somewhere else. |
 | A3 spec→story matching | Which of two stories came from this spec? | 1/2 | Above 0.5 means the story reflects its spec. |
 | A4 story→spec attribution | Which of three specs did this story come from? | 1/3 | Above 0.33 means the story reflects its spec. |
 | A5 sub-dimension recovery | Which of four values is true for this sub-dimension? | 1/4 | Exploratory. Reported descriptively. |
-| A6 premise attribution | Which of three premises did this story come from? | 1/3 | **Calibration, not a result.** Every condition should approach ceiling (the study reports about 0.94). A condition far below it signals a generation failure, not poor adherence. |
+| A6 premise attribution | Which of three premises did this story come from? | 1/3 | **Calibration, not a result.** Every condition should approach ceiling (the design uses 0.94 as an illustration, not a result). A condition far below it signals a generation failure, not poor adherence. |
 
 Reading the numbers:
 
@@ -555,13 +574,17 @@ Reading the numbers:
 - **"Cannot tell" is an allowed answer.** The primary analysis excludes
   abstentions and reports the abstention rate beside it. A secondary analysis
   counts them as wrong.
-- **H1d is conditional.** A2 is only scored on items where A1 was right. If
-  that subset is under 60 items, the design says to report an unconditional
-  drift rate instead and call H1d inconclusive.
+- **"No difference" on a variant pair is wrong.** It counts as a miss, not an
+  abstention. On a null pair it is the correct answer.
+- **H2b uses every variant pair.** A1's chosen dimension and A2's answers
+  together give a changed/unchanged report per dimension; $d'$ compares the
+  regenerated dimension with the locked ones over all pairs, whatever A1's
+  outcome (`EXPERIMENTAL_SETUP.md` §5.3). The analysis restricted to correct A1
+  answers is secondary.
 - **Pairwise comparisons (Q1, the C1–C3 and C1–C4 contrasts) are not powered
-  below 15 percentage points.** A null inside that band is not evidence of no
-  effect. The study says so in advance.
-- **Multiple tests are corrected** with Benjamini–Hochberg at q = 0.05, within
+  below the smallest effect size of interest** (Appendix A). A null inside
+  that band is not evidence of no effect. The study says so in advance.
+- **Multiple tests are corrected** with Benjamini–Hochberg (rate in Appendix A), within
   three families (dimension tests, condition contrasts, language contrasts).
   Each p-value is reported with a marginal probability, an interval, and an
   odds ratio.
@@ -575,8 +598,8 @@ Reading the numbers:
 Pilot runs are tagged `is_pilot` and are excluded from the confirmatory
 analysis. The pilot exists to decide things: whether open-weight models
 produce coherent stories and 36-field specs, which judges clear the gates, the
-observed abstention rate (which sizes the H1d check), and median human time per
-item. Do not mix pilot and confirmatory output in one analysis.
+observed abstention rate (which sizes the H2b check), median human time per
+item, and measured tokens and runtime per story. Do not mix pilot and confirmatory output in one analysis.
 
 ## 8. Troubleshooting
 
@@ -605,7 +628,9 @@ hash, the session id, every message in the trace, the plan and job identity,
 and the corpus item used.
 
 **Not recorded yet:** exact model revisions, decoding parameters (temperature
-and the like), seeds, and the repair bound. The study requires these. Add them
+and the like), seeds, the repair bound, and per-call token usage and
+wall-clock time (only per-attempt start and end times are logged, in
+`attempts.jsonl`). The study requires these. Add them
 to `config` before any run you intend to report.
 
 Also keep the full `runs/` tree, including failed and abandoned runs.
@@ -634,8 +659,8 @@ return a `GenerationResult`, and the runner writes it to disk.
 | Path | Purpose |
 |---|---|
 | `EXPERIMENTAL_SETUP.md` | Study design: RQs, conditions, instruments, analysis, power. |
-| `EXPERIMENT_DRAFT.md` | Shorter draft of the same design, with less detail. `EXPERIMENTAL_SETUP.md` is the fuller version and the one the harness spec cites. |
-| `CORPUS.md` | Corpus appendix: each item, its bucket, and why it was picked. |
+| `EXPERIMENT_DRAFT.md` | Short summary of the same design, with no parameter values. `EXPERIMENTAL_SETUP.md` is authoritative and the one the harness spec cites. |
+| `CORPUS.md` | Corpus appendix: each item, its bucket, why it was picked, length statistics, and translated items. |
 | `superpowers/specs/2026-09-22-generation-pipeline-design.md` | Harness design: job model, registry schema, backends, CLI. |
 | `experiments/plans/*.yaml` | Plans. |
 | `experiments/pipeline/` | Harness code. `cli.py` is the entry point. |

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -28,20 +29,15 @@ def _load_corpus(corpus_path: Path) -> pd.DataFrame:
     return pd.read_parquet(corpus_path)
 
 
-def _validated_items(items: list[str] | None, corpus: pd.DataFrame) -> set[str] | None:
-    """Return the requested corpus ids, or None when no `--item` was given.
-
-    Raises SystemExit listing the valid ids if any requested id is not in the corpus.
-    """
-    if not items:
-        return None
+def _select_corpus(items: list[str], corpus: pd.DataFrame) -> pd.DataFrame:
+    """Return only the requested corpus rows. Raises SystemExit listing valid ids on an unknown one."""
     valid = set(corpus["id"])
     unknown = sorted(set(items) - valid)
     if unknown:
         raise SystemExit(
             f"Unknown corpus id(s): {', '.join(unknown)}. Valid ids: {', '.join(sorted(valid))}"
         )
-    return set(items)
+    return corpus[corpus["id"].isin(items)]
 
 
 def _cmd_expand(args: argparse.Namespace) -> None:
@@ -59,12 +55,27 @@ def _cmd_expand(args: argparse.Namespace) -> None:
 def _cmd_run(args: argparse.Namespace) -> None:
     plan = load_plan(args.plan)
     corpus = _load_corpus(args.corpus)
-    item_ids = _validated_items(args.items, corpus)
+    item_ids: set[str] | None = None
+    if args.items:
+        # --item selects corpus items directly, overriding the plan's corpus_filter.
+        # The plan's tasks, conditions and generators still apply. Job ids do not
+        # depend on the filter, so these jobs are the same ones a full run would make.
+        item_ids = set(args.items)
+        corpus = _select_corpus(args.items, corpus)
+        plan = replace(plan, corpus_filter={})
+    jobs = expand_jobs(plan, corpus)
     registry = Registry(args.runs_dir / "runs.db")
     try:
-        registry.insert_jobs(expand_jobs(plan, corpus))
+        registry.insert_jobs(jobs)
+        if item_ids is not None and registry.count_pending(plan.name, item_ids) == 0:
+            print(  # noqa: T201
+                f"No pending jobs match --item {', '.join(sorted(item_ids))}: they are already "
+                "done, failed or abandoned. See `status`, and `retry` to requeue failed ones."
+            )
         resolver = InputResolver(args.data_dir)
-        run_pending(registry, plan.name, resolver, args.runs_dir, workers=args.workers, item_ids=item_ids)
+        run_pending(
+            registry, plan.name, resolver, args.runs_dir, workers=args.workers, item_ids=item_ids
+        )
         print_status(registry, plan.name)
     finally:
         registry.close()

@@ -1,7 +1,9 @@
 # Corpus (Appendix)
 
-This is the final, read-through-verified source corpus for the PSALM-SAGA evaluation, referenced as
-an appendix from `EXPERIMENTAL_SETUP.md` / `EXPERIMENT_DRAFT.md` Section 2 ("Corpus / Dataset").
+This is the read-through-verified source corpus for the PSALM-SAGA evaluation, referenced as
+an appendix from `EXPERIMENTAL_SETUP.md` §2 ("Corpus / Dataset"). It is the single source for the
+item list, per-bucket counts and per-language length statistics. The item counts are still subject
+to change.
 Every item below was read start to end to confirm it stands alone and closes cleanly.
 
 **Where the files live** (in the `psalm-saga-experiments` repo):
@@ -28,15 +30,30 @@ of the 36-dimension taxonomy:
 - **Satire / Moral Fable or Tale** — tests narrative voice most directly, via an intrusive
   commenting narrator.
 
-## Length policy
+## Length
 
-Source items are used whole where they already fall within **1,200–4,000 words**. Longer works are
-excerpted — a single chapter, a short contiguous run of chapters, or one self-contained tale from a
-story collection — down to a ceiling of roughly **7,000 words (~41,000 characters)**. The corpus
-favors narrative substance over brevity: public-domain candidates under about 2,000 words were rarely
-substantial enough to instantiate all 36 sub-dimensions of the specification taxonomy. Each excerpt
-was chosen because it reads as a complete scene or arc on its own, not because it happened to fall
-under a word count.
+The length bounds are defined once, in `EXPERIMENTAL_SETUP.md` §2.2, and not repeated here. Works
+that exceed them are excerpted: a single chapter, a short contiguous run of chapters, or one
+self-contained tale from a story collection. Each excerpt was chosen because it reads as a complete
+scene or arc on its own, not because it happened to fall under a word count.
+
+Realised lengths of the current corpus, from `corpus.csv`:
+
+| Language | Items | Min words | Median words | Max words | Total words |
+|----------|-------|-----------|--------------|-----------|-------------|
+| English  | 15    | 2,064     | 5,609        | 8,521     | 82,322      |
+| Dutch    | 14    | 300       | 3,803        | 6,671     | 48,433      |
+
+The Dutch items are shorter on average, and several of the shortest are verse fables and children's
+cautionary tales. `EXPERIMENTAL_SETUP.md` §2.1 states how the analysis handles this.
+
+## Translated items
+
+Three Dutch items are Dutch translations of German originals by Heinrich Hoffmann: *De vliegende
+Robert*, *Piet de Smeerpoets, zijn berouw en bekeering*, and *Een aardig prentenboek met leerzame
+vertellingen*. They are kept and disclosed. Because the study's language design argues against
+translated text (`EXPERIMENTAL_SETUP.md` §2.5), the language contrasts are reported with and without
+them.
 
 ## English — 15 items, all five buckets full
 
@@ -68,10 +85,10 @@ both fully verified as strong, displaced only because their buckets already had 
 | Bucket | Author | Title | Selection & rationale | Words |
 |---|---|---|---|---|
 | Satire / Moral Fable | J.J.A. Goeverneur | Fabelen en gedichtjes | Whole text. Classic verse-fable form; the moralizing narrator carries the piece. | 602 |
-| Satire / Moral Fable | Heinrich Hoffmann | Piet de Smeerpoets, zijn berouw en bekeering | Whole text. Struwwelpeter-tradition cautionary tale — exaggerated comeuppance, intrusive moralizing narrator. | 894 |
+| Satire / Moral Fable | Heinrich Hoffmann (Dutch translation of the German original) | Piet de Smeerpoets, zijn berouw en bekeering | Whole text. Struwwelpeter-tradition cautionary tale — exaggerated comeuppance, intrusive moralizing narrator. | 894 |
 | Satire / Moral Fable | J.J.A. Goeverneur | De ondeugende kinderen | Whole text. Same moral-fable tradition, children's misbehavior and consequence. | 2,165 |
-| Gothic / Supernatural | Heinrich Hoffmann | Een aardig prentenboek met leerzame vertellingen | Whole text. Grotesque cautionary imagery bordering on the macabre. | 1,691 |
-| Gothic / Supernatural | Heinrich Hoffmann | De vliegende Robert | Whole text. An explicit supernatural "rule" (play with an umbrella in a storm, get blown away forever) in miniature. | 300 |
+| Gothic / Supernatural | Heinrich Hoffmann (Dutch translation of the German original) | Een aardig prentenboek met leerzame vertellingen | Whole text. Grotesque cautionary imagery bordering on the macabre. | 1,691 |
+| Gothic / Supernatural | Heinrich Hoffmann (Dutch translation of the German original) | De vliegende Robert | Whole text. An explicit supernatural "rule" (play with an umbrella in a storm, get blown away forever) in miniature. | 300 |
 | Gothic / Supernatural | J.J.A. Goeverneur | Vrouw Holle (from *Oude sprookjes*) | One of 8 independent tale retellings in the source collection, extracted individually. A portal-to-another-world fairy tale with explicit reward/punishment magic rules — the strongest "rules of the haunting" fit in the collection. | 1,159 |
 | Detective / Mystery | Jacob van Lennep | De pleegzoon | Ch. 9. An afkomst-mysterie (concealed-birth mystery); this chapter is the narrator's own account of his hidden origin, closing on a genuine cliffhanger (a secret door opens as the chapter ends). | 5,307 |
 | Detective / Mystery | Jacob van Lennep | De lotgevallen van Ferdinand Huyck | Ch. 11. A police informant's full backstory plus a live case briefing, culminating in a manhunt the narrator has concealed information about — genuinely schematic detective material embedded in an otherwise adventure novel. | 5,523 |
