@@ -88,10 +88,13 @@ STAGES: dict[str, dict] = {
     "assemble": {"title": "Put the book together",
                  "what": "Joins the chapters into one text with title and chapter headings.", "produces": "story", "calls": "none"},
     "recover": {"title": "Analyse the synthetic text",
-                "what": "Analyses the finished synthetic text with exactly the same procedure as the source, and the "
-                        "source a second time, so the evaluation can compare like with like and knows how much of any "
-                        "difference is analysis noise.",
-                "produces": "story bible of the synthetic text, second analysis of the source", "calls": "one per passage, twice"},
+                "what": "Analyses the finished synthetic text once, with the same procedure as the source, and relates "
+                        "it back to the story design (which keeps the source's identities): by names, then by a model for "
+                        "what names cannot pair, and finally by checking the synthetic chapters for design items the "
+                        "analysis missed. So the evaluation knows, for every source item, whether it was kept, changed or "
+                        "lost — without analysing the source again.",
+                "produces": "story bible of the synthetic text, its alignment with the design",
+                "calls": "one per passage, plus a few alignment calls per chapter"},
     "evaluate": {"title": "Evaluate",
                  "what": "Measures how far the synthetic text keeps the source's properties and how far it is from the "
                          "source's wording. If you enabled the judges, language models also compare the texts: the PSALM "
@@ -162,9 +165,12 @@ GLOSSARY: dict[str, str] = {
     "style profile": "Numbers measured on the source: sentence and paragraph lengths and their spread, dialogue share, "
                      "punctuation, word length, pronouns; lines, stanzas and rhyme for verse.",
     "design checklist": "Per chapter, the design's events, causes, relations and places that the chapter must show.",
-    "second analysis (calibration)": "The source analysed a second time with the same procedure. Two analyses never "
-                                     "agree fully; their agreement is the best any comparison can show.",
-    "ceiling": "How far the source's second analysis agrees with the first. Graph scores are shown relative to it.",
+    "alignment": "How the synthetic text's story graph is related back to the design: names first, then a model "
+                 "pairing what names cannot, then a check of the chapter text for what the analysis missed.",
+    "second analysis (calibration)": "Optional: the source analysed a second time, to see how far two analyses of one "
+                                     "text agree (a noise ceiling for experiments). Off by default.",
+    "ceiling": "With the optional second analysis: how far it agrees with the first. Graph scores can then also be "
+               "shown relative to it.",
     "self-agreement": "The source's first half compared with its second half. No synthetic text can match the author "
                       "more closely than the author matches themself, so style thresholds allow for it.",
     "score": "Every measure converted to 0–1 where 1 is best, with its formula shown. Green ≥ 0.80, orange ≥ 0.60 "

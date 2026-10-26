@@ -490,11 +490,18 @@ def evaluate_run(store: RunStore, language: str) -> dict:
     chars = [(e.name, [e.name, *e.aliases], [mapping[f] for f in [e.name, *e.aliases] if f in mapping and mapping[f] != f])
              for e in main]
     rec_path = store.root / "recovered" / "bible_source.json"
-    if rec_path.exists() and bible.entities:  # KG: what the synthetic text realises, vs the source
+    if rec_path.exists() and bible.entities:  # KG: what the synthetic text realises of the design (and so of the source)
+        from psalm_saga.eval.kg_align import text_comparison
         from psalm_saga.graph import build_graph, compare_graphs
 
-        cmp = compare_graphs(build_graph(bible), build_graph(Bible.model_validate_json(rec_path.read_text(encoding="utf-8"))),
-                             mapping)
+        cmp = text_comparison(store, "design")
+        if cmp is not None:
+            report["structure_basis"] = "design"
+            report["alignment"] = cmp.get("alignment_stats") or {}
+        else:  # runs analysed before the design alignment existed
+            cmp = compare_graphs(build_graph(bible), build_graph(Bible.model_validate_json(rec_path.read_text(encoding="utf-8"))),
+                                 mapping)
+            report["structure_basis"] = "source"
         report["structure"] = cmp["summary"]
         cal_path = store.root / "calibration" / "bible_source.json"
         ceiling = None

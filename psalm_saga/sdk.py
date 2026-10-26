@@ -126,12 +126,16 @@ class Run:
                 if not cal.exists():
                     raise FileNotFoundError("No second analysis of the source yet (stage recover, calibrate=true)")
                 return compare_graphs(self.graph("source"), build_graph(Bible.model_validate_json(cal.read_text(encoding="utf-8"))), {})
-            if against == "text":
+            if against in ("text", "design_text"):
                 rec = self.recovered_bible()
                 if rec is None:
                     raise FileNotFoundError("The synthetic text has not been re-extracted yet (run.recover())")
-                other = build_graph(rec)
-                out = compare_graphs(self.graph("source"), other, (tmap.as_dict() if tmap else {}))
+                from psalm_saga.eval.kg_align import text_comparison
+
+                # aligned through the design (one analysis of each text; see kg_align)
+                out = text_comparison(self.store, "design" if against == "design_text" else "source")
+                if out is None:  # analysed before the design alignment existed
+                    out = compare_graphs(self.graph("source"), build_graph(rec), (tmap.as_dict() if tmap else {}))
                 cal = self.path / "calibration" / "bible_source.json"
                 if cal.exists():  # the noise floor: how far the source agrees with its own second analysis
                     out["ceiling"] = compare_graphs(self.graph("source"), build_graph(

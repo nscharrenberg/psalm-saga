@@ -298,7 +298,8 @@ def _align_sequence(sa: list[str], sb: list[str], sim, threshold: float) -> list
     return pairs[::-1]
 
 
-def compare_graphs(src: dict, syn: dict, mapping: dict[str, str]) -> dict:
+def compare_graphs(src: dict, syn: dict, mapping: dict[str, str], *, prealign: list[tuple[str, str]] | None = None,
+                   checks: dict[str, dict] | None = None) -> dict:
     """Align a source graph with a synthetic one and mark what is kept, changed, or missing.
 
     `syn` is either the synthetic *design* (bible.json: same ids as the source by construction)
@@ -311,7 +312,13 @@ def compare_graphs(src: dict, syn: dict, mapping: dict[str, str]) -> dict:
     The result is one merged graph in source coordinates: every node and edge has a `status`
     (kept / changed / source_only / synthetic_only) and a `diff` note; synthetic-only nodes get
     ids prefixed with `y:`. `summary` counts statuses per node and edge type, and gives recall /
-    precision of entities and of each edge type."""
+    precision of entities and of each edge type.
+
+    `prealign` gives pairs (source id, synthetic id) established elsewhere — by the model alignment
+    of psalm_saga.eval.kg_align — which take precedence over the rules; a source id given twice
+    absorbs the second synthetic item (one scene told in two parts). `checks` marks source items
+    the analysis did not find but a direct check of the synthetic text did: keys are node ids, or
+    `edge:<type>:<source>:<target>` for links; values {"realised": "yes" | "partly", "evidence": "…"}."""
     from psalm_saga.stages.transform import apply_renames
 
     sn = {n["id"]: n for n in src["nodes"]}
@@ -344,8 +351,18 @@ def compare_graphs(src: dict, syn: dict, mapping: dict[str, str]) -> dict:
 
     align: dict[str, str] = {}  # source id -> synthetic id
     taken: set[str] = set()
+    absorbed: dict[str, str] = {}  # synthetic part of a split -> the source item it belongs to
+    for a, b in prealign or []:
+        if a not in sn or b not in yn or b in taken:
+            continue
+        if a not in align:
+            align[a] = b
+            taken.add(b)
+        elif sn[a]["type"] in ("scene", "event"):
+            absorbed[b] = a
+            taken.add(b)
     for n in src["nodes"]:
-        if n["type"] in STORY_TYPES:
+        if n["type"] in STORY_TYPES or n["id"] in align:
             continue
         names = translations(n)
         cand = next((y_by_name[t] for t in names if t in y_by_name and y_by_name[t] not in taken), None)
@@ -453,11 +470,11 @@ def compare_graphs(src: dict, syn: dict, mapping: dict[str, str]) -> dict:
             v.sort(key=lambda i: int(i.split(".")[-1]) if i.split(".")[-1].isdigit() else 0)
         return out
 
-    absorbed: dict[str, str] = {}  # synthetic part of a split -> the source item it belongs to
     for typ in ("scene", "event"):
         sa, ya = in_chapter(src, typ), in_chapter(syn, typ)
         for ch in set(sa) | set(ya):
-            pairs = _align_sequence(sa.get(ch, []), ya.get(ch, []), story_sim, 0.12)
+            pairs = _align_sequence([i for i in sa.get(ch, []) if i not in align],
+                                    [i for i in ya.get(ch, []) if i not in taken], story_sim, 0.12)
             for a, b in pairs:
                 align[a] = b
                 taken.add(b)
@@ -506,6 +523,12 @@ def compare_graphs(src: dict, syn: dict, mapping: dict[str, str]) -> dict:
         d = dict(n, details=dict(n.get("details") or {}))
         if n["id"] not in align:
             d["status"], d["diff"] = "source_only", "not found in the synthetic graph"
+            ck = (checks or {}).get(n["id"])
+            if ck and ck.get("realised") in ("yes", "partly"):
+                d["status"] = "kept" if ck["realised"] == "yes" else "changed"
+                d["diff"] = (f"(found by checking the text — the analysis had missed it: “{ck.get('evidence', '')}”)"
+                             if ck["realised"] == "yes" else f"only partly realised in the text: “{ck.get('evidence', '')}”")
+                d["details"]["checked"] = ck
         else:
             o = yn[align[n["id"]]]
             notes, remarks = [], []  # notes make it "changed"; remarks are shown but do not
@@ -566,6 +589,11 @@ def compare_graphs(src: dict, syn: dict, mapping: dict[str, str]) -> dict:
             o = y_edges.get((k[0], k[1], k[3], k[2]))
             reversed_ = o is not None
         status, diff = ("source_only", "not in the synthetic graph") if o is None else ("kept", "")
+        if o is None:
+            ck = (checks or {}).get(f"edge:{e['type']}:{e['source']}:{e['target']}")
+            if ck and ck.get("realised") in ("yes", "partly"):
+                status = "kept" if ck["realised"] == "yes" else "changed"
+                diff = f"(found by checking the text: “{ck.get('evidence', '')}”)"
         if o is not None and e["type"] == "relation" and not _same_label(o.get("label", ""), e.get("label", "")):
             if reversed_:  # "mother of" one way, "daughter of" the other: the same tie, worded from the other side
                 diff = f"(stated from the other side: “{o.get('label')}”)"
@@ -598,7 +626,7 @@ def compare_graphs(src: dict, syn: dict, mapping: dict[str, str]) -> dict:
     for e in edges:
         ecounts[e["type"] + (f":{e['group']}" if e.get("group") else "")] += 1
     return {"nodes": nodes, "edges": edges, "chapters": sorted(set(src.get("chapters", [])) | set(syn.get("chapters", []))),
-            "counts": dict(counts), "edge_counts": dict(ecounts), "compare": True,
+            "counts": dict(counts), "edge_counts": dict(ecounts), "compare": True, "alignment": dict(align),
             "summary": {"nodes": {k: pr(v) for k, v in summary_n.items()}, "edges": {k: pr(v) for k, v in summary_e.items()}}}
 
 

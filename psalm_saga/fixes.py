@@ -159,8 +159,11 @@ def fix_context(store) -> dict:
     src = store.maybe("bible_source.json", Bible)
     rec = store.maybe("recovered/bible_source.json", Bible)
     if design and src and rec:
+        from psalm_saga.eval.kg_align import text_comparison
+
         tmap = store.maybe("transform.json", TransformMap)
-        g = compare_graphs(build_graph(src), build_graph(rec), tmap.as_dict() if tmap else {})
+        g = text_comparison(store, "design") or compare_graphs(build_graph(src), build_graph(rec),
+                                                                 tmap.as_dict() if tmap else {})
         dg = build_graph(design)
         dn = {n["id"]: n for n in dg["nodes"]}
         lab = lambda i: (dn.get(i) or {}).get("label", "")  # noqa: E731

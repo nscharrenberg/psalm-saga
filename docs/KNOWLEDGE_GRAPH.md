@@ -211,14 +211,36 @@ tokens of two letters or fewer.
 The result, `bible.json`, is what the writer works from. With everything preserved, "source vs
 design" shows no structural changes by construction.
 
-### 7.3 Synthetic-text graph (`recover`)
-Steps 1–4 run again on the finished synthetic text, with the same extractor, prompts and settings,
-into `recovered/`. This is independent of the design: it shows what the text actually contains.
+### 7.3 Synthetic-text graph and its alignment with the design (`recover`)
+Steps 1–4 run once on the finished synthetic text, with the same extractor, prompts and settings,
+into `recovered/`. The source is **not** analysed again: its graph exists, and the design keeps the
+source's ids. Instead, the synthetic text's graph is **aligned with the design** — both use the
+names the writer was given — in four steps (`eval/kg_align.py`, stored in `recovered/alignment.json`):
 
-### 7.4 Calibration graph (`recover`, `calibrate=true`)
-Steps 1–4 run a second time on the source, as an independent sample (a different variant seed, so
-no cached answers are reused). Comparing the source graph with it shows how far the extractor
-agrees with itself on identical text — the ceiling for any comparison.
+1. **Rules.** `compare_graphs(design, text)` in the shared name space (§8): names, aliases,
+   inflection-aware content words, ties to already paired neighbours; scenes and events by content.
+2. **Model: entities.** The design's characters, places, objects and organisations the rules left
+   unpaired, and the text's, are listed with kind, names, chapters and description; one call pairs
+   those that denote the same entity (a role for a name, a nickname, another classification),
+   one-to-one, with a confidence and a reason. Low-confidence pairs are dropped.
+3. **Model: story.** Per chapter, the unpaired design scenes (then events) and the text's, each in
+   story order, are paired by what happens and who takes part; one design item may take two
+   consecutive text items (told in two parts).
+4. **Check the text.** Design items still unmatched — events, scenes, characters, places, objects,
+   relations, causes — are checked against the synthetic chapter itself: per chapter, one call
+   receives the chapter and the list (at most 40 items) and answers *yes / partly / no* per item,
+   quoting at most 20 words as evidence. An item found this way was realised but missed by the
+   analysis; it counts as kept (*partly*: changed), and the evidence is shown.
+
+Because design ids are source ids (for entities and scenes always; for events when the policy kept
+the chapter's number of events), the same alignment says for every **source** item whether the
+synthetic text kept, changed or lost it (`text_comparison(store, "source")`). With
+`stages.recover.params.align=rules` only step 1 runs; `check_text=false` skips step 4.
+
+### 7.4 Calibration graph (optional: `recover`, `calibrate=true`)
+Off by default. Steps 1–4 of §5 run a second time on the source, as an independent sample.
+Comparing the source graph with it shows how far the extractor agrees with itself on identical text
+— a noise ceiling for experiments; when present, KG recall is also reported relative to it.
 
 ## 8. Comparison (`graph.compare_graphs`)
 
@@ -269,8 +291,9 @@ under which one split scene shifted every later scene of the chapter to "changed
   the same tie stated from the other side: kept, with a remark. A same-direction relation with a
   different label (unless they overlap: one contains the other, or word Jaccard ≥ 0.5) is `changed`.
 
-The comparison against the synthetic text also carries the **ceiling**: the same summary for the
-source against its own second analysis, shown next to every recall in the web app.
+For the synthetic text, `compare_graphs` is called with the alignment of §7.3 (`prealign`: pairs
+that take precedence over the rules; `checks`: items confirmed in the text). When the optional
+calibration exists, the comparison also carries the **ceiling** (§7.4).
 
 ### 8.4 Scores (instrument KG, `eval/automatic.kg_scores`)
 For characters, places, events, causal links and social relations:

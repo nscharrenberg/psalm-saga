@@ -35,7 +35,15 @@ def test_kg_relative_to_extractor_agreement():
 
 
 async def test_recover_calibrates_and_essays_skip_narrative_measures(runs, nl_text):
-    p = Pipeline.create("full", runs_dir=runs, source=nl_text, overrides=FAKE, run_id="cal")
+    # default: the source is analysed once; the synthetic text once, aligned with the design
+    p = Pipeline.create("full", runs_dir=runs, source=nl_text, overrides=FAKE, run_id="one")
+    await p.run()
+    assert not p.store.exists("calibration/bible_source.json") and p.store.exists("recovered/alignment.json")
+    ev = p.store.read_json("evaluation.json")
+    assert ev["structure_basis"] == "design" and "structure_ceiling" not in ev and ev["alignment"]["rules"] >= 0
+    # optional second analysis of the source, as a noise ceiling
+    p = Pipeline.create("full", runs_dir=runs, source=nl_text, overrides=[*FAKE, "stages.recover.params.calibrate=true"],
+                        run_id="cal")
     await p.run()
     assert p.store.exists("calibration/bible_source.json") and p.store.exists("text_kind.json")
     ev = p.store.read_json("evaluation.json")

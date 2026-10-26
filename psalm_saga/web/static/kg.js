@@ -257,6 +257,8 @@
         <h3>${esc(d.type === "scene" || d.type === "event" ? (x.summary || x.description || d.label) : d.label)}</h3>
         ${cmp ? `<div class="kg-diffnote kg-st-${d.status}"><i></i><b>${esc((STATUS.find(([s]) => s === d.status) || [, d.status])[1])}</b>${d.diff ? " · " + esc(d.diff) : ""}</div>` : ""}
         ${x.counterpart ? `<div class="muted kg-cp">${which === "synthetic" ? "Was" : "Becomes"} <b>${esc(x.counterpart)}</b> ${which === "synthetic" ? "in the source" : "in the synthetic story"}</div>` : ""}
+        ${x.matched_by ? `<div class="muted kg-cp">Matched by ${esc(x.matched_by)}</div>` : ""}
+        ${x.checked ? `<div class="muted kg-cp">Not found by the analysis, but a check of the synthetic chapter says <b>${esc(x.checked.realised)}</b>: “${esc(x.checked.evidence || "")}”</div>` : ""}
         ${row("Aliases", (x.aliases || []).join(", "))}${row("Role", x.role)}${d.type === "event" ? "" : row("Description", x.description)}
         ${d.type === "scene" ? "" : row("Summary", x.summary)}${row("Setting", x.setting)}${row("Location", x.location)}${row("Purpose", x.purpose)}
         ${row("Point of view", x.pov)}${row("Caused by", x.caused_by)}${row("Mentions", x.mentions)}
@@ -304,8 +306,10 @@
       const hdr = `<tr><th></th><th title="found, same">kept</th><th title="found, but different people, place or wording">chg</th><th title="not found in the other graph">src</th><th title="only in the other graph">syn</th><th title="share of source items found">recall</th>${ceil ? `<th title="recall of the source against its own second analysis: the noise floor">ceiling</th>` : ""}</tr>`;
       const list = (status) => g.nodes.filter((n) => n.status === status && !STORY.has(n.type)).sort((a, b) => b.weight - a.weight).slice(0, 12)
         .map((n) => `<a class="kg-link" data-go="${esc(n.id)}"><i style="background:var(--k-${n.type})"></i>${esc(n.label)}</a>`).join("") || `<div class="muted">none</div>`;
-      side.innerHTML = `<h3>Source vs ${opts.against === "text" ? "synthetic text (re-extracted)" : opts.against === "calibration" ? "its own second analysis" : "synthetic design"}</h3>
-        <p class="muted" style="font-size:12px">${opts.against === "calibration" ? "The same source analysed twice: every difference is analysis noise." : opts.against === "text" ? "Both graphs were extracted from the texts with the same procedure: what the synthetic story actually realises." : "The design the synthetic story was written from (story bible after transformation)."} Recall = share of source items found in the synthetic graph.</p>
+      const as = g.alignment_stats || null;
+      side.innerHTML = `<h3>${opts.against === "design_text" ? "Design vs synthetic text" : "Source vs " + (opts.against === "text" ? "synthetic text" : opts.against === "calibration" ? "its own second analysis" : "synthetic design")}</h3>
+        <p class="muted" style="font-size:12px">${opts.against === "calibration" ? "The same source analysed twice: every difference is analysis noise." : (opts.against === "text" || opts.against === "design_text") ? "The synthetic text, analysed once, aligned with the design (which keeps the source's identities)." : "The design the synthetic story was written from (story bible after transformation)."} Recall = share of ${opts.against === "design_text" ? "design" : "source"} items found in the synthetic text.</p>
+        ${as ? `<p class="muted" style="font-size:12px">Matched by names: ${as.rules ?? 0} · by the model: ${(as.model_entities || 0) + (as.model_story || 0)} · found by checking the text: ${as.found_by_check || 0} of ${as.checked || 0} still unmatched.</p>` : ""}
         ${ceil ? `<p class="muted" style="font-size:12px"><b>Ceiling</b> = the same recall when the source is compared with a second analysis of itself. Two analyses never agree fully, so a recall near the ceiling means the synthetic text keeps that layer as well as can be measured.</p>` : ""}
         <table class="kg-sum">${hdr}${tbl(sm.nodes || {}, "nodes")}</table>
         <table class="kg-sum" style="margin-top:8px">${hdr}${tbl(sm.edges || {}, "edges")}</table>
