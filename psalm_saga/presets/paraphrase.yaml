@@ -1,0 +1,14 @@
+name: paraphrase
+extends: full
+description: >
+  Naive synthetic-corpus baseline: rename entities, then paraphrase the source passage
+  by passage. Preserves structure trivially; the question is how much expression leaks.
+transform:
+  policy: {writing_style: preserve, narrative_voice: preserve, character: preserve, plot_structure: preserve, scene_sequence: preserve, world_building: preserve}
+stages:
+  spec: {impl: none}
+  plan: {enabled: false}
+  draft: {impl: paraphrase, params: {chunk_words: 700}}
+  review: {enabled: false}
+  conform: {enabled: false}
+  guard: {enabled: false}

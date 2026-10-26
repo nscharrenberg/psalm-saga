@@ -1,0 +1,24 @@
+# Runs the whole experiment machinery with the offline fake model (no API keys, no cost).
+name: offline_demo
+output: experiments_out/offline_demo
+inputs:
+  - {glob: "../tests/data/*.txt", kind: source}
+conditions:
+  full:       {preset: full}
+  no_spec:    {preset: no_spec}
+  paraphrase: {preset: paraphrase}
+  flat:       {preset: flat}
+models:
+  fake: {models.default.name: fake/demo}
+repeats: 1
+concurrency: 4
+judge:
+  model: fake/judge
+  instruments: [spec_recovery, dimension_fidelity, quality_pairwise, emotional_arc, surface_reuse, reconstruction]
+  quality_baseline: flat
+# Corpus-level instruments (R3, R5) need book metadata; these values are invented for the demo.
+metadata: offline_demo_metadata.csv
+analyses:
+  - {feature: mean_sentence_words, by: period, groups: [early, late]}
+  - {feature: dialogue_paragraph_share, vs: year}
+tstr_label: period

@@ -1,0 +1,7 @@
+name: no_spec
+extends: full
+description: >
+  C4. No dimension specification: the story is planned from the (renamed, re-skinned)
+  chapter skeleton only. Isolates what the spec contributes.
+stages:
+  spec: {impl: none}

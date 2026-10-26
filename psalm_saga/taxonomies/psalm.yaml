@@ -1,0 +1,67 @@
+# PSALM expressive dimensions (Scharrenberg & Sun), six dimensions x six sub-dimensions.
+# `surface: true` marks sub-dimensions whose concrete realisation is the most
+# identifying, protectable expression. Under the `abstract` policy these are
+# re-invented while their function is kept; under `preserve` they are kept as
+# described (paraphrased, never quoted). Swap or extend this file to change the taxonomy.
+name: psalm
+dimensions:
+  - key: writing_style
+    label: Writing Style
+    description: Sentence-level texture of the prose.
+    subdimensions:
+      - {key: lexical_complexity, label: Lexical Complexity, guidance: "Vocabulary richness, word length, formality register, archaisms or dialect."}
+      - {key: sentence_structure, label: Sentence Structure, guidance: "Typical sentence length and syntactic complexity; give numbers when measured."}
+      - {key: rhythm_flow, label: Rhythm & Flow, guidance: "Punctuation density, pacing, prose rhythm."}
+      - {key: rhetorical_patterns, label: Rhetorical Patterns, guidance: "Questions, imperatives, repetition, parallelism, irony."}
+      - {key: discourse_organisation, label: Discourse Organisation, guidance: "Paragraph structure, dialogue share, connectives."}
+      - {key: tone_voice, label: Tone & Voice, guidance: "Personal vs impersonal stance, assertive vs hedging, emotional temperature."}
+  - key: narrative_voice
+    label: Narrative Voice
+    description: Who tells, from where, and how close to the characters.
+    subdimensions:
+      - {key: point_of_view, label: Point of View, guidance: "Grammatical person and knowledge scope (limited, multiple, omniscient, objective)."}
+      - {key: narrative_distance, label: Narrative Distance, guidance: "Closeness to character consciousness; emotional involvement."}
+      - {key: narrator_presence, label: Narrator Presence, guidance: "Homodiegetic vs heterodiegetic; intrusive or covert."}
+      - {key: temporal_perspective, label: Temporal Perspective, guidance: "Primary tense; retrospective, simultaneous or anticipatory telling."}
+      - {key: focalisation, label: Focalisation Pattern, guidance: "Whose perception filters information: fixed, variable, external."}
+      - {key: reader_engagement, label: Reader Engagement, guidance: "Direct address of the reader, how often, with what assumed relationship."}
+  - key: character
+    label: Character
+    description: The people (or agents) of the story and how they are rendered.
+    subdimensions:
+      - {key: identity_traits, label: Identity & Traits, surface: true, guidance: "Concrete traits, physical idiosyncrasies, mannerisms. Behaviour, not labels."}
+      - {key: arc_development, label: Arc & Development, guidance: "Initial state, trigger, stages, resolution."}
+      - {key: relationships, label: Relationships & Dynamics, guidance: "Interaction patterns, power balance, emotional texture."}
+      - {key: background_motivation, label: Background & Motivation, surface: true, guidance: "Specific causal history leading to present behaviour."}
+      - {key: expression_behaviour, label: Expression & Behaviour, surface: true, guidance: "Behavioural signatures; how anger, fear, affection show."}
+      - {key: function_role, label: Function & Role, guidance: "Narrative function: protagonist, antagonist, mentor, foil."}
+  - key: plot_structure
+    label: Plot Structure
+    description: What happens and why.
+    subdimensions:
+      - {key: event_causality, label: Event Sequence & Causality, guidance: "The chain of events and how each causes the next."}
+      - {key: architecture, label: Story Architecture, guidance: "Acts, framing devices, nested narratives, subplots."}
+      - {key: conflict, label: Conflict Construction, guidance: "Escalation pattern, obstacles."}
+      - {key: turning_points, label: Turning Points & Reversals, surface: true, guidance: "The specific pivotal shifts and revelations."}
+      - {key: temporal_structure, label: Temporal Structure, guidance: "Chronology, flashbacks, time compression."}
+      - {key: convergence, label: Plot Functions & Convergence, guidance: "How threads converge and resolve."}
+  - key: scene_sequence
+    label: Scene Sequence
+    description: How the story is cut into scenes.
+    subdimensions:
+      - {key: scene_content, label: Scene Identity & Content, surface: true, guidance: "Setting, participants, action and purpose of each major scene."}
+      - {key: scene_internal, label: Scene Internal Structure, guidance: "Beat sequence and staging within scenes."}
+      - {key: scene_architecture, label: Scene Sequence Architecture, guidance: "Ordering and relation between scenes."}
+      - {key: transitions, label: Transitions & Connections, guidance: "Linking devices and continuity between scenes."}
+      - {key: scene_pacing, label: Scene Pacing & Rhythm, guidance: "Scene length and tempo patterns."}
+      - {key: scene_types, label: Scene Functions & Types, guidance: "Climax, denouement, set piece, etc."}
+  - key: world_building
+    label: World-Building
+    description: The world the story happens in.
+    subdimensions:
+      - {key: geography, label: Geographic & Spatial Design, surface: true, guidance: "Locations, layout, environment."}
+      - {key: rules, label: World Rules & Systems, guidance: "Physics, magic, technology, law; costs and limits."}
+      - {key: culture, label: Cultural & Social Architecture, guidance: "Customs, institutions, hierarchies."}
+      - {key: history, label: Historical & Temporal Design, guidance: "Period, past events, eras."}
+      - {key: material_sensory, label: Material & Sensory Detail, surface: true, guidance: "Objects, flora, fauna, sensory atmosphere."}
+      - {key: world_logic, label: World Function & Logic, guidance: "How the world stays coherent."}

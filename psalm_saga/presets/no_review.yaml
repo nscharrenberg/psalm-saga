@@ -1,0 +1,5 @@
+name: no_review
+extends: full
+description: C2. Full pipeline without the review/repair loop.
+stages:
+  review: {enabled: false}

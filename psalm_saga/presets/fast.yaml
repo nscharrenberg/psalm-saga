@@ -1,0 +1,10 @@
+name: fast
+extends: full
+description: Cheap iteration preset — no alias consolidation, no review, a small model for extraction.
+stages:
+  extract: {params: {consolidate: false, chunk_words: 6000}}
+  review: {enabled: false}
+  recover: {enabled: false}
+models:
+  extract: {name: anthropic/claude-haiku-5-5}
+  transform: {name: anthropic/claude-haiku-5-5}

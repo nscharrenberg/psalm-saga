@@ -1,0 +1,1021 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PSALM·SAGA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f3ee; --panel:#fffdf9; --ink:#1d2433; --muted:#6b7280; --line:#e4ddd2; --soft:#efe9df;
+  --accent:#1f4e79; --accent-ink:#fff; --warm:#b4541a; --ok:#2f7d4f; --warn:#b7791f; --bad:#b42318;
+  --serif:"Source Serif 4",Georgia,serif; --sans:Inter,system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --k-character:#2a6fb0; --k-place:#2f8f5b; --k-object:#c27c0e; --k-organisation:#8a4fb5; --k-other:#7a8391;
+  --k-scene:#c4567a; --k-event:#d0631f; --k-chapter:#4b5563;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#14171d; --panel:#1b1f27; --ink:#e7e3da; --muted:#9aa1ad; --line:#2c323d; --soft:#232833;
+  --accent:#7fb0e0; --accent-ink:#0f1520; --warm:#e08a50; --ok:#5fbf86; --warn:#e2b04a; --bad:#f07a6f;
+  --k-character:#6aa8e6; --k-place:#5cc28a; --k-object:#e2a43c; --k-organisation:#b88be0; --k-other:#9aa3b0;
+  --k-scene:#e486a6; --k-event:#f0905a; --k-chapter:#aab3c0;}}
+*{box-sizing:border-box} html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);display:grid;grid-template-columns:280px 1fr;grid-template-rows:auto 1fr;}
+header{grid-column:1/3;display:flex;align-items:baseline;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font:600 20px var(--serif);letter-spacing:.06em;margin:0} header h1 span{color:var(--warm)}
+header p{margin:0;color:var(--muted);font-size:13px} header button{margin-left:6px}
+aside{border-right:1px solid var(--line);overflow:auto;padding:14px;background:var(--panel)}
+main{overflow:auto;padding:22px 28px 60px}
+button{font:500 13px var(--sans);border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:6px 12px;border-radius:6px;cursor:pointer}
+button:hover{border-color:var(--accent)} button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.small{padding:3px 8px;font-size:12px} button:disabled{opacity:.5;cursor:default}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%}
+textarea{font-family:var(--sans);resize:vertical} label{font-size:12px;color:var(--muted);display:block;margin:10px 0 4px}
+.runs .item{padding:8px 10px;border-radius:6px;cursor:pointer;margin-bottom:4px;border:1px solid transparent}
+.runs .item:hover{background:var(--soft)} .runs .item.active{border-color:var(--accent);background:var(--soft)}
+.runs .t{font-weight:500;font-size:13px;display:flex;gap:6px;align-items:center} .runs .s{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted);flex:none}
+.dot.done{background:var(--ok)} .dot.running{background:var(--warn);animation:pulse 1s infinite} .dot.failed,.dot.budget_exceeded,.dot.cancelled{background:var(--bad)} .dot.partial{background:var(--accent)}
+@keyframes pulse{50%{opacity:.3}}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap} .grow{flex:1}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px} .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:14px}
+.card h3{margin:0 0 8px;font:600 15px var(--serif)}
+.chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--muted);border:1px solid var(--line)}
+.chip.preserve{color:var(--ok)} .chip.abstract{color:var(--accent)} .chip.regenerate{color:var(--warm)}
+.track{display:flex;gap:4px;margin:14px 0 6px;flex-wrap:wrap}
+.track .st{font-size:12px;padding:5px 10px;border-radius:6px;background:var(--soft);color:var(--muted);border:1px solid var(--line)}
+.track .st.done{background:color-mix(in srgb,var(--ok) 14%,var(--panel));color:var(--ok)} .track .st.running{color:var(--warn);border-color:var(--warn)} .track .st.na{opacity:.35}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:16px 0}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 14px;color:var(--muted)}
+.tabs button.on{border-bottom-color:var(--accent);color:var(--ink)}
+.story{font:17px/1.7 var(--serif);max-width:42em;margin:0 auto}
+.story h1{font-size:30px;text-align:center;margin:10px 0 30px} .story h2{font-size:20px;margin:40px 0 14px;text-align:center;font-weight:600}
+.story p{margin:0 0 .9em;text-indent:1.4em} .story h2+p,.story h1+p{text-indent:0}
+.dim{border-left:3px solid var(--line);padding-left:14px;margin:14px 0}
+.item{margin:10px 0} .item .k{font-size:12px;color:var(--muted);font-weight:500}
+.item textarea{min-height:52px;font-size:13.5px}
+.ev{font:12px/1.5 var(--mono);white-space:pre-wrap;color:var(--muted);border-bottom:1px dashed var(--line);padding:3px 0}
+.ev.err{color:var(--bad)} .ev.warn{color:var(--warn)} .ev.stage{color:var(--ink)}
+/* help: modal, info buttons, explanations */
+.info{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;padding:0;border-radius:50%;font:600 11px var(--serif);font-style:italic;color:var(--accent);border:1px solid var(--line);background:var(--panel);vertical-align:1px;margin-left:4px;flex:none}
+.info:hover{border-color:var(--accent);background:var(--soft)}
+#modal{position:fixed;inset:0;background:rgba(10,14,20,.45);display:flex;align-items:flex-start;justify-content:center;z-index:50;padding:6vh 16px;overflow:auto}
+#modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;max-width:720px;width:100%;padding:20px 24px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+#modal h2{font:600 20px var(--serif);margin:0 0 6px} #modal .close{float:right}
+#modal dl{display:grid;grid-template-columns:170px 1fr;gap:6px 14px;margin:10px 0} #modal dt{color:var(--muted);font-size:12.5px} #modal dd{margin:0}
+#modal code,.formula{font:12.5px var(--mono);background:var(--soft);padding:1px 5px;border-radius:4px}
+.formula{display:block;padding:6px 9px;margin:6px 0;white-space:pre-wrap}
+.lead{color:var(--muted);font-size:13px;margin:-2px 0 10px}
+.tabdesc{color:var(--muted);font-size:13px;margin:-8px 0 14px}
+.nowline{font-size:13px;margin:2px 0 6px;color:var(--ink)} .nowline b{color:var(--warn)}
+.track .st{cursor:pointer} .track .st:hover{border-color:var(--accent)}
+.presets{display:flex;flex-direction:column;gap:10px} .pkind{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:6px 0 2px}
+.pcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.pcard{border:1px solid var(--line);border-radius:8px;padding:9px 11px;cursor:pointer;background:var(--bg);display:block;margin:0;color:var(--ink);font-size:13px}
+.pcard:hover{border-color:var(--accent)} .pcard.on{border-color:var(--accent);background:var(--soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.pcard b{display:block;font-size:13.5px;margin-bottom:2px} .pcard > span{color:var(--muted);font-size:12px;line-height:1.4;display:block} .pcard input{display:none}
+.stagepick{display:flex;flex-wrap:wrap;gap:6px} .stagepick label{margin:0;display:inline-flex;gap:5px;align-items:center;font-size:12.5px;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 8px;background:var(--bg)}
+.stagepick input{width:auto}
+table.pol td,table.pol th{vertical-align:middle} table.pol td.opt{text-align:center;width:110px} table.pol input{width:auto}
+table.pol .dl{font-weight:500} table.pol .dd{font-size:12px;color:var(--muted)}
+.polhead{font-size:12px;text-align:center} .polhead small{display:block;color:var(--muted);font-weight:400}
+.score{font:600 24px var(--serif)} .raw{font:11.5px var(--mono);color:var(--muted)}
+.core{font:600 9.5px var(--sans);letter-spacing:.04em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:3px;padding:0 4px;margin-left:4px}
+.how{font-size:11.5px;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px;background:none;border:0;padding:0}
+.tile .ts{font:600 18px var(--serif);margin-top:2px}
+.fixsel{display:flex;gap:10px;align-items:flex-start} .fixsel input{width:auto;margin-top:4px}
+/* busy states */
+button.busy{position:relative;color:transparent!important;pointer-events:none}
+button.busy::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:12px;margin:-7px 0 0 -7px;border:2px solid currentColor;border-color:var(--muted) transparent var(--muted) transparent;border-radius:50%;animation:spin .8s linear infinite}
+button.primary.busy::after{border-color:var(--accent-ink) transparent var(--accent-ink) transparent}
+@keyframes spin{to{transform:rotate(360deg)}}
+#netbar{position:fixed;top:0;left:0;height:2px;width:0;background:var(--accent);z-index:99;transition:width .4s ease,opacity .3s;opacity:0}
+#netbar.on{opacity:1;width:70%;transition:width 8s cubic-bezier(.1,.6,.2,1),opacity .2s}
+/* activity (live log) */
+.term{background:#0f1218;color:#d6dbe3;border-radius:8px;padding:10px 12px;font:12px/1.55 var(--mono);max-height:72vh;overflow:auto;border:1px solid #232a35}
+.term details{margin:0} .term summary{cursor:pointer;list-style:none;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.term summary::-webkit-details-marker{display:none}
+.term summary::before{content:"▸ ";color:#6b7686} .term details[open]>summary::before{content:"▾ "}
+.term .grp{border-top:1px solid #1e2530;padding:3px 0}
+.term .grp>summary{font-weight:600}
+.term .asub{margin-left:18px} .term .ln{margin-left:18px;white-space:pre-wrap;word-break:break-word}
+.term .t{color:#6b7686} .term .ok{color:#6fcf97} .term .run{color:#f2c94c} .term .err{color:#ff7b72} .term .wrn{color:#f2c94c}
+.term .adim{color:#8792a2} .term .tag{color:#79b8ff} .term .num{color:#c8a2ff} .term .pv{color:#9aa5b5;margin-left:36px;font-style:italic}
+.term .spin{display:inline-block;animation:spin 1s linear infinite}
+.term .call{margin:4px 0 8px 36px;padding:6px 8px;border-left:2px solid #2b3442;background:#121721}
+.term .msg{margin:3px 0} .term .msg pre{white-space:pre-wrap;word-break:break-word;margin:4px 0 6px 14px;padding:6px 8px;background:#0b0e13;border:1px solid #1e2530;border-radius:4px;max-height:420px;overflow:auto;color:#d6dbe3;font:12px/1.5 var(--mono)}
+.term .role{color:#ffab70} .term pre.pv{white-space:pre-wrap;font-style:normal}
+.term .head{display:flex;gap:16px;flex-wrap:wrap;padding-bottom:6px;margin-bottom:4px;border-bottom:1px solid #1e2530;color:#aab3c0}
+table{border-collapse:collapse;width:100%;font-size:13px} th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top} th{color:var(--muted);font-weight:500}
+.metric{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.metric .v{font:600 22px var(--serif)} .metric .l{font-size:12px;color:var(--muted)} .metric .h{font-size:11px;color:var(--muted)}
+.metric .v:not(.good):not(.warn):not(.bad){color:var(--ink)}
+.rule{font-size:10.5px;color:var(--muted);margin-top:5px;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.rule i,.legend i,.dot2{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+i.good{background:var(--ok)} i.warn{background:var(--warn)} i.bad{background:var(--bad)}
+.legend{display:flex;flex-direction:column;gap:3px;font-size:13px} .legend span{display:flex;gap:6px;align-items:baseline} .legend i{transform:translateY(1px)}
+h3.sec{font:600 16px var(--serif);margin:22px 0 8px}
+.small{font-size:12px} .sub{font:600 13px var(--sans);margin:14px 0 2px}
+.tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px}
+.tile{display:block;text-decoration:none;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--line);border-radius:8px;padding:10px 12px}
+.tile.t-good{border-top-color:var(--ok)} .tile.t-warn{border-top-color:var(--warn)} .tile.t-bad{border-top-color:var(--bad)}
+.tile .tt{font:600 14px var(--serif)} .tile .tq{font-size:11.5px;color:var(--muted);min-height:32px}
+.dots{display:inline-flex;gap:8px;font-size:12px;margin-left:6px} .dots span{display:inline-flex;gap:3px;align-items:center} .dots i{width:8px;height:8px;border-radius:50%;display:inline-block}
+details.group{background:transparent;margin:10px 0 18px} details.group>summary{cursor:pointer;padding:6px 0;border-bottom:1px solid var(--line);margin-bottom:10px;list-style-position:outside}
+details.group .gt{font:600 17px var(--serif)}
+.metric.m-bad{border-left:3px solid var(--bad)} .metric.m-warn{border-left:3px solid var(--warn)} .metric.m-good{border-left:3px solid var(--ok)} .metric.m-na{opacity:.8;background:var(--soft)}
+.mtop{display:flex;justify-content:space-between;align-items:baseline} .inst{font:500 10.5px var(--mono,monospace);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.gw{font-size:11px} .h.na{font-style:italic}
+.fix{display:flex;gap:12px;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line)} .fix:first-of-type{border-top:0}
+.notice{border-left:3px solid var(--warn)}
+.itable td{vertical-align:top}
+@media (max-width:1100px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.dist h3{margin:0 0 4px;font-size:14px} .chart{width:100%;height:auto;display:block;margin:4px 0}
+.ckey{font-size:11px;color:var(--muted);display:flex;gap:5px;align-items:center} .ckey i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.dstats{font-size:12px} .dstats .good{color:var(--ok)} .dstats .warn{color:var(--warn)} .dstats .bad{color:var(--bad)}
+.good{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+.muted{color:var(--muted)} .mono{font-family:var(--mono);font-size:12px}
+.ask{display:flex;gap:8px;margin-top:10px} .ask input{flex:1}
+.scene{border-left:2px solid var(--soft);margin:8px 0 8px 4px;padding-left:12px}
+details summary{cursor:pointer} .empty{color:var(--muted);text-align:center;padding:60px 0;font-family:var(--serif);font-size:17px}
+.toast{position:fixed;bottom:18px;right:18px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;opacity:0;transition:.3s;pointer-events:none}
+.toast.on{opacity:.95}
+@media (max-width:820px){body{grid-template-columns:1fr} aside{display:none} main{padding:16px} .grid2,.grid3{grid-template-columns:1fr}}
+.kg{display:flex;flex-direction:column;gap:8px;position:relative}
+.kg-tip{position:absolute;display:none;max-width:260px;background:var(--ink);color:var(--bg);font-size:12px;line-height:1.4;padding:6px 9px;border-radius:6px;pointer-events:none;z-index:5}
+.kg-bar{display:flex;flex-direction:column;gap:6px}
+.kg-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.kg-lbl{font-size:12px;color:var(--muted);min-width:64px}
+.kg-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 9px;border-radius:99px;opacity:.55}
+.kg-chip.on{opacity:1;border-color:var(--ink)} .kg-chip i,.kg-type i,.kg-link i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.kg-chip span{color:var(--muted);font-size:11px}
+.kg-row input[type=range]{width:130px} .kg-search{max-width:300px} .kg-layout{width:auto}
+.kg-check{display:flex;align-items:center;gap:4px;margin:0;font-size:12px;color:var(--muted)} .kg-check input{width:auto}
+.kg-main{display:grid;grid-template-columns:1fr 320px;gap:12px;height:640px}
+.kg-canvas{border:1px solid var(--line);border-radius:8px;background:var(--panel);min-height:0}
+.kg-side{border:1px solid var(--line);border-radius:8px;padding:12px 14px;overflow:auto;background:var(--panel)}
+.kg-diffnote{font-size:12.5px;margin:2px 0 8px;display:flex;gap:6px;align-items:baseline}
+.kg-diffnote i,[data-s] i{width:10px;height:10px;border-radius:2px;display:inline-block;flex:none}
+.kg-st-kept i{background:var(--line)} .kg-st-changed i{background:var(--warm)} .kg-st-source_only i{border:2px dashed var(--bad);box-sizing:border-box} .kg-st-synthetic_only i{background:var(--ok)}
+.kg-sum{font-size:12px;width:100%} .kg-sum td,.kg-sum th{padding:2px 4px;text-align:right} .kg-sum td:first-child,.kg-sum th:first-child{text-align:left}
+.kg-side h3{margin:4px 0 8px;font:600 17px var(--serif)} .kg-type{font-size:11px;color:var(--muted);display:flex;gap:6px;align-items:center;text-transform:uppercase;letter-spacing:.04em}
+.kg-kv{margin:6px 0;font-size:13px} .kg-kv>span{display:block;font-size:11px;color:var(--muted)}
+.kg-cp{font-size:12.5px;margin-bottom:6px} .kg-actions{margin:8px 0}
+.kg-chapter{font-size:11px;padding:1px 7px;margin:0 3px 3px 0}
+.kg-group{margin-top:10px} .kg-gh{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px} .kg-gh span{opacity:.7}
+.kg-link{display:flex;align-items:center;gap:6px;font-size:13px;padding:2px 0;cursor:pointer;color:var(--ink)} .kg-link:hover{color:var(--accent)}
+.kg-note{font-size:11.5px} .kg-empty{padding:40px;text-align:center}
+@media (max-width:1100px){.kg-main{grid-template-columns:1fr;height:auto}.kg-canvas{height:520px}.kg-side{max-height:360px}}
+</style>
+<script src="/static/vendor/cytoscape-3.34.4.min.js"></script>
+<script src="/static/kg.js"></script>
+</head>
+<body><div id="netbar"></div>
+<header><h1>PSALM<span>·</span>SAGA</h1><p>Synthetic counterparts of literary texts: the same research-relevant properties, new wording.</p><span class="grow"></span><button class="small nobusy" onclick="showKeys()" title="API keys and endpoints for the model providers">API keys</button><button class="small nobusy" onclick="helpFor('glossary')">Help &amp; glossary</button></header>
+<aside>
+  <button class="primary" style="width:100%" onclick="showNew()">+ New run</button>
+  <div class="runs" id="runs" style="margin-top:12px"></div>
+  <div id="exps" style="margin-top:18px"></div>
+</aside>
+<main id="main"></main>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// Busy feedback: the button that was clicked shows a spinner until the requests it started have
+// settled, and a thin bar at the top shows that the server is working.
+let BUSY_BTN=null, INFLIGHT=0, BUSY_CLEAR=null, NET_T=null;
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("button");
+  if(b && !b.disabled && !b.closest(".tabs") && !b.classList.contains("nobusy")){ if(BUSY_BTN && BUSY_BTN!==b) BUSY_BTN.classList.remove("busy"); BUSY_BTN=b; clearTimeout(BUSY_CLEAR); BUSY_CLEAR=setTimeout(settle, 400); } }, true);
+function settle(){ if(INFLIGHT>0) return; clearTimeout(BUSY_CLEAR); BUSY_CLEAR=setTimeout(()=>{ if(INFLIGHT===0 && BUSY_BTN){ BUSY_BTN.classList.remove("busy"); BUSY_BTN=null; } }, 250); }
+function netStart(slow){ INFLIGHT++; if(BUSY_BTN && document.contains(BUSY_BTN)) BUSY_BTN.classList.add("busy");
+  if(slow){ clearTimeout(NET_T); NET_T=setTimeout(()=>{ const b=$("#netbar"); if(b) b.classList.add("on"); }, 250); } }
+function netEnd(){ INFLIGHT=Math.max(0,INFLIGHT-1); if(INFLIGHT===0){ clearTimeout(NET_T); const b=$("#netbar"); if(b) b.classList.remove("on"); settle(); } }
+const api = async (path, opt={}) => {
+  const slow = (opt.method||"GET")!=="GET";
+  netStart(slow);
+  try { const r = await fetch(path, opt); if(!r.ok){ let m=r.statusText; try{m=(await r.json()).detail||m}catch{}; throw new Error(m)} const ct=r.headers.get("content-type")||""; return ct.includes("json")? await r.json() : await r.text(); }
+  finally { netEnd(); }
+};
+const toast = m => { const t=$("#toast"); t.textContent=m; t.classList.add("on"); setTimeout(()=>t.classList.remove("on"), 2600); };
+let META=null, CUR=null, TAB="story", ES=null, EVENTS=[];
+
+// ------------------------------------------------------------------ help
+// All explanatory text comes from the server (psalm_saga/web/help.py and eval/grading.py via /api/meta).
+const H = () => (META && META.help) || {};
+const stageTitle = s => ((H().stages||{})[s]||{}).title || s;
+const presetTitle = p => ((H().presets||{})[p]||{}).title || p;
+function modal(title, html){
+  closeModal();
+  const d = document.createElement("div"); d.id = "modal";
+  d.innerHTML = `<div class="box" role="dialog" aria-label="${esc(title)}"><button class="small close nobusy" onclick="closeModal()">Close</button><h2>${esc(title)}</h2>${html}</div>`;
+  d.addEventListener("click", ev => { if(ev.target === d) closeModal(); });
+  document.body.appendChild(d);
+}
+async function showKeys(){
+  let k; try{ k = await api("/api/keys"); }catch(e){ toast(e.message); return; }
+  const rows = k.providers.map(p=>`<details class="card" style="margin:6px 0;padding:10px 14px" ${p.ready?"":""}><summary><b>${esc(p.label)}</b> ${p.ready?'<span class="chip preserve">set</span>':'<span class="chip">not set</span>'} <span class="muted small">model ids like <code>${esc(p.example)}</code></span></summary>
+      ${p.vars.map(v=>`<div class="row" style="margin-top:8px"><label style="margin:0;min-width:190px" class="mono">${esc(v.var)}</label>
+        <input class="grow keyin" data-var="${esc(v.var)}" type="${v.kind==="key"?"password":"text"}" autocomplete="off" placeholder="${v.set?esc(v.display)+" ("+esc(v.source==="saved"?"saved here":"from the environment")+")":(v.kind==="url"?"https://…":v.kind==="key"?"paste the key":"")}" style="flex:1;max-width:none">
+        <button class="small" onclick="saveKey('${esc(v.var)}')">Save</button>${v.source==="saved"?`<button class="small" onclick="saveKey('${esc(v.var)}', true)">Remove</button>`:""}</div>`).join("")}</details>`).join("");
+  modal("API keys and endpoints", `<p>Models are called through LiteLLM; each provider needs its key (or, for self-hosted models, its address). Keys you save here are kept <b>on this computer only</b>, in <code>${esc(k.file)}</code>, and used for every run started here or with the <code>saga</code> command. They are never written into run folders or shown again in full. A key saved here takes precedence over one set as an environment variable.</p>
+    <p class="muted small">Copyrighted input: sending in-copyright library material to an external API may not be allowed by your licences — for such runs use a model hosted inside the library (Ollama or vLLM).</p>${rows}`);
+}
+async function saveKey(v, remove){
+  const inp = document.querySelector(`.keyin[data-var="${v}"]`); const value = remove ? "" : (inp ? inp.value.trim() : "");
+  if(!remove && !value){ toast("Paste a value first."); return; }
+  try{ await api("/api/keys", {method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify({var:v, value})}); toast(remove?`${v} removed`:`${v} saved`); showKeys(); }
+  catch(e){ toast(e.message); }
+}
+function closeModal(){ const m = $("#modal"); if(m) m.remove(); }
+document.addEventListener("keydown", ev => { if(ev.key === "Escape") closeModal(); });
+const info = (topic, key="") => `<button class="info nobusy" title="What is this?" onclick="event.stopPropagation();event.preventDefault();helpFor('${topic}','${esc(key)}')">i</button>`;
+function helpFor(topic, key){
+  const h = H();
+  if(topic==="stage"){ const st = (h.stages||{})[key]||{};
+    const u = ((window.ST||{}).usage||{}).by_stage||{}, t = (((window.ST||{}).timing||{}).stages||{})[key];
+    const mine = CUR && (u[key] || t) ? `<dt>In this run</dt><dd>${u[key]?`${u[key].calls} model calls · $${(u[key].cost_usd||0).toFixed(3)}`:"no model calls"}${t?` · ${dur(t.wall_seconds)}`:""}</dd>` : "";
+    return modal(st.title||key, `<p>${esc(st.what||"")}</p><dl><dt>Produces</dt><dd>${esc(st.produces||"")}</dd><dt>Model calls</dt><dd>${esc(st.calls||"")}</dd><dt>Internal name</dt><dd><code>${esc(key)}</code></dd>${mine}</dl><p class="muted small">The run's track shows each stage grey (not yet), orange (running) or green (done); faded stages do not apply to this kind of input. The activity tab shows every step in detail.</p>`); }
+  if(topic==="preset"){ const p = (h.presets||{})[key]||{}, pr = (META.presets||[]).find(x=>x.name===key)||{};
+    return modal(p.title||key, `<p>${esc(p.summary||pr.description||"")}</p><dl><dt>When to use</dt><dd>${esc(p.when||"")}</dd><dt>Stages</dt><dd>${Object.entries((pr.config||{}).stages||{}).filter(([,c])=>c.enabled).map(([s])=>esc(stageTitle(s))).join(" → ")}</dd><dt>Internal name</dt><dd><code>${esc(key)}</code></dd></dl><p class="muted small">${esc(pr.description||"")}</p>`); }
+  if(topic==="policy"){ const P = h.policies||{}, ex = h.dimension_examples||{};
+    const dims = META.taxonomy.dimensions;
+    return modal("Transform policy: what carries over", `<p>For each of six dimensions of a narrative you decide what the synthetic text takes from the source. Names of characters and places are always replaced (unless you switch renaming off).</p>
+      <dl>${Object.entries(P).map(([k,v])=>`<dt><b>${esc(v.title)}</b> <code>${k}</code></dt><dd>${esc(v.what)}</dd>`).join("")}</dl>
+      <table><tr><th>dimension</th>${Object.values(P).map(v=>`<th>${esc(v.title)}</th>`).join("")}</tr>${dims.map(d=>`<tr><td><b>${esc(d.label)}</b><div class="muted small">${esc(d.description)}</div></td>${Object.keys(P).map(k=>`<td class="small">${esc((ex[d.key]||{})[k]||"")}</td>`).join("")}</tr>`).join("")}</table>
+      <p class="muted small">Measures of a dimension that is replaced are not expected to match; the evaluation and the judges take the policy into account.</p>`); }
+  if(topic==="dimension"){ const d = META.taxonomy.dimensions.find(x=>x.key===key)||{};
+    return modal(d.label||key, `<p>${esc(d.description||"")}</p><table><tr><th>aspect</th><th>what it covers</th></tr>${(d.subdimensions||[]).map(sd=>`<tr><td>${esc(sd.label)}</td><td class="small">${esc(sd.guidance)}</td></tr>`).join("")}</table>`); }
+  if(topic==="metric"){ return metricModal(key); }
+  if(topic==="group"){ const g = META.evaluation.groups[key]||{};
+    const ms = META.evaluation.metrics.filter(m=>m.group===key);
+    return modal(g.title||key, `<p><b>${esc(g.question||"")}</b></p><p>${esc(g.why||"")}</p><table><tr><th>measure</th><th>what it measures</th></tr>${ms.map(m=>`<tr><td>${esc(m.label)}${m.core?'<span class="core">core</span>':""}</td><td class="small">${esc(m.meaning)}</td></tr>`).join("")}</table>`); }
+  if(topic==="tab"){ return modal(key, `<p>${esc((h.tabs||{})[key]||"")}</p>`); }
+  if(topic==="mode"){ return modal("Kind of input", `<dl>${Object.entries(h.modes||{}).map(([k,v])=>`<dt><code>${k}</code></dt><dd>${esc(v)}</dd>`).join("")}</dl>`); }
+  if(topic==="scores"){ return modal("How to read the evaluation", `<p>Every measure is turned into a <b>score from 0 to 100%</b> where 100% is best, so all of them read the same way. The raw value (in its own unit) is shown underneath, and <i>how is this computed?</i> on each measure gives the formula.</p>
+      <dl><dt><code>score = x</code></dt><dd>shares, similarities and recalls that already run from 0 (bad) to 1 (good)</dd>
+      <dt><code>max(0, r)</code></dt><dd>correlations: a negative correlation counts as 0</dd>
+      <dt><code>max(0, 1 − d / c)</code></dt><dd>differences and distances, where 0 means identical: <b>inverted</b>, so no difference gives 100% and a difference of c or more gives 0%</dd>
+      <dt><code>max(0, 1 − |x − 1| / c)</code></dt><dd>ratios where 1 is ideal (length, variety)</dd></dl>
+      <p><i class="good dot2"></i> green: score ≥ 80% · <i class="warn dot2"></i> orange: ≥ 60% · <i class="bad dot2"></i> red: below — unless a measure states other cut-offs. The cut-offs are provisional working values.</p>
+      <p>Some measures are calibrated on the source itself: style allows for how much the source's two halves already differ, and graph measures are relative to how far a second analysis of the source agrees with the first. A measure that cannot be taken on this text (too few characters, no verse, …) is listed as not applicable rather than given a misleading number.</p>
+      <p><span class="core">core</span> marks the compact set of measures used to compare conditions in experiments; the others are supporting detail.</p>`); }
+  // glossary (default)
+  const tabs = Object.entries(h.tabs||{}).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+  return modal("Help & glossary", `<p>PSALM·SAGA turns a literary text into a <b>synthetic counterpart</b>: a new text that keeps the properties researchers measure (style, structure, characters, …) but none of the original wording, so it can be shared and studied where the original cannot.</p>
+    <p><b>How a run works.</b> ${Object.entries(h.stages||{}).map(([k,v])=>`<a href="#" onclick="helpFor('stage','${k}');return false">${esc(v.title)}</a>`).join(" → ")}.</p>
+    <h3 class="sec">Terms</h3><dl>${Object.entries(h.glossary||{}).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+    <h3 class="sec">Tabs of a run</h3><dl>${tabs}</dl>
+    <p class="muted small">More: the docs folder (README, DESIGN, KNOWLEDGE_GRAPH, EXPERIMENTS and the paper sections).</p>`);
+}
+
+function md(text){ // tiny markdown: headings + paragraphs
+  return text.split(/\n\s*\n/).map(b=>{ b=b.trim(); if(!b) return "";
+    const h=b.match(/^(#{1,3})\s+(.*)$/); if(h) return `<h${h[1].length}>${esc(h[2])}</h${h[1].length}>`;
+    return `<p>${esc(b).replace(/\n/g,"<br>")}</p>`; }).join("");
+}
+
+async function loadExperiments(){
+  try{ const xs = (await api("/api/experiments")).filter(x=>x.has_report);
+    $("#exps").innerHTML = xs.length? `<div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Experiments</div>` + xs.map(x=>`<a class="small-link" href="#" onclick="showExperiment('${esc(x.name)}');return false" style="display:block;font-size:13px;padding:3px 0">${esc(x.name)} <span class="muted">· ${x.jobs} runs</span></a>`).join("") : "";
+  }catch(e){}
+}
+async function showExperiment(name){
+  const xs = await api("/api/experiments"); const x = xs.find(e=>e.name===name);
+  if(!x){ toast("experiment not found"); return; }
+  CUR=null; closeES(); loadRuns();
+  const folder = x.path.split(/[\\/]/).pop();
+  $("main").innerHTML = `<div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="font:600 22px var(--serif);margin:0">Experiment: ${esc(x.name)}</h2>
+    <a class="small-link" target="_blank" href="/experiments/${encodeURIComponent(folder)}/report.html"><button class="small">Open in a new tab</button></a></div>
+    <p class="muted">${x.jobs} runs${x.failed?`, ${x.failed} failed`:""}. Corpus level: for every property, the distribution across books on the originals and on the synthetic texts, each book's pair joined by a line. If the synthetic corpus can stand in for the originals, both rows have the same spread and the lines rarely cross.</p>
+    <iframe src="/experiments/${encodeURIComponent(folder)}/report.html" style="width:100%;height:calc(100vh - 190px);border:1px solid var(--line);border-radius:10px;background:var(--panel)"></iframe>`;
+}
+async function loadRuns(){
+  const runs = await api("/api/runs");
+  // versions made by fixes are listed under the run they come from
+  const kids = {}; runs.filter(r=>r.parent).forEach(r=>{ const root=r.root||r.parent; (kids[root]=kids[root]||[]).push(r); });
+  const item = (r, child) => `<div class="item ${CUR===r.id?"active":""}" ${child?'style="margin-left:14px;border-left:2px solid var(--line)"':""} onclick="openRun('${r.id}')">
+    <div class="t"><span class="dot ${r.executing?"running":r.status}"></span>${child?`version ${r.version}`:esc(presetTitle(r.preset))} · ${esc(r.language||"")}</div>
+    <div class="s">${child?esc((r.fix_titles||r.fixes||[]).join(", ")):esc(r.id)}${r.cost_usd?` · $${r.cost_usd.toFixed(3)}`:""}</div></div>`;
+  const roots = runs.filter(r=>!r.parent);
+  $("#runs").innerHTML = runs.length ? roots.map(r=>item(r,false) + (kids[r.id]||[]).sort((a,b)=>(a.version||0)-(b.version||0)).map(k=>item(k,true)).join("")).join("")
+    + runs.filter(r=>r.parent && !roots.some(x=>x.id===(r.root||r.parent))).map(r=>item(r,true)).join("") : `<p class="muted">No runs yet.</p>`;
+}
+
+// ------------------------------------------------------------------ new run
+let PRESET = "full";
+const JUDGES = {psalm: ["PSALM dimensions", "six dimensions × six aspects; function and expression rated separately, with evidence and reasoning (6 calls)"],
+  content: ["Same story", "chapter summaries of both texts compared (1 call)"], style: ["Same style", "name-masked excerpts compared (1 call)"]};
+function judgePicker(prefix){ return `<div class="stagepick">${Object.entries(JUDGES).map(([k,[l,h]])=>`<label title="${esc(h)}"><input type="checkbox" class="jpick-${prefix}" value="${k}" checked> ${esc(l)}</label>`).join("")}</div>`; }
+async function runJudges(){
+  const model = ($("#jModelEv")||{}).value||"", instruments=[...document.querySelectorAll(".jpick-ev:checked")].map(x=>x.value);
+  if(!instruments.length){ toast("Choose at least one judge."); return; }
+  try{ await api(`/api/runs/${CUR}/judge`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({model, instruments})}); toast("Judges running — only the evaluation is redone."); TAB="activity"; await openRun(CUR); }
+  catch(e){ toast(e.message); }
+}
+function showNew(){
+  CUR=null; closeES(); loadRuns();
+  const hp = H().presets||{}, kinds = H().kinds||{};
+  const byKind = {}; META.presets.forEach(p=>{ const k=(hp[p.name]||{}).kind||"baseline"; (byKind[k]=byKind[k]||[]).push(p); });
+  const presetCards = Object.keys(kinds).filter(k=>byKind[k]).map(k=>`<div class="pkind">${esc(kinds[k])}</div><div class="pcards">${byKind[k].map(p=>{ const h=hp[p.name]||{};
+      return `<label class="pcard ${p.name===PRESET?"on":""}" data-preset="${p.name}"><input type="radio" name="preset" value="${p.name}" ${p.name===PRESET?"checked":""} onchange="presetChanged('${p.name}')"><b>${esc(h.title||p.name)}${h.recommended?' <span class="core">recommended</span>':""}${info("preset",p.name)}</b><span>${esc(h.summary||p.description)}</span></label>`; }).join("")}</div>`).join("");
+  const P = H().policies||{}, EX = H().dimension_examples||{};
+  const polRows = META.taxonomy.dimensions.map(d=>`<tr><td><div class="dl">${esc(d.label)}${info("dimension",d.key)}</div><div class="dd">${esc(d.description)}</div></td>
+      ${["preserve","abstract","regenerate"].map(o=>`<td class="opt" title="${esc((P[o]||{}).title||o)}: ${esc((EX[d.key]||{})[o]||"")}"><input type="radio" name="pol-${d.key}" value="${o}" data-pol="${d.key}"><div class="dd">${esc((EX[d.key]||{})[o]||"")}</div></td>`).join("")}</tr>`).join("");
+  $("#main").innerHTML = `
+  <h2 style="font:600 24px var(--serif);margin:0 0 4px">New run</h2>
+  <p class="lead">Give a text, choose what to run and what should carry over from the source, and start. You can follow every step live in the run's <b>activity</b> tab.</p>
+  <div class="card"><h3>1 · Input</h3>
+    <p class="lead">Upload or paste the text. Any language: the synthetic text is written in the language of the input.</p>
+    <div class="row"><input type="file" id="file" accept=".txt,.md,.json" style="max-width:320px">
+      <label style="margin:0">Kind of input${info("mode")}</label>
+      <select id="kind" style="max-width:260px"><option value="auto">decide automatically</option><option value="source">a source text to make a counterpart of</option><option value="premise">a premise for a new story</option><option value="spec">a specification (JSON)</option></select></div>
+    <label>…or paste text</label><textarea id="text" rows="7" placeholder="Paste a book, a chapter or a premise."></textarea>
+  </div>
+  <div class="card"><h3>2 · What to run</h3>
+    <p class="lead">A <i>preset</i> is a ready-made pipeline. Use <b>Full pipeline</b> to produce a synthetic text; the others are for testing or for experiments that compare methods.</p>
+    <div class="presets">${presetCards}</div>
+    <label>Stages in this preset <span class="muted" style="font-weight:400">— hover for what each does; untick to skip one</span></label><div id="stages" class="stagepick"></div>
+  </div>
+  <div class="card"><h3>3 · What carries over from the source ${info("policy")}</h3>
+    <p class="lead">For each dimension: <b>Keep</b> it as in the source, <b>Re-invent</b> it (same function, new particulars) or <b>Replace</b> it freely. Names are always replaced. Only applies when the input is a source text.</p>
+    <div class="row" style="margin-bottom:8px"><span class="muted small">Quick choice:</span>
+      <button class="small nobusy" onclick="setPolicies('all')">Keep everything</button>
+      <button class="small nobusy" onclick="setPolicies('surface')">Keep story and style, new people and world</button>
+      <button class="small nobusy" onclick="setPolicies('structure')">Keep only the structure</button></div>
+    <table class="pol"><tr><th>dimension</th>${["preserve","abstract","regenerate"].map(o=>`<th class="polhead">${esc((P[o]||{}).title||o)}<small>${esc((P[o]||{}).short||"")}</small></th>`).join("")}</tr>${polRows}</table>
+    <div class="row" style="margin-top:10px"><label style="margin:0" title="Replace every character and place name with a new one (recommended: original names are protected expression)."><input type="checkbox" id="rename" checked style="width:auto"> replace all names</label>
+    <label style="margin:0" title="New names fit the source's culture and period (Dutch names for a Dutch novel), instead of being free."><input type="checkbox" id="culture" checked style="width:auto"> keep the cultural setting of names</label></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>4 · Model</h3>
+      <label>Model <span class="muted" style="font-weight:400">(any LiteLLM model id; leave empty for the preset's) — <a href="#" onclick="showKeys();return false">set API keys</a></span></label><input id="model" placeholder="e.g. anthropic/claude-sonnet-5-5, openai/gpt-5.5, mistral/mistral-large-latest — fake/test runs offline">
+      <label>Reasoning effort <span class="muted" style="font-weight:400">(reasoning models only: how much the model thinks before answering — more costs more)</span></label>
+      <select id="effort"><option value="">provider default</option><option>low</option><option>medium</option><option>high</option></select>
+      <label>Budget in US dollars <span class="muted" style="font-weight:400">(the run stops when it is spent)</span></label><input id="budget" type="number" step="0.5" placeholder="no limit">
+    </div>
+    <div class="card"><h3>5 · Language and length</h3>
+      <div class="grid3"><div><label title="Output language; auto = the input's language">Language</label><input id="lang" placeholder="as input"></div>
+        <div><label title="Target length in words; empty = the source's length">Words</label><input id="words" type="number" placeholder="as source"></div>
+        <div><label title="Number of chapters; empty = the source's">Chapters</label><input id="chapters" placeholder="as source"></div></div>
+      <label>Language variety <span class="muted" style="font-weight:400">(dialect or historical spelling)</span></label><input id="variety" placeholder="empty = keep the source's variety · 'modern' = modernise · or describe one">
+    </div>
+  </div>
+  <div class="card"><h3>6 · Judges <span class="muted" style="font:12px var(--sans)">— optional</span></h3>
+    <p class="lead">Language-model judges add evaluations no count can make: the <b>PSALM judge</b> compares the two texts on all six dimensions and 36 aspects, citing evidence from both and arguing each verdict; the others ask whether it tells the same story and reads like the same writing. Use a model of a <b>different family</b> from the writer, so it does not favour its own text. You can also run the judges later from a run's evaluation.</p>
+    <label style="margin:0 0 6px;color:var(--ink);font-size:13px"><input type="checkbox" id="jOn" style="width:auto"> run the judges in this run's evaluation</label>
+    <div class="grid2"><div><label>Judge model <span class="muted" style="font-weight:400">(LiteLLM id; empty = the writer's model, not advised)</span></label><input id="jModel" placeholder="e.g. anthropic/claude-sonnet-5-5 when the writer is an OpenAI model"></div>
+      <div><label>Judges</label>${judgePicker("j")}</div></div>
+  </div>
+  <details class="card"><summary><b>Advanced</b> <span class="muted small">— pause points and raw settings</span></summary>
+    <label>Pause after <span class="muted" style="font-weight:400">(stop to inspect or edit, then resume)</span></label><select id="until"><option value="">run to the end</option><option value="spec">the specification (check it before anything is written)</option><option value="transform">the transform step (check names and design)</option><option value="plan">the plan (check it before drafting)</option></select>
+    <label>Extra settings <span class="muted" style="font-weight:400">(one key=value per line; see the config tab of a run for all keys)</span></label><textarea id="extra" rows="2" class="mono" placeholder="stages.review.params.rounds=2&#10;stages.guard.params.min_span=8"></textarea>
+  </details>
+  <button class="primary" onclick="createRun()">Start run</button>`;
+  presetChanged(PRESET);
+}
+function setPolicies(kind){
+  const sets = {all: {}, surface: {character:"abstract", world_building:"abstract"},
+    structure: {writing_style:"abstract", narrative_voice:"abstract", character:"abstract", world_building:"abstract"}};
+  META.taxonomy.dimensions.forEach(d=>{ const v=(sets[kind]||{})[d.key]||"preserve"; const r=document.querySelector(`input[data-pol="${d.key}"][value="${v}"]`); if(r) r.checked=true; });
+}
+function presetChanged(name){
+  PRESET = name || PRESET;
+  document.querySelectorAll(".pcard").forEach(c=>c.classList.toggle("on", c.dataset.preset===PRESET));
+  const p = META.presets.find(x=>x.name===PRESET);
+  const order=["extract","spec","transform","plan","draft","conform","review","guard","assemble","recover","evaluate"];
+  $("#stages").innerHTML = order.filter(s=>s in p.config.stages).map(s=>{const c=p.config.stages[s];
+    return `<label title="${esc(((H().stages||{})[s]||{}).what||s)}"><input type="checkbox" data-stage="${s}" ${c.enabled?"checked":""}> ${esc(stageTitle(s))}${c.impl&&c.impl!==s?` <span class="muted">(${esc(c.impl)})</span>`:""}</label>`}).join("");
+  for(const [k,v] of Object.entries(p.config.transform.policy)){ const r=document.querySelector(`input[data-pol="${k}"][value="${v}"]`); if(r) r.checked=true; }
+}
+async function createRun(){
+  const p = META.presets.find(x=>x.name===PRESET);
+  const ov = {};
+  document.querySelectorAll("[data-stage]").forEach(c=>{ if(c.checked!==p.config.stages[c.dataset.stage].enabled) ov[`stages.${c.dataset.stage}.enabled`]=c.checked; });
+  document.querySelectorAll("input[data-pol]:checked").forEach(r=>{ if(r.value!==p.config.transform.policy[r.dataset.pol]) ov[`transform.policy.${r.dataset.pol}`]=r.value; });
+  if(!$("#rename").checked) ov["transform.rename_entities"]=false;
+  if(!$("#culture").checked) ov["transform.keep_cultural_setting"]=false;
+  if($("#model").value) ov["models.default.name"]=$("#model").value.trim();
+  if($("#effort").value) ov["models.default.extra.reasoning_effort"]=$("#effort").value;
+  if($("#lang").value) ov["language.output"]=$("#lang").value.trim();
+  if($("#variety").value) ov["language.variety"]=$("#variety").value.trim();
+  if($("#words").value) ov["length.target_words"]=+$("#words").value;
+  if($("#chapters").value) ov["length.chapters"]= isNaN(+$("#chapters").value)? $("#chapters").value : +$("#chapters").value;
+  if($("#budget").value) ov["limits.max_cost_usd"]=+$("#budget").value;
+  if($("#jOn").checked){ ov["judges.enabled"]=true; if($("#jModel").value.trim()) ov["judges.model"]=$("#jModel").value.trim();
+    ov["judges.instruments"]=[...document.querySelectorAll(".jpick-j:checked")].map(x=>x.value); }
+  $("#extra").value.split("\n").map(l=>l.trim()).filter(Boolean).forEach(l=>{const i=l.indexOf("="); let v=l.slice(i+1).trim(); try{v=JSON.parse(v)}catch{} ov[l.slice(0,i).trim()]=v;});
+  if(!$("#text").value.trim() && !$("#file").files[0]){ toast("Add a text first: upload a file or paste it."); return; }
+  const fd = new FormData();
+  fd.append("text", $("#text").value); fd.append("kind", $("#kind").value); fd.append("preset", p.name);
+  fd.append("overrides", JSON.stringify(ov)); fd.append("until", $("#until").value);
+  if($("#file").files[0]) fd.append("file", $("#file").files[0]);
+  try{ const r = await api("/api/runs", {method:"POST", body:fd}); toast("Run created — starting. Follow it in the activity tab."); TAB="activity"; await openRun(r.id); }catch(e){ toast(e.message); }
+}
+
+// ------------------------------------------------------------------ run view
+function closeES(){ if(ES){ ES.close(); ES=null; } }
+async function openRun(id){
+  CUR=id; EVENTS=[]; closeES(); await loadRuns(); await renderRun();
+  ES = new EventSource(`/api/runs/${id}/events`);
+  let pending=null;
+  ES.onmessage = m => { const e=JSON.parse(m.data); EVENTS.push(e); if(e.call && (e.type==="llm_call"||e.type==="llm_retry")) delete ACT.calls[e.call]; if(TAB==="activity") ACT.schedule();
+    if(e.type==="stage_progress" && e.stage==="recover"){ const b=$("#recoverBtn"); if(b) b.textContent=recoverLabel(); }
+    if(["stage_progress","llm_start","llm_call"].includes(e.type)){ const n=$("#nowline"); if(n && window.ST) n.innerHTML = nowLine(window.ST); }
+    if(["stage_finished","stage_started","run_finished","run_failed","invalidated"].includes(e.type)){ clearTimeout(pending); pending=setTimeout(()=>{ renderRun(true); loadRuns(); }, 300);} };
+  ES.addEventListener("idle", ()=>closeES());
+}
+async function upgradeRun(){
+  try{ const r = await api(`/api/runs/${CUR}/upgrade`, {method:"POST"}); toast(`added: ${r.added.join(", ")} — rerunning`); await api(`/api/runs/${CUR}/run`, {method:"POST", headers:{"content-type":"application/json"}, body:"{}"}); await renderRun(true); }
+  catch(e){ toast(e.message); }
+}
+async function renderRun(keepTab){
+  if(!CUR) return;
+  const st = await api(`/api/runs/${CUR}`);
+  const running = st.meta.current_stage;
+  const stWord = s => !s.applies ? "does not apply to this input" : s.done ? "done" : (running===s.name&&st.executing) ? "running now" : "not yet";
+  const stages = st.stages.map(s=>`<span class="st ${!s.applies?"na":s.done?"done":(running===s.name&&st.executing)?"running":""}" onclick="helpFor('stage','${s.name}')" title="${esc(stageTitle(s.name))} — ${stWord(s)}. ${esc(((H().stages||{})[s.name]||{}).what||"")} (click for more)">${esc(stageTitle(s.name))}${s.impl!==s.name&&s.impl!=="chapter"?` <span class="muted">· ${esc(s.impl)}</span>`:""}</span>`).join("");
+  const u = st.usage||{};
+  let title = ""; try{ const sp = await api(`/api/runs/${CUR}/artifact/spec`); title = sp.title; }catch{}
+  $("#main").innerHTML = `
+    <div class="row"><div class="grow"><div style="font:600 24px var(--serif)">${esc(title||st.run)}</div>
+      <div class="muted small">${esc(presetTitle(st.meta.preset))}${info("preset", st.meta.preset)} · ${esc({source:"from a source text", premise:"from a premise", spec:"from a specification"}[st.mode]||st.mode)} · language ${esc(st.language)} · <span class="dot ${st.executing?"running":st.status}"></span> ${esc(st.executing?"running":({done:"finished", partial:"paused", failed:"failed", cancelled:"cancelled", budget_exceeded:"stopped: budget spent", created:"not started"}[st.status]||st.status))} · <span class="mono">${esc(st.run)}</span></div></div>
+      <button onclick="runAgain()" ${st.executing?"disabled":""} title="${st.status==="done"?"Re-run everything that is not up to date (finished steps are reused)":"Continue where the run stopped"}">${st.status==="done"?"Run again":"Resume"}</button>
+      <select id="rerun" style="width:auto" title="Redo the run from a chosen stage onwards (that stage and everything after it are recomputed)"><option value="">Redo from…</option>${st.stages.filter(s=>s.applies).map(s=>`<option value="${s.name}">${esc(stageTitle(s.name))}</option>`).join("")}</select>
+      ${st.executing?`<button onclick="cancelRun()">Cancel</button>`:""}
+      <select id="dl" style="width:auto" title="Download this run"><option value="">Download…</option>
+        <option value="story">Story (markdown)</option><option value="release">Release bundle (synthetic only)</option>
+        <option value="full">Full bundle (incl. source, internal)</option></select></div>
+    ${st.meta.parent?`<div class="card notice small" style="margin:10px 0 0">Version ${st.meta.version} — made from <a href="#" onclick="openRun('${esc(st.meta.parent)}');return false">version ${st.meta.parent_version||1}</a> with the fix${(st.meta.fixes||[]).length>1?"es":""} <b>${esc((st.meta.fix_titles||st.meta.fixes||[]).join(", "))}</b>, redone from <i>${esc(stageTitle(((st.meta.evaluation_guided_fixes||[]).slice(-1)[0]||{}).rerun_from||""))}</i>. The earlier version is unchanged; the evaluation tab compares the two.</div>`:""}
+    <div class="track">${stages}</div>
+    <div class="nowline" id="nowline">${nowLine(st)}</div>
+    <div class="muted mono" title="model calls (served from cache) · tokens sent / received · cost · retries · time">${u.calls||0} calls (${u.cached_calls||0} cached) · ${(u.prompt_tokens||0).toLocaleString()} in / ${(u.completion_tokens||0).toLocaleString()} out · $${(u.cost_usd||0).toFixed(3)} · ${u.retries||0} retries · ${dur((st.timing||{}).wall_seconds)} wall clock</div>
+    ${st.error?`<div class="card bad">${esc(st.error)}</div>`:""}
+    ${(st.missing_stages||[]).length && !st.executing?`<div class="card warn">This run was created with older settings and lacks stages its preset now has: <b>${st.missing_stages.map(esc).join(", ")}</b>. Running it again keeps its original settings. <button class="small" onclick="upgradeRun()">Add them and redo from there</button> or start a new run.</div>`:""}
+    <div class="tabs">${["story","spec","bible","plan","chapters","evaluation","usage","activity","config"].map(t=>`<button class="${t===TAB?"on":""}" data-tab="${t}" onclick="setTab('${t}')" title="${esc((H().tabs||{})[t]||"")}">${t}</button>`).join("")}</div>
+    <p class="tabdesc" id="tabdesc">${esc((H().tabs||{})[TAB]||"")}</p>
+    <div id="tab"></div>`;
+  $("#rerun").onchange = e => { if(e.target.value) runAgain(e.target.value); };
+  $("#dl").onchange = e => { const v=e.target.value; e.target.value=""; if(!v) return;
+    location.href = v==="story" ? `/api/runs/${CUR}/download/story.md` : `/api/runs/${CUR}/bundle?kind=${v}`; };
+  window.ST = st;
+  if(!keepTab || TAB!=="events") renderTab(); else renderTab();
+}
+function setTab(t){ TAB=t; document.querySelectorAll(".tabs button").forEach(b=>b.classList.toggle("on", b.dataset.tab===t)); const d=$("#tabdesc"); if(d) d.textContent=(H().tabs||{})[t]||""; renderTab(); }
+function nowLine(st){
+  st = st || window.ST; if(!st) return "";
+  if(!st.executing){ const next = st.stages.find(s=>s.applies && !s.done);
+    return st.status==="done" ? "" : next ? `<span class="muted">Next: ${esc(stageTitle(next.name))} — ${esc(((H().stages||{})[next.name]||{}).what||"")}</span>` : ""; }
+  const cur = st.meta.current_stage; if(!cur) return `<b>Starting…</b>`;
+  const ev = [...EVENTS].reverse().find(e=>e.type==="stage_progress" && e.stage===cur);
+  const prog = ev ? (ev.message || (ev.total ? `${ev.done||0} of ${ev.total}` : "")) : "";
+  const inflight = (()=>{ let n=0; const open=new Set(); for(const e of EVENTS){ if(e.type==="llm_start") open.add(e.call); else if((e.type==="llm_call"||e.type==="llm_retry") && e.call) open.delete(e.call); } return open.size; })();
+  return `<b>Now: ${esc(stageTitle(cur))}</b> — ${esc(((H().stages||{})[cur]||{}).what||"")}${prog?` <span class="muted">· ${esc(prog)}</span>`:""}${inflight?` <span class="muted">· ${inflight} model call${inflight>1?"s":""} in progress</span>`:""} <a href="#" onclick="setTab('activity');return false">see details</a>`;
+}
+async function runAgain(from){ try{ await api(`/api/runs/${CUR}/run`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({rerun_from:from||null})}); openRun(CUR);}catch(e){toast(e.message)} }
+async function cancelRun(){ await api(`/api/runs/${CUR}/cancel`, {method:"POST"}); toast("cancelling…"); }
+async function get(name){ try{ return await api(`/api/runs/${CUR}/artifact/${name}`);}catch{ return null; } }
+
+async function renderTab(){
+  const el = $("#tab"); if(!el) return;
+  const fn = {usage:tabUsage, story:tabStory, spec:tabSpec, bible:tabBible, plan:tabPlan, chapters:tabChapters, evaluation:tabEval, activity:tabActivity, events:tabActivity, config:tabConfig}[TAB];
+  el.innerHTML = `<p class="muted">loading…</p>`;
+  try { await fn(el); } catch (err) { console.error(err); el.innerHTML = `<div class="card bad">This tab failed to render: ${esc(String(err && err.message || err))}. Reload the page; if it persists, please report it.</div>`; }
+}
+async function tabStory(el){ const s = await get("story.md"); el.innerHTML = s? `<div class="story">${md(s)}</div>` : `<div class="empty">The story appears here when drafting is done.</div>`; }
+
+function askBox(artifact, placeholder){ return `<div class="ask"><input id="ask-${artifact.replace(/\W/g,"_")}" placeholder="${esc(placeholder)}"><button onclick="ask('${artifact}')">Apply</button></div>`; }
+async function ask(artifact){
+  const inp = $(`#ask-${artifact.replace(/\W/g,"_")}`); if(!inp.value.trim()) return;
+  inp.disabled=true; toast("asking the model…");
+  try{ await api(`/api/runs/${CUR}/edit`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({artifact, instruction:inp.value})}); toast(`${artifact} updated — downstream stages will be regenerated`); await renderRun(true);}catch(e){toast(e.message); inp.disabled=false;}
+}
+
+async function tabSpec(el){
+  const which = window.SPECSRC ? "spec_source" : "spec";
+  const sp = await get(which); const hasSrc = ST.mode==="source";
+  const head = hasSrc? `<div class="row" style="margin-bottom:10px"><button class="small nobusy ${which==="spec"?"primary":""}" onclick="SPECSRC=false;renderTab()" title="What the synthetic story is written from: the source's specification after the transform policy">synthetic specification</button><button class="small nobusy ${which==="spec_source"?"primary":""}" onclick="SPECSRC=true;renderTab()" title="The specification as extracted from the source">source specification</button><span class="muted small">Six dimensions, described in words. Each says whether it was kept, re-invented or replaced.</span></div>`:"";
+  if(!sp){ el.innerHTML = head+`<div class="empty">No ${which.replace("_"," ")} yet.</div>`; return; }
+  const label = k => { for(const d of META.taxonomy.dimensions){ if(d.key===k) return d.label; for(const s of d.subdimensions) if(s.key===k) return s.label; } return k; };
+  el.innerHTML = head + `<div class="card"><h3>${esc(sp.title||"(untitled)")}</h3><p>${esc(sp.logline)}</p><p class="muted">~${sp.target_words} words · ${sp.chapters} chapters · ${esc(sp.language)}</p>${sp.notes?`<p class="muted">${esc(sp.notes)}</p>`:""}</div>`
+   + (sp.variety && !sp.variety.standard ? `<div class="card"><h3>Language variety <span class="chip preserve">kept</span></h3><p><b>${esc(sp.variety.name)}</b> · ${esc(sp.variety.scope)}${sp.variety.source_share!=null?` · ${Math.round(100*sp.variety.source_share)}% variety forms in the source`:""}</p><p>${esc(sp.variety.description)}</p>${(sp.variety.character_varieties||[]).map(c=>`<div class="muted">${esc(c.character)}: ${esc(c.description)}</div>`).join("")}<div style="margin-top:8px">${(sp.variety.markers||[]).map(m=>`<span class="chip" title="${esc(m.feature)}">${esc(m.variety_form)}${m.standard_form?` ← ${esc(m.standard_form)}`:""}</span> `).join("")}</div></div>` : "")
+   + sp.dimensions.map((d,di)=>`<div class="card"><h3>${esc(label(d.dimension))}${info("dimension",d.dimension)} <span class="chip ${d.policy}" title="${esc(((H().policies||{})[d.policy]||{}).what||"")}">${esc(((H().policies||{})[d.policy]||{}).title||d.policy)}</span>${info("policy")}</h3><p>${esc(d.summary)}</p>
+      ${d.items.map((it,ii)=>`<div class="item"><div class="k">${esc(label(it.key))}</div><textarea data-d="${di}" data-i="${ii}">${esc(it.value)}</textarea>${it.evidence?`<div class="muted" style="font-size:12px">evidence: ${esc(it.evidence)}</div>`:""}</div>`).join("")}</div>`).join("")
+   + `<div class="row"><button class="primary" onclick="saveSpec('${which}')">Save edits</button><span class="muted">Saving invalidates everything downstream.</span></div>`
+   + askBox(which, "Or describe a change, e.g. ‘make the narrator more intrusive and ironic’");
+  window.SPEC = sp;
+}
+async function saveSpec(which){
+  document.querySelectorAll("textarea[data-d]").forEach(t=>{ SPEC.dimensions[+t.dataset.d].items[+t.dataset.i].value = t.value; });
+  try{ await api(`/api/runs/${CUR}/artifact/${which}`, {method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify(SPEC)}); toast("saved"); renderRun(true);}catch(e){toast(e.message)}
+}
+
+async function tabBible(el){
+  const view = ST.mode==="source" ? (window.BIBVIEW||"synthetic") : "synthetic";
+  const src = view==="source";
+  const b = await get(src? "bible_source.json" : "bible"); const tm = ST.mode==="source"? await get("transform") : null;
+  const recovered = (ST.artifacts||[]).includes("recovered/bible_source.json");
+  const calibrated = (ST.artifacts||[]).includes("calibration/bible_source.json");
+  const btn = (v,l)=>`<button class="small nobusy ${view===v?"primary":""}" onclick="BIBVIEW='${v}';renderTab()">${l}</button>`;
+  const head = ST.mode==="source"? `<div class="row" style="margin-bottom:10px">${btn("synthetic","design (synthetic)")}${btn("source","source")}${btn("compare","compare: source ↔ design")}${recovered?btn("compare_text","compare: source ↔ synthetic text"): (ST.meta||{}).current_stage==="recover" ? `<button class="small" id="recoverBtn" disabled>${recoverLabel()}</button>` : ST.status==="done"||ST.status==="partial" ? `<button class="small" id="recoverBtn" title="Analyse the synthetic text with the same extractor as the source (one extraction pass; costs tokens). Runs in the background." onclick="recoverGraph()">compare with the synthetic text…</button>` : `<button class="small" disabled title="available when the story is finished">compare with the synthetic text (after the run)</button>`}${calibrated?btn("compare_noise","noise: source ↔ its second analysis"):""}${info("tab","bible")}</div>
+    <p class="muted small" style="margin:-4px 0 10px">${{synthetic:"The story design: the source's bible after renaming and the transform policy — what the writer was asked to realise.", source:"What the analysis found in the source.", compare:"The source next to the design, item by item.", compare_text:"The source next to what the same analysis finds in the synthetic text.", compare_noise:"The source next to a second analysis of itself: every difference is analysis noise."}[view]||""} Click a node or link for details; each names its counterpart in the other text.</p>`:"";
+  if(!b){ el.innerHTML = head+`<div class="empty">No story bible yet (source mode extracts one).</div>`; return; }
+  if(view==="compare_text" && !recovered){ el.innerHTML = head + `<div class="card"><p>${(ST.meta||{}).current_stage==="recover"? recoverLabel() + " The comparison opens here when it is done." : "The synthetic text has not been analysed yet."}</p></div>`; return; }
+  if(view.startsWith("compare")){
+    const note = {
+      compare: "The design is the source's bible after renaming and the chosen policies — what the writer was asked to realise. With everything preserved it matches by construction, so few or no changes is expected here.",
+      compare_text: "The synthetic text analysed afresh, by the same extractor that analysed the source. Differences are what the text did not realise <i>plus</i> analysis noise: two analyses never word or split things identically." + (calibrated? " Compare with <a href='#' onclick=\"BIBVIEW='compare_noise';renderTab();return false\">the source against its own second analysis</a> to see how much of this is noise." : ""),
+      compare_noise: "The source analysed twice. Nothing changed in the text, so every difference here is analysis noise — the floor under the synthetic-text comparison."}[view] || "";
+    el.innerHTML = head + `<div class="card"><h3>Knowledge graph — differences</h3><p class="muted small">${note}</p><div class="kg" id="kg"></div></div>`;
+    window.KG = await mountKG($("#kg"), {runId: CUR, which: "compare", against: {compare_text:"text", compare_noise:"calibration"}[view] || "design"});
+    return;
+  }
+  const ents = b.entities.slice(0,60); const byId = Object.fromEntries(b.entities.map(e=>[e.id,e]));
+  el.innerHTML = head + `<div class="card"><h3>Knowledge graph</h3><div class="kg" id="kg"></div></div>
+    <div class="card"><h3>Renames</h3>${tm&&tm.renames.length? `<table><tr><th>original</th><th>new</th><th>note</th></tr>${tm.renames.slice(0,80).map(r=>`<tr><td>${esc(r.original)}</td><td>${esc(r.new)}</td><td class="muted">${esc(r.note)}</td></tr>`).join("")}</table>${tm.setting_shift?`<p><b>Setting shift.</b> ${esc(tm.setting_shift)}</p>`:""}${askBox("transform","e.g. ‘give the family a Frisian surname’")}`:`<p class="muted">—</p>`}</div>
+    <div class="card"><h3>Entities</h3><table><tr><th>name</th><th>kind</th><th>gender</th><th>role</th><th>mentions</th><th>chapters</th><th>description</th></tr>
+    ${ents.map(e=>`<tr><td><b>${esc(e.name)}</b>${e.aliases.length?`<div class="muted" style="font-size:11px">${esc(e.aliases.join(", "))}</div>`:""}</td><td>${esc(e.kind)}</td><td class="muted">${e.kind==="character"&&e.gender&&e.gender!=="unknown"?esc(e.gender):""}</td><td>${esc(e.role)}</td><td>${e.mentions}</td><td class="mono">${e.chapters.slice(0,12).join(",")}</td><td style="font-size:12.5px">${esc(e.description.slice(0,260))}</td></tr>`).join("")}</table></div>
+    <div class="card"><h3>Relations</h3><table>${b.relations.slice(0,80).map(r=>`<tr><td>${esc(byId[r.source]?.name||r.source)}</td><td class="muted">${esc(r.type)}</td><td>${esc(byId[r.target]?.name||r.target)}</td><td style="font-size:12.5px">${esc(r.description)}</td></tr>`).join("")}</table></div>`;
+  window.KG = await mountKG($("#kg"), {runId: CUR, which: src? "source" : "synthetic"});
+}
+function recoverLabel(){
+  const ev = [...EVENTS].reverse().find(e=>e.type==="stage_progress" && e.stage==="recover");
+  return "analysing the synthetic text" + (ev&&ev.total? ` — ${ev.done||0} of ${ev.total} passages` : ev&&ev.message? ` — ${ev.message}` : "") + "…";
+}
+async function recoverGraph(fromEval){
+  try{ const r = await api(`/api/runs/${CUR}/recover`, {method:"POST"});
+    BIBVIEW="compare_text";
+    if(r.status==="started"){ toast("Analysing the synthetic text in the background; the comparison opens when it is done."); }
+    const keep = TAB; await openRun(CUR); if(keep!==TAB) setTab(keep);
+  }catch(e){ toast(e.message); }
+}
+async function tabPlan(el){
+  const p = await get("plan"); if(!p){ el.innerHTML=`<div class="empty">No plan yet.</div>`; return; }
+  el.innerHTML = `<div class="card"><h3>${esc(p.title)}</h3><p>${esc(p.arc)}</p>${askBox("plan","Change the whole plan, e.g. ‘move the reveal one chapter earlier’")}</div>`
+   + p.chapters.map(c=>`<div class="card"><details ${p.chapters.length<=3?"open":""}><summary><b>${c.index}. ${esc(c.title)}</b> <span class="muted">· ${c.target_words} words · ${c.scenes.length} scenes · POV ${esc(c.pov)}</span></summary>
+      <p>${esc(c.summary)}</p>${c.scenes.map((s,i)=>`<div class="scene"><b>Scene ${i+1}</b> <span class="muted">${esc(s.setting)} · ${esc(s.characters.join(", "))} · ${s.target_words} w</span><div>${esc(s.summary)}</div><ol>${s.beats.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>`).join("")}
+      ${c.commitments.length?`<div class="muted">Must realise: ${c.commitments.map(esc).join(" · ")}</div>`:""}
+      ${askBox("chapter_plan:"+c.index, "Change this chapter’s plan")}</details></div>`).join("");
+}
+
+async function tabChapters(el){
+  const files = ST.artifacts.filter(a=>/^chapters\/ch_\d+\.json$/.test(a));
+  if(!files.length){ el.innerHTML=`<div class="empty">No chapters drafted yet.</div>`; return; }
+  const chs = await Promise.all(files.map(f=>get(f)));
+  const revs = await Promise.all(chs.map(c=>get(`reviews/ch_${String(c.index).padStart(3,"0")}.json`)));
+  const confs = await Promise.all(chs.map(c=>(ST.artifacts||[]).includes(`conform/ch_${String(c.index).padStart(3,"0")}.json`) ? get(`conform/ch_${String(c.index).padStart(3,"0")}.json`) : null));
+  const confTxt = cf => !cf || cf.distance_before==null ? "" : ` · <span title="distance from the source's measured style profile; 0 = identical. The style-matching stage revises a chapter only if this goes down.">style distance ${(+cf.distance_before).toFixed(2)}${cf.distance_after!==cf.distance_before?` → ${(+cf.distance_after).toFixed(2)}`:""}</span>`;
+  const backs = (ST.artifacts||[]).includes("backtracks.json") ? await get("backtracks.json") : null;
+  const ORIGIN = {prose:"chapter text — repaired in place", plan:"chapter plan — plan revised, chapter redrafted", spec:"specification — amended, run re-planned", bible:"story bible — amended, run re-planned"};
+  const acts = r => (r.rounds||[]).slice(1).map(h=>`${h.action||"repair"}${h.kept===false?" (discarded: not better)":""}`).join(", ");
+  el.innerHTML = (backs&&backs.length? `<div class="card"><h3>Back to planning</h3>${backs.map(b=>`<p>Attempt ${b.attempt}: ${b.issues.length} issue(s) traced to the ${b.amended.join(" and ")}, which ${b.amended.length>1?"were":"was"} amended; the story was re-planned and redrafted.</p><ul>${b.issues.map(u=>`<li>ch. ${u.chapter} [${esc(u.severity)}] ${esc(u.commitment)} — ${esc(u.fix)}</li>`).join("")}</ul>`).join("")}</div>` : "")
+   + chs.map((c,i)=>{ const r=revs[i]; const last = r? r.rounds[r.rounds.length-1] : null;
+    return `<div class="card"><details><summary><b>${c.index}. ${esc(c.title)}</b> <span class="muted">· ${c.word_count} words · ${esc(c.language)} · attempts ${c.attempts}${confTxt(confs[i])}${r?` · review: ${acts(r)||"no changes needed"}, ${r.final_blocking} blocking left${r.upstream&&r.upstream.length?` · ${r.upstream.length} upstream issue(s)`:""}${r.coverage?` · design ${r.coverage.realised}/${r.coverage.items} shown${r.coverage.missing.length?`, missing ${esc(r.coverage.missing.join(" "))}`:""}${r.coverage.contradicted.length?`, contradicted ${esc(r.coverage.contradicted.join(" "))}`:""}`:""}`:""}</span></summary>
+     ${last&&last.issues.length?`<table style="margin:10px 0"><tr><th>severity</th><th>comes from</th><th>commitment</th><th>evidence</th><th>fix</th></tr>${last.issues.map(x=>`<tr><td class="${x.severity==="minor"?"muted":x.severity==="major"?"warn":"bad"}">${x.severity}</td><td class="muted" title="${esc(ORIGIN[x.origin||"prose"])}">${esc(x.origin||"prose")}</td><td>${esc(x.commitment)}</td><td>${esc(x.evidence)}</td><td>${esc(x.fix)}</td></tr>`).join("")}</table><p class="muted" style="font-size:12px">Severity: <b>blocker</b> = contradicts the plan or spec visibly; <b>major</b> = a commitment clearly under-realised (both trigger a fix); <b>minor</b> = noted only. “Comes from” says where the fix is made: chapter text, chapter plan, or the specification / story bible.</p>`:""}
+     <div class="story" style="font-size:15.5px;margin:14px 0">${md(c.text)}</div>
+     ${askBox("chapter:"+c.index, "Revise this chapter, e.g. ‘more dialogue in the second scene’")}
+     <button class="small" onclick="redraft(${c.index})">Redraft from plan</button></details></div>`}).join("");
+}
+async function redraft(i){
+  const p = await get("plan"); const c = p.chapters.find(x=>x.index===i);
+  await api(`/api/runs/${CUR}/artifact/chapter_plan:${i}`, {method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify(c)});
+  runAgain();
+}
+
+// ---- evaluation. Metric definitions, groups and thresholds come from the server
+// (psalm_saga/eval/grading.py via /api/meta), so the web app, the report and the suggested
+// fixes all use the same rules.
+const f3 = x => x==null? "–" : (+x).toFixed(3);
+const pct = x => x==null? "–" : Math.round(100*x)+"%";
+const GRADE_WORD = {good:"preserved", warn:"borderline", bad:"not preserved"};
+const GRADE_WORD_DISTANCE = {good:"safe", warn:"borderline", bad:"leaked"};
+function fmtVal(m, v){
+  if(v==null) return "n/a";
+  if(m.fmt==="pct") return v>0 && v<0.005 ? "<1%" : pct(v);
+  if(m.fmt==="int") return String(Math.round(v));
+  return f3(v);
+}
+function ruleHTML(m, gv){
+  if(!m.norm) return `<div class="rule muted">descriptive — no target</div>`;
+  const g = m.s_good, w = m.s_warn;
+  const parts = g===w ? [`≥ ${pct(g)}`, null, `below`] : [`≥ ${pct(g)}`, `≥ ${pct(w)}`, `below`];
+  const note = gv && gv.rule && gv.rule.includes("(") ? ` <span class="muted">${esc(gv.rule.slice(gv.rule.indexOf("(")))}</span>` : "";
+  return `<div class="rule"><i class="good"></i>${parts[0]} ${parts[1]?`<i class="warn"></i>${parts[1]}`:""} <i class="bad"></i>${parts[2]}${note}</div>`;
+}
+const RAWFMT = (m, v) => v==null ? "–" : m.fmt==="pct" ? (v>0 && v<0.005 ? "<0.5%" : (100*v).toFixed(v<0.1?1:0)+"%") : m.fmt==="int" ? String(Math.round(v)) : (+v).toFixed(3);
+function rawCut(m, x){ if(x==null) return ""; if(m.norm==="ratio") return `within ±${RAWFMT({fmt:"num"}, x)} of 1`;
+  if(m.norm==="diff") return `${m.raw_unit||"value"} below ${RAWFMT(m, x)}`; return `${m.raw_unit||"value"} of ${RAWFMT(m, x)} or more`; }
+function metricModal(key){
+  const m = META.evaluation.metrics.find(z=>z.key===key); if(!m) return;
+  const e = window.EVAL || {}, gv = (e.grades||{})[key], reason = (e.not_measurable||{})[key];
+  const detail = gv ? metricDetail(key, e) : "";
+  const g = META.evaluation.groups[m.group]||{};
+  modal(m.label, `<p>${esc(m.meaning)}</p>
+    <dl><dt>Question</dt><dd>${esc(g.title||"")}: ${esc(g.question||"")}</dd>
+    <dt>Instrument</dt><dd><code>${esc(m.instrument)}</code>${m.core?' <span class="core">core</span> one of the measures compared across conditions in experiments':" supporting measure"}</dd>
+    ${gv?`<dt>This run</dt><dd><b class="${gv.grade}">${gv.score!=null?pct(gv.score):"–"}</b> · raw value ${esc(RAWFMT(m, gv.value))}${detail?` · ${detail}`:""}</dd>`:""}
+    ${!gv&&reason?`<dt>This run</dt><dd>not measured: ${esc(reason)}</dd>`:""}
+    <dt>From raw value to score</dt><dd><span class="formula">${esc(gv&&gv.formula||m.formula)}</span>${m.norm==="diff"?"The raw value is a difference or distance (0 = identical), so it is <b>inverted</b>: a smaller difference gives a higher score.":m.norm==="corr"?"A correlation runs from −1 to 1; anything at or below 0 means no agreement and scores 0.":m.norm==="ratio"?"A ratio of 1 is ideal; the score falls with the distance from 1.":m.norm==="unit"?"The raw value already runs from 0 (bad) to 1 (good) and is used as it is.":"Not graded."}</dd>
+    ${m.norm?`<dt>Colours</dt><dd><i class="good dot2"></i> green at score ≥ ${pct(m.s_good)} (${esc(rawCut(m, m.raw_good))})${m.s_warn!==m.s_good?` · <i class="warn dot2"></i> orange at ≥ ${pct(m.s_warn)} (${esc(rawCut(m, m.raw_warn))})`:""} · <i class="bad dot2"></i> red below${gv&&gv.rule&&gv.rule.includes("(")?` — adjusted for this text ${esc(gv.rule.slice(gv.rule.indexOf("(")))}`:""}</dd>`:""}
+    <dt>Why it matters</dt><dd>${esc(g.why||"")}</dd></dl>
+    <p class="muted small">Cut-offs are provisional working values, to be fixed after a pilot study. <a href="#" onclick="helpFor('scores');return false">How scores work in general</a>.</p>`);
+}
+function metricDetail(key, e){
+  const f=e.fidelity||{}, g=f.gender||{}, v=e.variety||{}, lk=e.leakage||{}, st=e.structure||{};
+  const kgr = k => { const r=(e.kg||{})[k]; if(!r) return ""; return `${r.found} of ${r.of} found (${pct(r.recall)})` +
+    (r.ceiling!=null? ` · the analysis agrees with itself on the source ${pct(r.ceiling)} of the time, so this is ${pct(r.relative)} of what it can detect` : ""); };
+  const kgd = (part,typ)=>{ const c=((st[part]||{})[typ]); return c? `${c.kept+c.changed} of ${c.kept+c.changed+c.source_only} found · ${c.synthetic_only} new` : ""; };
+  return ({
+    length_ratio: `${(e.length.words||0).toLocaleString()} words, target ${(e.length.target||0).toLocaleString()}`,
+    retention: v.applicable? `${esc(v.source_variety)} · share ${f3(v.source_share)} → ${f3(v.synthetic_share)}${v.target!=="kept"?" · modernised by configuration":""}` : "",
+    gender_mentions: g.female_mention_share? `women ${pct(g.female_mention_share.source)} → ${pct(g.female_mention_share.synthetic)} of mentions` : "",
+    gender_pronouns: g.female_pronoun_share? `feminine ${pct(g.female_pronoun_share.source)} → ${pct(g.female_pronoun_share.synthetic)} of pronouns` : "",
+    names: Object.keys(lk.name_leakage||{}).join(", "),
+    kg_characters: kgr("characters"), kg_places: kgr("places"), kg_events: kgr("events"),
+    kg_social: kgr("social"), kg_causes: kgr("causes"), kg_world: kgr("world"),
+    design_coverage: e.coverage&&e.coverage.items? `${e.coverage.realised} of ${e.coverage.items} checklist facts shown${e.coverage.missing?` · ${e.coverage.missing} missing`:""}${e.coverage.contradicted?` · ${e.coverage.contradicted} contradicted`:""}` : "",
+    judge_content: ((e.judges||{}).content||{}).rating? `rated ${e.judges.content.rating}/5 by ${esc((e.judges||{}).model||"the judge")}${(e.judges||{}).same_model_as_writer?" (the same model that wrote it — may be lenient)":""}: ${esc((e.judges.content.reason||"").slice(0,220))}` : "",
+    psalm_fidelity: ((e.judges||{}).psalm||{}).dimensions? `per dimension: ${e.judges.psalm.dimensions.filter(d=>d.policy!=="regenerate").map(d=>`${esc(d.label)} ${pct(d.function)}`).join(" · ")}` : "",
+    psalm_expression: ((e.judges||{}).psalm||{}).dimensions? `on re-invented / replaced dimensions: ${e.judges.psalm.dimensions.filter(d=>d.policy!=="preserve").map(d=>`${esc(d.label)} ${pct(d.surface_expression??d.expression)}`).join(" · ")}` : "",
+    judge_style: ((e.judges||{}).style||{}).rating? `rated ${e.judges.style.rating}/5: ${esc((e.judges.style.reason||"").slice(0,220))}` : "",
+  })[key] || "";
+}
+function metricCard(m, e){
+  const gv = (e.grades||{})[m.key], reason = (e.not_measurable||{})[m.key];
+  if(!gv && !reason) return "";
+  if(window.EVCORE && !m.core) return "";
+  // A measure that does not apply to this text (one chapter, no verse, ...) is not a result: it is
+  // listed under the group, not shown as an empty card. Only pending analysis keeps a card (it has an action).
+  if(!gv && !(m.key.startsWith("kg_") && reason.includes("not been analysed"))) return "";
+  const cls = gv? gv.grade : "";
+  const big = gv ? (gv.score!=null ? pct(gv.score) : RAWFMT(m, gv.value)) : "n/a";
+  const detail = gv? metricDetail(m.key, e) : "";
+  return `<div class="metric ${cls?"m-"+cls:""} ${gv?"":"m-na"}">
+    <div class="mtop"><span class="score ${cls}">${big}</span><span class="inst" title="instrument ${esc(m.instrument)}">${esc(m.instrument)}</span></div>
+    <div class="l">${esc(m.label)}${m.core?'<span class="core" title="core measure: compared across conditions in experiments">core</span>':""}${cls?` <span class="gw ${cls}">· ${(m.group==="distance"?GRADE_WORD_DISTANCE:GRADE_WORD)[cls]}</span>`:""}</div>
+    ${gv && window.EVCMP && window.EVCMP[m.key] && Math.abs(window.EVCMP[m.key].change)>0.02 ? `<div class="small ${window.EVCMP[m.key].change>0?"good":"bad"}">${window.EVCMP[m.key].change>0?"▲":"▼"} ${Math.round(100*Math.abs(window.EVCMP[m.key].change))} points vs previous version (${pct(window.EVCMP[m.key].before)})</div>`:""}
+    ${gv? `<div class="raw">raw: ${esc(m.raw_name||m.raw_unit||"value")} = ${esc(RAWFMT(m, gv.value))}</div>` + (detail?`<div class="h">${detail}</div>`:"") + ruleHTML(m, gv) + `<button class="how nobusy" onclick="helpFor('metric','${m.key}')">how is this computed?</button>`
+       : `<div class="h na">Not measurable: ${esc(reason)}.</div>${m.key.startsWith("kg_")&&reason.includes("not been analysed")?`<button class="small" onclick="recoverGraph(true)">Analyse the synthetic text now</button>`:""}`}
+  </div>`;
+}
+function groupStatus(gkey, e){
+  const ms = META.evaluation.metrics.filter(m=>m.group===gkey && (!window.EVCORE || m.core)), c={good:0,warn:0,bad:0,na:0,scores:[]};
+  ms.forEach(m=>{ const g=(e.grades||{})[m.key]; if(g&&g.grade){ c[g.grade]++; if(g.score!=null) c.scores.push(g.score); } else if(!g && (e.not_measurable||{})[m.key]) c.na++; });
+  c.mean = c.scores.length ? c.scores.reduce((a,b)=>a+b,0)/c.scores.length : null;
+  return c;
+}
+function dots(c){ return `<span class="dots">${c.good?`<span><i class="good"></i>${c.good}</span>`:""}${c.warn?`<span><i class="warn"></i>${c.warn}</span>`:""}${c.bad?`<span><i class="bad"></i>${c.bad}</span>`:""}</span>`; }
+function notApplicable(ms, e){
+  const r = ms.filter(m=>!(e.grades||{})[m.key] && (e.not_measurable||{})[m.key] && !(m.key.startsWith("kg_") && e.not_measurable[m.key].includes("not been analysed")) && !e.not_measurable[m.key].startsWith("the judges are off"));
+  return r.length? `<p class="muted small na-list">Does not apply to this text: ${r.map(m=>`<b>${esc(m.label)}</b> (${esc(e.not_measurable[m.key].replace(/^not applicable:\s*/,""))})`).join("; ")}.</p>` : "";
+}
+// ---- small inline SVG charts (no library), source vs synthetic
+const C_SRC = "var(--muted)", C_SYN = "var(--accent)";
+function chartKey(){ return `<div class="ckey"><i style="background:${C_SRC}"></i>source <i style="background:${C_SYN}"></i>synthetic</div>`; }
+function histSVG(d){
+  const W=300,H=120,P=18, n=d.source.length, max=Math.max(...d.source,...d.synthetic,0.01), bw=(W-P)/n;
+  const lab=i=>{ const a=d.edges[i], b=d.edges[i+1]; return b>=1e8? `${a}+` : `${a}–${b}`; };
+  let g="";
+  for(let i=0;i<n;i++){
+    const hs=(H-P)*d.source[i]/max, hy=(H-P)*d.synthetic[i]/max, x=P+i*bw;
+    g+=`<rect x="${x+1}" y="${H-P-hs}" width="${bw/2-1}" height="${hs}" fill="${C_SRC}" opacity=".55"><title>${lab(i)} ${d.unit}: source ${pct(d.source[i])}</title></rect>`;
+    g+=`<rect x="${x+bw/2}" y="${H-P-hy}" width="${bw/2-1}" height="${hy}" fill="${C_SYN}"><title>${lab(i)} ${d.unit}: synthetic ${pct(d.synthetic[i])}</title></rect>`;
+    if(i%2===0) g+=`<text x="${x+bw/2}" y="${H-4}" font-size="8" text-anchor="middle" fill="var(--muted)">${d.edges[i]}</text>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${g}<line x1="${P}" y1="${H-P}" x2="${W}" y2="${H-P}" stroke="var(--line)"/></svg>`;
+}
+function lineSVG(a,b,{fmt=pct}={}){
+  const W=300,H=110,P=16, n=Math.max(a.length,b.length,2), max=Math.max(...a,...b,0.01);
+  const pts=v=>v.map((y,i)=>`${P+(W-P-4)*i/(n-1)},${H-P-(H-P-6)*y/max}`).join(" ");
+  const dots=(v,c,who)=>v.map((y,i)=>`<circle cx="${P+(W-P-4)*i/(n-1)}" cy="${H-P-(H-P-6)*y/max}" r="2.2" fill="${c}"><title>chapter ${i+1}, ${who}: ${fmt(y)}</title></circle>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart"><polyline points="${pts(a)}" fill="none" stroke="${C_SRC}" stroke-width="1.5"/><polyline points="${pts(b)}" fill="none" stroke="${C_SYN}" stroke-width="1.8"/>${dots(a,C_SRC,"source")}${dots(b,C_SYN,"synthetic")}
+    <line x1="${P}" y1="${H-P}" x2="${W}" y2="${H-P}" stroke="var(--line)"/><text x="${P}" y="${H-3}" font-size="8" fill="var(--muted)">ch. 1</text><text x="${W-4}" y="${H-3}" font-size="8" text-anchor="end" fill="var(--muted)">ch. ${n}</text></svg>`;
+}
+function scatterSVG(rows){
+  // square-root axes: a few very frequent words would otherwise squeeze the rest into a corner
+  const W=300,H=200,P=22, max=Math.sqrt(Math.max(...rows.flatMap(r=>[r.source,r.synthetic]),1));
+  const X=v=>P+(W-P-6)*Math.sqrt(v)/max, Y=v=>H-P-(H-P-6)*Math.sqrt(v)/max;
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart"><line x1="${X(0)}" y1="${Y(0)}" x2="${X(max*max)}" y2="${Y(max*max)}" stroke="var(--line)" stroke-dasharray="3 3"/>
+    ${rows.map(r=>`<circle cx="${X(r.source)}" cy="${Y(r.synthetic)}" r="3" fill="${C_SYN}" opacity=".8"><title>“${esc(r.word)}”: source ${r.source}/1k, synthetic ${r.synthetic}/1k</title></circle>`).join("")}
+    ${rows.filter((r,i)=>i%5===0).map(r=>`<text x="${X(r.source)+4}" y="${Y(r.synthetic)-3}" font-size="8" fill="var(--muted)">${esc(r.word)}</text>`).join("")}
+    <text x="${W-4}" y="${H-6}" font-size="8" text-anchor="end" fill="var(--muted)">source (per 1,000 words, √ scale) →</text><text x="4" y="10" font-size="8" fill="var(--muted)">↑ synthetic</text></svg>`;
+}
+function barsSVG(rows){
+  const W=300, rh=16, H=rows.length*rh+4, L=96, max=Math.max(...rows.flatMap(r=>[r.source,r.synthetic]),0.01), sc=v=>(W-L-30)*v/max;
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${rows.map((r,i)=>{ const y=i*rh+2, nm=r.synthetic_name? `${r.name||""}${r.name?" → ":""}${r.synthetic_name}` : (r.name||"");
+    return `<text x="${L-4}" y="${y+10}" font-size="8.5" text-anchor="end" fill="var(--ink)">${esc(nm.length>24?nm.slice(0,23)+"…":nm)}</text>
+      <rect x="${L}" y="${y+1}" width="${sc(r.source)}" height="6" fill="${C_SRC}" opacity=".6"><title>source ${pct(r.source)} of main-character mentions</title></rect>
+      <rect x="${L}" y="${y+7}" width="${sc(r.synthetic)}" height="6" fill="${C_SYN}"><title>synthetic ${pct(r.synthetic)}</title></rect>`; }).join("")}</svg>`;
+}
+function distCard(title, d, expl, key){
+  if(!d) return "";
+  const ks = d.ks==null? "–" : (+d.ks).toFixed(2);
+  const gv = key && ((window.EVAL||{}).grades||{})[key];
+  const cls = gv ? gv.grade : "";
+  return `<div class="card dist"><h3>${title}</h3>${chartKey()}${histSVG(d)}
+    <div class="dstats">${gv&&gv.score!=null?`<b class="${cls}">score ${pct(gv.score)}</b> · `:""}<span class="${cls}">KS D ${ks}${d.ks_p!=null?` (p = ${(+d.ks_p).toFixed(2)})`:""}</span> · overlap ${pct(d.overlap)} · median ${d.median[0]??"–"} vs ${d.median[1]??"–"} ${d.unit}</div>
+    <div class="h">${expl}</div></div>`;
+}
+function groupExtras(gkey, e){
+  const D = e.distributions||{}, cp = D.chapter_profile||{}, f=e.fidelity||{}, lk=e.leakage||{};
+  if(gkey==="form") return `<div class="grid3">${["language","chapters"].map(k=>k==="language"
+      ? `<div class="metric ${e.language.ok?"m-good":"m-bad"}"><div class="mtop"><span class="v ${e.language.ok?"good":"bad"}">${esc(e.language.detected||"–")}</span><span class="inst">G1</span></div><div class="l">language</div><div class="h">expected ${esc(e.language.expected)}${(e.language.chapters_off_language||[]).length?` · off in chapters ${e.language.chapters_off_language.join(", ")}`:""}</div></div>`
+      : `<div class="metric"><div class="mtop"><span class="v">${e.length.chapters}</span><span class="inst">F2</span></div><div class="l">chapters</div><div class="h">${f.chapter_count?`source ${f.chapter_count.source}${f.chapter_count.equal?" · same":" · differs"}`:""}</div></div>`).join("")}</div>`;
+  if(gkey==="style") return `<div class="sub">Distributions — the whole shape, not just the average</div>
+      <p class="muted small">Two texts can share an average sentence length while one uses only medium sentences and the other mixes very short and very long ones. <b>Overlap</b> = share of the two histograms that coincides (100% = identical); <b>KS D</b> = largest gap between the cumulative distributions (0 = identical); the score is 1 − D / 0.5, raised to 80% when the test cannot tell the two apart (p ≥ 0.05).</p>
+      <div class="grid3">${distCard("Sentence length", D.sentence_length, "Rhythm of the prose.", "sentence_overlap")}${distCard("Paragraph length", D.paragraph_length, "Density and pacing on the page.", "paragraph_overlap")}${distCard("Word length", D.word_length, "Register: longer words go with more formal prose.", "word_overlap")}
+      ${D.function_words&&D.function_words.length?`<div class="card dist"><h3>Most frequent words</h3>${scatterSVG(D.function_words)}<div class="h">One dot per frequent word of the source (names excluded). On the dashed line = same frequency in both texts.</div></div>`:""}
+      ${cp.dialogue_share?`<div class="card dist"><h3>Dialogue per chapter</h3>${chartKey()}${lineSVG(cp.dialogue_share.source, cp.dialogue_share.synthetic)}<div class="h">Share of paragraphs that are dialogue.</div></div>`:""}</div>
+      ${f.stylometrics?`<details class="card"><summary><b>All stylometric features</b> <span class="muted">(F1 — rel. diff = |source − synthetic| ÷ the larger; <i class="good dot2"></i>&lt; 0.15 <i class="warn dot2"></i>&lt; 0.35 <i class="bad dot2"></i>≥ 0.35)</span></summary><table><tr><th>feature</th><th>source</th><th>synthetic</th><th>rel. diff</th></tr>
+      ${Object.entries(f.stylometrics).map(([k,v])=>`<tr><td>${k.replace(/_/g," ")}</td><td>${v.source}</td><td>${v.synthetic}</td><td class="${v.rel_diff<.15?"good":v.rel_diff<.35?"warn":"bad"}">${v.rel_diff}</td></tr>`).join("")}</table></details>`:""}`;
+  if(gkey==="structure") return `<div class="grid3">
+      ${cp.length_share?`<div class="card dist"><h3>Chapter lengths</h3>${chartKey()}${lineSVG(cp.length_share.source, cp.length_share.synthetic)}<div class="h">Share of the book in each chapter: the pacing profile.</div></div>`:""}
+      <div class="card dist"><h3>Story graph</h3><p class="small">The source's characters, places, scenes, events and causal links, compared with what the same analysis finds in the synthetic text.</p><button class="small" onclick="BIBVIEW='compare_text';setTab('bible')">Open the comparison</button></div></div>`;
+  if(gkey==="content"){
+    const jd = e.judges, ps = jd && jd.psalm;
+    const runCard = `<div class="card"><h3>${jd?"Run the judges again":"Run the judges"}</h3><p class="small">${jd?`Last run with <b>${esc(jd.model)}</b>${jd.same_model_as_writer?' — <span class="warn">the same model that wrote the text, so it may be lenient</span>':""}.`:"The judges are optional and off by default."} Only the evaluation is redone; the text is not touched. Choose a model of a different family from the writer (${esc(((ST.meta||{}).config||{}).models?.default?.name||"")}).</p>
+      <div class="grid2"><div><label>Judge model</label><input id="jModelEv" value="${esc(jd?jd.model:"")}" placeholder="LiteLLM model id"></div><div><label>Judges</label>${judgePicker("ev")}</div></div>
+      <button class="small" style="margin-top:8px" onclick="runJudges()">Run the judges</button></div>`;
+    if(!ps || !ps.dimensions) return runCard;
+    const r5 = v => `<b class="${v>=4?"good":v>=3?"warn":"bad"}">${v}</b>`;
+    const pol = k => ((H().policies||{})[k]||{}).title||k;
+    return `<details class="card"><summary><b>PSALM judge — dimension by dimension</b> <span class="muted small">(${esc(ps.mode)}; function = does it do the same thing, expression = are the concrete particulars the same; 1–5)</span></summary>
+      <p class="muted small">Under <i>Keep</i>, high function and expression similarity are both intended (only names change). Under <i>Re-invent</i>, function should stay high and expression low. Under <i>Replace</i>, neither is expected. Each verdict cites evidence from both texts and the judge's reasoning.</p>
+      ${ps.dimensions.map(d=>`<details style="margin:8px 0"><summary><b>${esc(d.label)}</b> <span class="chip ${d.policy}">${esc(pol(d.policy))}</span> <span class="small">function ${pct(d.function)} · expression ${pct(d.expression)}</span> <span class="muted small">— ${esc(d.summary||"")}</span></summary>
+        <table class="small"><tr><th>aspect</th><th>function</th><th>expression</th><th>source</th><th>synthetic</th><th>reasoning</th></tr>
+        ${d.subdimensions.map(x=>`<tr><td>${esc(x.label)}${x.surface?' <span class="chip" title="its concrete realisation is the most identifying part of a work">surface</span>':""}<div class="muted">confidence ${esc(x.confidence)}</div></td><td>${r5(x.function_similarity)}</td><td>${x.expression_similarity}</td><td>${esc(x.in_a)}${x.evidence_a?`<div class="muted"><i>“${esc(x.evidence_a)}”</i></div>`:""}</td><td>${esc(x.in_b)}${x.evidence_b?`<div class="muted"><i>“${esc(x.evidence_b)}”</i></div>`:""}</td><td>${esc(x.reasoning)}</td></tr>`).join("")}</table></details>`).join("")}
+    </details>` + runCard;
+  }
+  if(gkey==="characters") return D.characters&&D.characters.length? `<div class="grid3"><div class="card dist"><h3>Character attention</h3>${chartKey()}${barsSVG(D.characters)}<div class="h">Each main character's share of all main-character mentions (source name → synthetic name).</div></div></div>` : "";
+  if(gkey==="distance") return lk.copied_spans&&lk.copied_spans.length? `<details class="card"><summary><b>Shared passages</b> <span class="muted">(${lk.copied_spans.length} of 12 words or more)</span></summary>${lk.copied_spans.map(s=>`<div class="ev">${s.length} words: ${esc(s.text)}</div>`).join("")}</details>` : "";
+  return "";
+}
+function fixesHTML(e){
+  const fx = e.fixes||[];
+  const done = e.evaluation_guided_fixes||[];
+  let h = "";
+  if(done.length){ const names = [...new Set(done.flatMap(d=>d.fixes||(d.id?[d.id]:[])))];
+    h += `<div class="card notice small">This version was made with fixes chosen from an evaluation (${names.map(esc).join(", ")}). Fine for exploring and for producing a release; in an experiment its measurements are no longer independent of the generation, so keep it apart from unrevised runs.</div>`; }
+  if(!fx.length) return h;
+  return h + `<div class="card"><h3>Suggested fixes</h3><p class="muted small">A fix makes a <b>new version</b> of this run: the run is copied, the fix applied, and everything from the stage it names is redone (style matching, review with the design checklist, copy guard, analysis and evaluation all run again). <b>This version stays as it is</b>, so you can compare the two and keep the better one. Selected fixes are applied together, from the earliest stage any of them needs. Scores vary a little between any two runs, so borderline (orange) results may not improve.</p>
+    ${fx.map(x=>`<div class="fix"><label class="fixsel" style="margin:0;color:var(--ink);font-size:13px"><input type="checkbox" class="fixpick nobusy" value="${esc(x.id)}" data-from="${esc(x.rerun_from)}" ${x.severity==="bad"?"checked":""} onchange="fixCount()"><div><b>${esc(x.title)}</b>${x.severity==="warn"?' <span class="chip" title="only orange measures: the difference may be within run-to-run variation">borderline</span>':""} <span class="muted small">· ${esc(META.evaluation.groups[x.group].title)} · redoes from <i>${esc(stageTitle(x.rerun_from))}</i> · ${esc(x.cost)}</span><div class="small">${esc(x.explanation)}</div>${(()=>{ const ins = Object.entries(x.overrides||{}).filter(([k,v])=>typeof v==="string" && v.length>40); return ins.length? `<details class="small"><summary class="muted">instruction the stage receives</summary><pre class="formula">${esc(ins.map(([k,v])=>v).join("\n\n"))}</pre></details>` : ""; })()}
+      <div class="small muted">Because of: ${x.metrics.map(k=>{ const m=META.evaluation.metrics.find(z=>z.key===k), g=(e.grades||{})[k]; return `<span class="${g?g.grade:""}">${esc(m?m.label:k)}${g&&g.score!=null?` (${pct(g.score)})`:""}</span>`; }).join(", ")}</div></div></label></div>`).join("")}
+    <div class="row" style="margin-top:10px"><button class="primary small" id="fixSel" onclick="applyFixes(false)">Make a new version with the selected fixes</button><button class="small" onclick="applyFixes(true)">…with all ${fx.length}</button><span class="muted small" id="fixInfo"></span></div></div>`;
+}
+const STAGE_IDX = s => ["extract","spec","transform","plan","draft","conform","review","guard","assemble","recover","evaluate"].indexOf(s);
+function fixCount(){ const sel=[...document.querySelectorAll(".fixpick:checked")]; const b=$("#fixSel"); if(b){ b.disabled=!sel.length; b.textContent=sel.length?`Make a new version with the selected fixes (${sel.length})`:"Make a new version with the selected fixes"; }
+  const from = sel.map(x=>x.dataset.from).sort((a,b)=>STAGE_IDX(a)-STAGE_IDX(b))[0]; const i=$("#fixInfo"); if(i) i.textContent = from? `redoes from ${stageTitle(from)}` : ""; }
+async function applyFixes(all){
+  const boxes = [...document.querySelectorAll(".fixpick")].filter(x=>all||x.checked); if(!boxes.length) return;
+  const ids = boxes.map(x=>x.value), from = boxes.map(x=>x.dataset.from).sort((a,b)=>STAGE_IDX(a)-STAGE_IDX(b))[0];
+  if(!confirm(`Make a new version with ${ids.length} fix${ids.length>1?"es":""}, redone from “${stageTitle(from)}”? This version stays unchanged.`)) return;
+  try{ const r = await api(`/api/runs/${CUR}/fix`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({ids})}); toast(`version created — redoing from ${stageTitle(from)}`); TAB="activity"; await openRun(r.id); }
+  catch(e){ toast(e.message); }
+}
+function instrumentTable(e){
+  const rows = META.evaluation.metrics.filter(m=>!window.EVCORE||m.core).map(m=>{ const g=(e.grades||{})[m.key], r=(e.not_measurable||{})[m.key];
+    if(!g && !r) return "";
+    return `<tr><td><span class="inst">${esc(m.instrument)}</span></td><td>${esc(m.label)}${m.core?'<span class="core">core</span>':""}<div class="muted small">${esc(m.meaning)}</div></td><td class="${g?g.grade:"muted"}"><b>${g&&g.score!=null?pct(g.score):"—"}</b></td><td class="mono">${g?esc(RAWFMT(m,g.value)):"—"}</td><td class="small">${g? `<span class="formula" style="margin:0">${esc(g.formula)}</span>` : "does not apply: "+esc(r.replace(/^not applicable:\s*/,""))}</td><td class="muted small">${esc(META.evaluation.groups[m.group].title)}</td></tr>`; }).join("");
+  return `<div class="card"><table class="itable"><tr><th>id</th><th>measure</th><th>score</th><th>raw</th><th>raw → score</th><th>question</th></tr>${rows}</table></div>`;
+}
+async function tabEval(el){
+  const e = await get("evaluation.json"); if(!e){ el.innerHTML=`<div class="empty">Evaluation runs at the end of the pipeline.</div>`; return; }
+  window.EVAL = e;
+  let vers = null; try{ vers = await api(`/api/runs/${CUR}/versions`); }catch{}
+  window.EVCMP = vers && vers.comparison ? vers.comparison.measures : null;
+  const view = window.EVVIEW || "questions";
+  const G = META.evaluation.groups;
+  const hasSrc = !!e.fidelity;
+  const head = `<div class="row" style="margin-bottom:10px">
+      <button class="small ${view==="questions"?"primary":""}" onclick="EVVIEW='questions';renderTab()">By question</button>
+      <button class="small ${view==="instruments"?"primary":""}" onclick="EVVIEW='instruments';renderTab()">By instrument</button>
+      <label class="kg-check" style="margin-left:8px" title="show only orange and red measures"><input type="checkbox" class="nobusy" ${window.EVISSUES?"checked":""} onchange="EVISSUES=this.checked;renderTab()"> only issues</label>
+      <label class="kg-check" title="only the compact set of measures used to compare conditions in experiments"><input type="checkbox" class="nobusy" ${window.EVCORE?"checked":""} onchange="EVCORE=this.checked;renderTab()"> core measures only</label>
+      <span class="grow"></span><span class="muted small">Scores 0–100%, higher is better · <i class="good dot2"></i> ≥ 80% · <i class="warn dot2"></i> ≥ 60% · <i class="bad dot2"></i> below <button class="how nobusy" onclick="helpFor('scores')">how to read this</button></span></div>`;
+  const stale = hasSrc && (!e.structure_ceiling || !e.text_kind || !e.self_agreement) && !(window.ST||{}).executing
+    ? `<div class="card warn">This evaluation predates the calibrated grading: it lacks ${[!e.text_kind&&"the text-kind check (does the source have a cast?)", !e.structure_ceiling&&"the extractor's own agreement on the source", !e.self_agreement&&"the source's self-agreement"].filter(Boolean).join(", ")}, so some grades are stricter than the instruments can support. <button class="small" onclick="runAgain('recover')">Redo from recover</button> <span class="muted small">(analysis only — the synthetic text is kept; about 7 model calls)</span></div>` : "";
+  if(!hasSrc){ el.innerHTML = head + `<div class="card">This run has no source text, so there is nothing to compare against. Language and length:</div>` + groupExtras("form", e); return; }
+  const tiles = `<div class="tiles">${Object.entries(G).map(([k,g])=>{ const c=groupStatus(k,e); const worst=c.bad?"bad":c.warn?"warn":c.good?"good":"";
+      return `<a class="tile t-${worst}" href="#g-${k}" onclick="document.getElementById('g-${k}').open=true" title="${esc(g.why||"")}"><div class="tt">${esc(g.title)}</div><div class="tq">${esc(g.question)}</div><div class="ts ${c.mean==null?"":c.mean>=.8?"good":c.mean>=.6?"warn":"bad"}">${c.mean!=null?pct(c.mean):"–"}</div><div class="muted small">average score${dots(c)}</div></a>`; }).join("")}</div>`;
+  if(view==="instruments"){ el.innerHTML = head + stale + versionsHTML(vers) + tiles + fixesHTML(e) + instrumentTable(e) + corpusNote(); return; }
+  const groups = Object.entries(G).map(([k,g])=>{
+    let ms = META.evaluation.metrics.filter(m=>m.group===k);
+    if(window.EVISSUES) ms = ms.filter(m=>{ const x=(e.grades||{})[m.key]; return x && (x.grade==="warn"||x.grade==="bad"); });
+    const c = groupStatus(k,e), open = c.bad||c.warn||!window.EVCLOSED;
+    const cards = ms.map(m=>metricCard(m,e)).join("");
+    if(window.EVISSUES && !cards) return "";
+    return `<details class="group" id="g-${k}" ${open?"open":""}><summary><span class="gt">${esc(g.title)}</span>${info("group",k)} <span class="muted">— ${esc(g.question)}</span> ${c.mean!=null?`<b class="${c.mean>=.8?"good":c.mean>=.6?"warn":"bad"}" title="average score of the measures in this group">${pct(c.mean)}</b>`:""} ${dots(c)}</summary>
+      ${cards?`<div class="grid3">${cards}</div>`:""}${window.EVISSUES? "" : notApplicable(ms,e) + groupExtras(k,e)}</details>`; }).join("");
+  el.innerHTML = head + stale + versionsHTML(vers) + tiles + fixesHTML(e) + groups + corpusNote();
+}
+function versionsHTML(v){
+  if(!v || (v.family||[]).length<2) return "";
+  const me = (v.family||[]).find(f=>f.id===CUR)||{};
+  const fam = v.family.map(f=>`<a href="#" onclick="openRun('${esc(f.id)}');return false" style="${f.id===CUR?"font-weight:600":""}">version ${f.version}</a>${f.fixes&&f.fixes.length?` <span class="muted small">(${esc(f.fixes.join(", "))})</span>`:""}`).join(" · ");
+  let cmp = "";
+  if(v.comparison){ const c=v.comparison, pv=(v.family.find(f=>f.id===v.compared_with)||{}).version||"previous";
+    const verdict = c.core_worse>c.core_better ? `<b class="bad">worse on the core measures</b> — consider keeping version ${pv}` : c.core_better>c.core_worse ? `<b class="good">better on the core measures</b>` : `about the same on the core measures`;
+    cmp = `<p>Compared with version ${pv}: better on ${c.better}, worse on ${c.worse} measure${c.worse!==1?"s":""} (core: +${c.core_better} / −${c.core_worse}) — ${verdict}. Each measure below shows its change.</p>`; }
+  return `<div class="card"><h3>Versions</h3><p class="small">${fam}</p>${cmp}<p class="muted small">Changes smaller than about 2 points are not counted: scores vary a little between any two runs of the same settings.</p></div>`;
+}
+function corpusNote(){
+  const exp = ST.experiment || (ST.meta||{}).experiment;
+  return `<div class="card muted small"><b>Across books.</b> Everything above compares this one text with its source. Whether a whole synthetic corpus has the same distributions as the originals (do books keep their order and spread?) can only be seen across many runs: run an experiment and open it under <b>Experiments</b> in the sidebar${exp?` (this run belongs to <a href="#" onclick="showExperiment('${esc(exp)}');return false">${esc(exp)}</a>)`:""}.</div>`;
+}
+function evLine(e){ const t=e.type; const cls = t==="run_failed"?"err":(t==="warning"||t==="llm_retry"||t==="language_mismatch")?"warn":t.startsWith("stage")?"stage":"";
+  const {ts,type,trace,...rest}=e; return `<div class="ev ${cls}">${new Date(ts*1000).toLocaleTimeString()} ${type} ${esc(JSON.stringify(rest))}</div>`; }
+function appendEvent(e){ const box=$("#evbox"); if(box){ box.insertAdjacentHTML("afterbegin", evLine(e)); } }
+// ------------------------------------------------------------------ activity: a live, structured log
+// Built from the run's event stream (the same events.jsonl the pipeline always writes), so watching
+// costs the run nothing. Stages are groups, chapters sub-groups; model calls show while in flight.
+const ACT = { open: new Set(), closed: new Set(), follow: true, problems: false, raw: false, timer: null, tick: null, q: "", calls: {}, loading: new Set(), dirty: false,
+  schedule(){ if(this.timer) return; this.timer = setTimeout(()=>{ this.timer=null; if(TAB==="activity") drawActivity(); }, 400); } };
+const PART_TEXT = c => typeof c === "string" ? c : Array.isArray(c) ? c.map(x => x && (x.text ?? (typeof x === "string" ? x : JSON.stringify(x)))).join("\n\n") : JSON.stringify(c, null, 2);
+function prettyMaybeJSON(t){ if(!t) return ""; const s = String(t).trim(); if(s[0]==="{"||s[0]==="["){ try{ return JSON.stringify(JSON.parse(s), null, 2); }catch{} } return s; }
+async function loadCall(id){
+  if(ACT.loading.has(id)) return; ACT.loading.add(id);
+  try{ ACT.calls[id] = await api(`/api/runs/${CUR}/artifact/calls/${id}.json`); }
+  catch{ ACT.calls[id] = {missing: true}; }
+  finally{ ACT.loading.delete(id); ACT.dirty = true; drawActivity(true); }
+}
+function callDetailHTML(id){
+  const r = ACT.calls[id];
+  if(!r){ loadCall(id); return `<div class="pv">loading the full call…</div>`; }
+  if(r.missing) return `<div class="pv">No full record for this call (runs made before call logging, or logging switched off: log_calls=false).</div>`;
+  const u = r.usage || {};
+  const meta = [r.model, r.status, r.attempt>1?`attempt ${r.attempt}`:"", r.schema?`structured: ${r.schema}`:"text", `max ${r.max_tokens} tok`,
+    r.temperature!=null?`temperature ${r.temperature}`:"", r.finish?`finish: ${r.finish}`:"",
+    u.prompt_tokens!=null?`${u.prompt_tokens} in`:"", u.completion_tokens!=null?`${u.completion_tokens} out`:"", u.reasoning_tokens?`${u.reasoning_tokens} reasoning`:"",
+    u.cached_tokens?`${u.cached_tokens} cached`:"", r.seconds!=null?dur(r.seconds):"", r.cost_usd!=null?`$${r.cost_usd.toFixed(4)}`:""].filter(Boolean).join(" · ");
+  const block = (label, text, open) => { const t = String(text ?? ""); const bid = `${id}:${label}`;
+    return `<details class="msg" data-id="${esc(bid)}" ${(open && !ACT.closed.has(bid)) || ACT.open.has(bid) ? "open" : ""}><summary><span class="role">${esc(label)}</span> <span class="adim">${t.length.toLocaleString()} chars</span></summary><pre>${esc(t)}</pre></details>`; };
+  const msgs = (r.messages||[]).map((m,i) => block(`${i+1} · ${m.role}`, PART_TEXT(m.content), false)).join("");
+  const reasoning = r.reasoning ? block("reasoning", r.reasoning, false) : (u.reasoning_tokens ? `<div class="pv">${u.reasoning_tokens} reasoning tokens; this provider does not return the reasoning text.</div>` : "");
+  const answer = r.status==="running" ? `<div class="pv">waiting for the answer…</div>` : r.error ? `<div class="ln err">${esc(r.error)}</div>` : block("answer", r.schema ? prettyMaybeJSON(r.content) : r.content, true);
+  return `<div class="call"><div class="adim">${esc(meta)}</div>${msgs}${reasoning}${answer}</div>`;
+}
+const PROBLEM = new Set(["warning","llm_retry","language_mismatch","form_mismatch","variety_mismatch","length_mismatch","run_failed","llm_repair","stage_failed"]);
+function actModel(events){
+  const groups = [], byTag = {};
+  let cur = null;
+  const group = (name, ts) => { const g = {name, start: ts, end: null, status: "running", items: [], calls: 0, tok: 0, cost: 0, inflight: 0, problems: 0}; groups.push(g); return g; };
+  for(const e of events){
+    const t = e.type;
+    if(t==="run_started" || t==="invalidated" || t==="run_finished" || t==="run_failed" || t==="stage_skipped"){
+      let g = cur && cur.status==="running" ? cur : (groups.length && groups[groups.length-1].name==="run" ? groups[groups.length-1] : null);
+      if(!g){ g = group("run", e.ts); g.status = "info"; }
+      if(t==="run_failed"){ if(cur && cur.status==="running") cur.status="failed"; if(g.name==="run") g.status="failed"; }
+      if(t==="run_finished" && g.name==="run"){ g.status="done"; }
+      if(g.name==="run") g.end = e.ts;
+      g.items.push({kind:"note", e}); if(PROBLEM.has(t)) g.problems++; continue; }
+    if(t==="stage_started"){ cur = group(e.stage, e.ts); continue; }
+    if(t==="stage_finished" || t==="stage_failed"){
+      const g = [...groups].reverse().find(x=>x.name===e.stage) || group(e.stage, e.ts);
+      g.status = t==="stage_finished"?"done":t==="stage_failed"?"failed":"skipped"; g.end = e.ts; g.fin = e;
+      if(t==="stage_failed") g.problems++;
+      for(const it of g.items) if(it.kind==="call" && !it.done){ it.done = true; it.lost = true; }
+      g.inflight = 0; continue; }
+    const g = (e.stage && [...groups].reverse().find(x=>x.name===e.stage && x.status==="running")) || cur || Object.assign(group("run", e.ts), {status:"info"});
+    if(t==="llm_start"){ const it = {kind:"call", e, done:false}; g.items.push(it); g.inflight++; (byTag[e.tag] = byTag[e.tag] || []).push([it, g]); continue; }
+    if(t==="llm_call"){
+      const q = byTag[e.tag]; const pair = q && q.length ? q.shift() : null;
+      let it, gg = g;
+      if(pair){ [it, gg] = pair; it.done = true; it.res = e; gg.inflight = Math.max(0, gg.inflight-1); }
+      else { it = {kind:"call", e, done:true, res:e}; g.items.push(it); }
+      gg.calls++; gg.tok += (e.prompt_tokens||0)+(e.completion_tokens||0); gg.cost += e.cost_usd||0; continue; }
+    if(t==="llm_retry"){ const q = byTag[e.tag]; if(q && q.length){ const [it, gg] = q.shift(); it.done = true; it.retried = e; gg.inflight = Math.max(0, gg.inflight-1); } }
+    if(PROBLEM.has(t)) g.problems++;
+    g.items.push({kind:"note", e});
+  }
+  return groups;
+}
+const tm = ts => new Date(ts*1000).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit", second:"2-digit"});
+const kfmt = n => n>=1000 ? (n/1000).toFixed(n>=10000?0:1)+"k" : String(n||0);
+function chapterOf(it){ const tag = (it.e && (it.e.tag||"")) || ""; const m = tag.match(/:ch(\d+)/) || (it.e && it.e.chapter!=null ? [0, it.e.chapter] : null); return m ? +m[1] : null; }
+function lineHTML(it){
+  const e = it.e;
+  if(it.kind==="call"){
+    const r = it.res || {};
+    const st = !it.done ? `<span class="run spin">◐</span>` : it.retried ? `<span class="wrn">↻</span>` : it.lost ? `<span class="adim">·</span>` : r.cached ? `<span class="adim">≡</span>` : `<span class="ok">✓</span>`;
+    const model = (e.model||"").split("/").pop();
+    const info = !it.done ? `<span class="adim">waiting for ${esc(model)}… ${dur(Date.now()/1000 - e.ts)}</span>`
+      : it.retried ? `<span class="wrn">retry: ${esc((it.retried.error||"").slice(0,120))}</span>`
+      : r.cached ? `<span class="adim">from cache</span>`
+      : `<span class="num">${kfmt(r.prompt_tokens)}→${kfmt(r.completion_tokens)}</span> <span class="adim">tok · ${dur(r.seconds)}${r.cost_usd!=null?` · $${r.cost_usd.toFixed(4)}`:""}${r.finish==="length"?" · hit the output limit":""}</span>`;
+    const rt = r.reasoning_tokens ? ` <span class="adim">(${kfmt(r.reasoning_tokens)} reasoning)</span>` : "";
+    const pv = it.done && r.preview ? `<div class="pv">${esc(r.preview)}${r.preview.length>=160?"…":""}</div>` : "";
+    const head = `<span class="t">${tm(e.ts)}</span> ${st} <span class="tag">${esc(e.tag||"call")}</span>${(e.attempt||1)>1?` <span class="wrn">attempt ${e.attempt}</span>`:""} ${info}${rt}`;
+    const cid = e.call || r.call;
+    if(!cid && !pv) return `<div class="ln">${head}</div>`;
+    const id = cid ? "call:"+cid : "c"+e.ts+e.tag; const open = ACT.open.has(id) && !ACT.closed.has(id);
+    return `<details class="ln" data-id="${esc(id)}" ${open?"open":""}><summary>${head}</summary>${open && cid ? callDetailHTML(cid) : pv}</details>`;
+  }
+  const {ts, type, trace, usage, ...rest} = e;
+  if(type!=="stage_skipped") delete rest.stage;
+  if(type==="conform_round" || type==="review_result"){
+    let sum, body;
+    if(type==="conform_round"){
+      const lost = (e.lost||[]).length ? ` <span class="wrn">would lose ${esc(e.lost.join(", "))}</span>` : "";
+      sum = `chapter ${e.chapter} · style round ${e.round}: distance ${e.distance_before} → ${e.distance} · <span class="${e.kept?"ok":"wrn"}">${e.kept?"kept":"rejected"}</span>${lost}${e.length_change!=null?` <span class="adim">· length ${e.length_change>0?"±":""}${Math.round(100*e.length_change)}%</span>`:""}`;
+      body = (e.gaps||[]).map(g=>`<div class="pv">· ${esc(g)}</div>`).join("") || `<div class="pv">no gaps</div>`;
+    } else {
+      const cv = e.coverage; const cov = cv ? ` · design ${cv.realised}/${cv.items}${cv.missing.length?` <span class="wrn">missing ${esc(cv.missing.join(" "))}</span>`:""}${cv.contradicted.length?` <span class="err">contradicted ${esc(cv.contradicted.join(" "))}</span>`:""}${(cv.unanswered||[]).length?` <span class="adim">· ${cv.unanswered.length} not answered by the reviewer</span>`:""}` : "";
+      sum = `chapter ${e.chapter} · ${esc(e.action)} ${e.round}: <span class="${e.blocking?"wrn":"ok"}">${e.blocking} blocking</span>${cov}${e.kept!=null?` · <span class="${e.kept?"ok":"wrn"}">${e.kept?"kept":"not kept"}</span>`:""}${e.style!=null?` <span class="adim">· style ${e.style}</span>`:""}`;
+      body = (e.issues||[]).map(g=>`<div class="pv">· ${esc(g)}</div>`).join("") || `<div class="pv">no issues</div>`;
+    }
+    const id = `n${ts}${type}${e.chapter}${e.round}`;
+    return `<details class="ln" data-id="${esc(id)}" ${ACT.open.has(id)&&!ACT.closed.has(id)?"open":""}><summary><span class="t">${tm(ts)}</span> <span class="adim">›</span> ${sum}</summary>${body}</details>`;
+  }
+  if(JSON.stringify(rest).length > 220){
+    const id = `n${ts}${type}`; const short = rest.message || type;
+    return `<details class="ln" data-id="${esc(id)}" ${ACT.open.has(id)&&!ACT.closed.has(id)?"open":""}><summary><span class="t">${tm(ts)}</span> <span class="${PROBLEM.has(type)?"wrn":"adim"}">${PROBLEM.has(type)?"!":"·"} ${esc(type)} ${esc(String(short).slice(0,160))}</span></summary><pre class="pv">${esc(JSON.stringify(rest, null, 2))}</pre></details>`;
+  }
+  const cls = type==="run_failed"||type==="stage_failed" ? "err" : PROBLEM.has(type) ? "wrn" : "adim";
+  const msg = rest.message || (type==="stage_progress" ? JSON.stringify(rest) : Object.entries(rest).map(([k,v])=>`${k}=${typeof v==="object"?JSON.stringify(v):v}`).join(" "));
+  const icon = PROBLEM.has(type) ? "!" : type==="stage_progress" ? "›" : "·";
+  return `<div class="ln"><span class="t">${tm(ts)}</span> <span class="${cls}">${icon} ${type==="stage_progress"?"":esc(type)+" "}${esc(String(msg).slice(0,400))}</span></div>`;
+}
+function groupHTML(g, i, last){
+  const id = `g${i}:${g.name}`;
+  const st = g.status==="info" ? `<span class="adim">●</span>` : g.status==="done" ? `<span class="ok">✓</span>` : g.status==="failed" ? `<span class="err">✗</span>` : g.status==="skipped" ? `<span class="adim">–</span>` : `<span class="run spin">◐</span>`;
+  const secs = g.fin && g.fin.seconds!=null ? g.fin.seconds : ((g.end||Date.now()/1000) - g.start);
+  const bits = [`${dur(secs)}`, g.calls?`${g.calls} call${g.calls>1?"s":""}`:"", g.tok?`${kfmt(g.tok)} tok`:"", g.cost?`$${g.cost.toFixed(3)}`:"",
+    g.inflight?`<span class="run">${g.inflight} in flight</span>`:"", g.problems?`<span class="wrn">${g.problems} warning${g.problems>1?"s":""}</span>`:""].filter(Boolean).join(" · ");
+  let items = ACT.problems ? g.items.filter(it => it.kind==="note" ? PROBLEM.has(it.e.type) : (it.retried || it.lost || (it.res && it.res.finish==="length"))) : g.items;
+  if(ACT.q){ const q = ACT.q.toLowerCase(); items = items.filter(it => JSON.stringify(it.res || it.e).toLowerCase().includes(q)); if(!items.length) return ""; }
+  // chapters as sub-groups when the stage works on several
+  const chs = [...new Set(items.map(chapterOf).filter(x=>x!=null))];
+  let body;
+  if(chs.length > 1){
+    const loose = items.filter(it => chapterOf(it)==null).map(lineHTML).join("");
+    body = loose + chs.sort((a,b)=>a-b).map(c => { const its = items.filter(it=>chapterOf(it)===c); const sid = `${id}:ch${c}`;
+      const fly = its.filter(it=>it.kind==="call" && !it.done).length, n = its.filter(it=>it.kind==="call").length, pr = its.filter(it=>it.kind==="note" && PROBLEM.has(it.e.type)).length;
+      const open = !ACT.closed.has(sid) && (ACT.open.has(sid) || (ACT.follow && fly>0));
+      return `<details class="asub" data-id="${esc(sid)}" ${open?"open":""}><summary>${fly?`<span class="run spin">◐</span>`:`<span class="ok">✓</span>`} chapter ${c} <span class="adim">· ${n} call${n!==1?"s":""}${fly?` · ${fly} in flight`:""}</span>${pr?` <span class="wrn">· ${pr} warning${pr>1?"s":""}</span>`:""}</summary>${its.map(lineHTML).join("")}</details>`; }).join("");
+  } else body = items.map(lineHTML).join("");
+  if(!body) body = `<div class="ln adim">${ACT.problems?"no problems":"nothing logged"}</div>`;
+  const open = !ACT.closed.has(id) && (ACT.open.has(id) || (ACT.follow && (g.status==="running" || (last && g.status!=="done"))));
+  return `<details class="grp" data-id="${esc(id)}" ${open?"open":""}><summary>${st} ${esc(g.name)} <span class="adim">· ${bits}</span></summary>${body}</details>`;
+}
+function drawActivity(force){
+  const box = $("#act"); if(!box) return;
+  // Do not pull the text away while someone reads or selects it; catch up when the pointer leaves.
+  const sel = window.getSelection && window.getSelection();
+  const selecting = sel && !sel.isCollapsed && box.contains(sel.anchorNode);
+  if(!force && !ACT.raw && (box.matches(":hover") || selecting) && box.childElementCount){ ACT.dirty = true; const h = box.querySelector(".head .paused"); if(h) h.textContent = "paused while you read — move the pointer away to update"; return; }
+  ACT.dirty = false;
+  const keepScroll = box.scrollTop;
+  if(ACT.raw){ box.innerHTML = EVENTS.slice(-600).reverse().map(evLine).join(""); box.className = "card"; return; }
+  box.className = "term";
+  const groups = actModel(EVENTS);
+  const calls = groups.reduce((a,g)=>a+g.calls,0), fly = groups.reduce((a,g)=>a+g.inflight,0), cost = groups.reduce((a,g)=>a+g.cost,0), tok = groups.reduce((a,g)=>a+g.tok,0);
+  const first = EVENTS.length ? EVENTS[0].ts : null, lastTs = EVENTS.length ? EVENTS[EVENTS.length-1].ts : null;
+  const live = ST && ST.executing;
+  const head = `<div class="head"><span>${live?`<span class="run spin">◐</span> running`:`<span class="ok">■</span> ${esc(ST?ST.status:"")}`}</span><span class="paused wrn"></span>
+    <span>${EVENTS.length} events</span><span>${calls} model calls${fly?` · <span class="run">${fly} in flight</span>`:""}</span><span>${kfmt(tok)} tokens</span><span>$${cost.toFixed(3)}</span>
+    ${first?`<span>${tm(first)} → ${live?"now":tm(lastTs)}</span>`:""}</div>`;
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.innerHTML = head + (groups.length ? groups.map((g,i)=>groupHTML(g,i,i===groups.length-1)).join("") : `<div class="adim">No events yet. They appear here as the run works.</div>`);
+  if(!box.dataset.wired){ box.dataset.wired = "1";  // only the user's clicks count, not re-renders
+    box.addEventListener("click", ev => { const sm = ev.target.closest("summary"); if(!sm) return; const d = sm.parentElement, id = d.dataset.id; if(!id) return;
+      const willOpen = !d.open; if(willOpen){ ACT.open.add(id); ACT.closed.delete(id); } else { ACT.closed.add(id); ACT.open.delete(id); }
+      if(willOpen && id.startsWith("call:")){ ev.preventDefault(); d.open = true; const body = d.querySelector(".pv, .call"); const html = callDetailHTML(id.slice(5)); if(body) body.outerHTML = html; else d.insertAdjacentHTML("beforeend", html); } }); }
+  if(ACT.follow && live && !force && atBottom) box.scrollTop = box.scrollHeight; else box.scrollTop = keepScroll;
+  if(!box.dataset.leave){ box.dataset.leave = "1"; box.addEventListener("mouseleave", () => { if(ACT.dirty) drawActivity(); }); }
+}
+async function tabActivity(el){
+  if(!EVENTS.length){ const txt = await get("events.jsonl"); if(typeof txt==="string") EVENTS = txt.split("\n").filter(Boolean).map(l=>{ try{return JSON.parse(l)}catch{return null} }).filter(Boolean); }
+  const chk = (k, l, t) => `<label class="kg-check" title="${t}"><input type="checkbox" class="nobusy" ${ACT[k]?"checked":""} onchange="ACT.${k}=this.checked;drawActivity()"> ${l}</label>`;
+  el.innerHTML = `<div class="row" style="margin-bottom:8px">${chk("follow","follow","keep the running stage open and scroll along")}${chk("problems","only problems","warnings, retries, mismatches and truncated answers")}${chk("raw","raw events","every event as recorded in events.jsonl")}
+    <input id="actq" class="nobusy" placeholder="search calls, prompts' previews, warnings…" value="${esc(ACT.q)}" style="max-width:260px" oninput="ACT.q=this.value;drawActivity(true)">
+    <span class="grow"></span><span class="muted small">Click a call for its full input, answer and reasoning. Watching does not slow the run.</span></div><div id="act" class="term"></div>`;
+  drawActivity();
+  clearInterval(ACT.tick); ACT.tick = setInterval(()=>{ if(TAB!=="activity"){ clearInterval(ACT.tick); return; } if(ST && ST.executing) drawActivity(); }, 1000);
+}
+
+function dur(x){ if(x==null) return "–"; x=+x; return x<120? x.toFixed(1)+"s" : `${Math.floor(x/60)}m${String(Math.floor(x%60)).padStart(2,"0")}s`; }
+// Plain number tile (no grading), used by the usage tab.
+function metric(v, l, h=""){ return `<div class="metric"><div class="v">${v??"–"}</div><div class="l">${l}</div>${h?`<div class="h">${h}</div>`:""}</div>`; }
+async function tabUsage(el){
+  const u = ST.usage||{}, t = ST.timing||{}, by = u.by_stage||{}, tim = t.stages||{};
+  const order = ST.stages.map(s=>s.name); const names = [...order.filter(n=>n in by||n in tim), ...Object.keys(by).filter(n=>!order.includes(n))];
+  const fmt = n => Math.round(n||0).toLocaleString();
+  const tot = names.reduce((a,n)=>a+((by[n]||{}).cost_usd||0),0) || 1;
+  el.innerHTML = `<div class="grid3">
+      ${metric(dur(t.wall_seconds),"wall clock",`${t.invocations||1} invocation(s), incl. resumes`)}
+      ${metric("$"+(u.cost_usd||0).toFixed(3),"cost", u.replayed_cost_usd?`+ $${u.replayed_cost_usd.toFixed(3)} served from cache`:"")}
+      ${metric(fmt((u.prompt_tokens||0)+(u.completion_tokens||0)),"tokens",`${fmt(u.prompt_tokens)} in · ${fmt(u.completion_tokens)} out · ${fmt(u.cache_read_tokens)} cache-read`)}</div>
+    ${u.unpriced_calls?`<div class="card warn" style="margin-top:14px">${u.unpriced_calls} calls had no known price and are counted as $0. Set <span class="mono">models.&lt;role&gt;.input_cost_per_mtok</span> / <span class="mono">output_cost_per_mtok</span>.</div>`:""}
+    <div class="card" style="margin-top:14px"><h3>Per stage</h3><table><tr><th>stage</th><th title="time on the clock, summed over attempts">wall clock</th><th title="how often the stage ran (resumes and redos count)">attempts</th><th>model calls</th><th>input tok</th><th>output tok</th><th>$</th><th>share of cost</th><th>retries</th></tr>
+    ${names.map(n=>{const b=by[n]||{}, w=tim[n]||{}; const sh=(b.cost_usd||0)/tot;
+      return `<tr><td title="${esc(n)}">${esc(stageTitle(n))}</td><td>${dur(w.wall_seconds)}</td><td>${w.runs??"–"}</td><td>${fmt(b.calls)}</td><td>${fmt(b.prompt_tokens)}</td><td>${fmt(b.completion_tokens)}</td><td>${(b.cost_usd||0).toFixed(4)}</td>
+      <td><div style="background:var(--soft);border-radius:3px;height:8px;width:120px"><div style="background:var(--accent);height:8px;border-radius:3px;width:${Math.round(sh*120)}px"></div></div></td><td>${fmt(b.retries)}</td></tr>`}).join("")}</table>
+    <p class="muted" style="font-size:12px">Wall clock is cumulative over all attempts of a stage. Model time (${dur(u.llm_seconds)} in total) can exceed wall clock because calls run in parallel.</p></div>`;
+}
+async function tabConfig(el){ el.innerHTML = `<div class="card"><p class="muted small">Every setting of this run, after the preset and your overrides were combined. Any value can be changed for a new run with a <span class="mono">key=value</span> line under <i>Advanced</i> (e.g. <span class="mono">stages.review.params.rounds=2</span>); keys follow the nesting shown here.</p><pre class="mono" style="white-space:pre-wrap">${esc(JSON.stringify(ST.meta.config,null,2))}</pre></div>`; }
+
+(async()=>{ META = await api("/api/meta"); await loadRuns(); loadExperiments(); const runs = await api("/api/runs"); runs.length? openRun(runs[0].id) : showNew(); setInterval(loadRuns, 8000); })();
+</script>
+</body>
+</html>

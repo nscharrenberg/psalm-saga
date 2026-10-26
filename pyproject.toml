@@ -1,112 +1,50 @@
 [project]
 name = "psalm-saga"
-version = "0.1.0"
-description = "A spec-first, PSALM-dimension-aligned story-writing agent built on LangChain Deep Agents"
+version = "2.0.0a1"
+description = "Dimension-controlled story synthesis: turn (copyrighted) literary sources into synthetic stories that keep their research-relevant data points but not their expression."
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "nscharrenberg" }]
 dependencies = [
-    "deepagents>=0.7.6",
-    "jsonpatchkit>=0.1.0",
-    "langchain>=1.3.15",
-    "langgraph-checkpoint-sqlite>=3.1.1",
-    "prompt-toolkit>=3.0.53",
-    "pydantic>=2.13.4",
-    "pydantic-settings>=2.15.0",
-    "python-dotenv>=1.2.3",
-    "rich>=13.6.0,<15.0.0",
-]
-
-[project.urls]
-Homepage = "https://github.com/nscharrenberg/psalm-saga"
-Issues = "https://github.com/nscharrenberg/psalm-saga/issues"
-
-[dependency-groups]
-dev = [
-    "mypy>=2.3.1",
-    "pytest>=9.1.1",
-    "ruff>=0.16.3",
-    "psalm-saga[all]",
-    "deepeval>=4.1.8",
-]
-experiments = [
-    "pandas>=3.0.6",
-    "pyarrow>=25.0.1",
-    "pyyaml>=6.0.3",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "litellm>=1.50",
+    "typer>=0.12",
+    "rich>=13.7",
+    "jinja2>=3.1",
+    "numpy>=1.24",
 ]
 
 [project.optional-dependencies]
-anthropic = [
-    "langchain-anthropic>=1.5.6",
-]
-openai = [
-    "langchain-openai>=1.5.1",
-]
-all = ["psalm-saga[anthropic,openai]"]
+web = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]
+experiments = ["pandas>=2.0"]
+all = ["psalm-saga[web,experiments]"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx>=0.27", "ruff>=0.5", "psalm-saga[all]"]
 
 [project.scripts]
-psalm-saga = "psalm_saga.cli:main"
-psalm-saga-batch = "psalm_saga.batch_cli:main"
+saga = "psalm_saga.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatchling.build.targets.wheel]
+[tool.hatch.build.targets.wheel]
 packages = ["psalm_saga"]
-# `skills/` lives inside the package dir; make sure the non-.py content
-# (SKILL.md, references/*.md) ships too.
-artifacts = ["psalm_saga/skills/**"]
-
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-exclude = [".runtime/**", "**/_runtime/**", "examples/**", "runs/**"]
-
-[tool.ruff.lint]
-select = ["ALL"]
-ignore = [
-    "ANN",
-    "C901",
-    "COM812",
-    "D203",
-    "D102",
-    "D213",
-    "D107",
-    "E501",
-    "EM102",
-    "ISC001",
-    "PERF401",
-    "PLR0912",
-    "PLR0915",
-    "PLR2004",
-    "Q000",
-    "S314",
-    "S603",
-    "S607",
-    "TC001",
-    "TC003",
-    "TRY003",
-    "CPY001",
-    "D401",
-    "D205"
-]
-
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = [
-    "ANN001",
-    "ANN201",
-    "D",
-    "S101",
-    "TC002",
-    "TC003",
-]
-"psalm_saga/story_length.py" = ["RUF001"]
-"tests/unit/test_story_length.py" = ["RUF001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
-[tool.uv]
-default-groups = ["dev", "experiments"]
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501", "SIM105", "RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"psalm_saga/cli/*" = ["B008"]
+"psalm_saga/web/*" = ["B008"]
+"tests/*" = ["B008"]

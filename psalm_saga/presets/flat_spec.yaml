@@ -1,0 +1,8 @@
+name: flat_spec
+extends: full
+description: C3. One generation call from the transformed spec and skeleton (no plan, no review).
+stages:
+  plan: {enabled: false}
+  draft: {impl: oneshot, params: {inputs: [spec, skeleton], continuations: 3}}
+  review: {enabled: false}
+  conform: {enabled: false}

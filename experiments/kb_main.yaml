@@ -1,0 +1,35 @@
+# Main design from docs/EXPERIMENTS.md. Point `inputs` at the corpus; adjust models to what is available.
+name: kb_main
+output: experiments_out/kb_main
+inputs:
+  - {glob: "../corpus/en/*.txt", kind: source}
+  - {glob: "../corpus/nl/*.txt", kind: source}
+conditions:
+  full:        {preset: full}
+  no_review:   {preset: no_review}
+  no_spec:     {preset: no_spec}
+  paraphrase:  {preset: paraphrase}
+  flat:        {preset: flat}
+  # policy trade-off (section 5)
+  conservative: {preset: full, overrides: {transform.policy.character: preserve, transform.policy.scene_sequence: preserve, transform.policy.world_building: preserve}}
+  aggressive:   {preset: full, overrides: {transform.policy.plot_structure: abstract, transform.policy.character: regenerate, transform.policy.scene_sequence: regenerate, transform.policy.world_building: regenerate}}
+models:
+  frontier: {models.default.name: anthropic/claude-sonnet-5-5}
+  open:     {models.default.name: mistral/mistral-large-latest}   # or hosted_vllm/<model> + models.default.extra.api_base
+repeats: 1
+concurrency: 3
+overrides:
+  limits.max_cost_usd: 10
+judge:
+  model: openai/gpt-5.5
+  instruments: [spec_recovery, emotional_arc, surface_reuse, reconstruction, quality_pairwise]
+  quality_baseline: flat
+# Book metadata for the corpus-level instruments: item (file stem), title, author, year, period,
+# author_gender, genre, ... Analyses are fixed here BEFORE the main run (pre-registration).
+metadata: ../corpus/metadata.csv
+analyses:
+  - {name: sentence length by period, feature: mean_sentence_words, by: period, groups: [1880-1914, 1945-1980]}
+  - {name: dialogue over time, feature: dialogue_paragraph_share, vs: year}
+  - {name: women's share of character mentions over time, feature: female_mention_share, vs: year}
+  - {name: women's share by author gender, feature: female_mention_share, by: author_gender, groups: [male, female]}
+tstr_label: period

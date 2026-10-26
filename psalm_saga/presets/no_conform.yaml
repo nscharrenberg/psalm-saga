@@ -1,0 +1,8 @@
+name: no_conform
+extends: full
+description: >
+  Ablation. Full pipeline without the conform stage (and without numeric rhythm targets in the
+  drafting prompt): what measured style targets contribute.
+stages:
+  draft: {params: {rhythm: "off"}}
+  conform: {enabled: false}

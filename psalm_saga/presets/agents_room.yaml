@@ -1,0 +1,11 @@
+name: agents_room
+extends: full
+description: >
+  C6. Agents' Room (Huot et al., 2024): conflict/character/setting/plot planners fill a
+  scratchpad; exposition/rising action/climax/falling action/resolution writers draft.
+  Given the same transformed spec and skeleton as C1 for input parity.
+stages:
+  plan: {enabled: false}
+  draft: {impl: agents_room, params: {use_spec: true}}
+  review: {enabled: false}
+  conform: {enabled: false}

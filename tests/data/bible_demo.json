@@ -1,0 +1,494 @@
+{
+ "entities": [
+  {
+   "id": "e1",
+   "name": "Geertje Bos",
+   "kind": "character",
+   "aliases": [
+    "Geertje",
+    "de weduwe"
+   ],
+   "description": "Weduwe van de visser, houdt de herberg aan de dijk draaiende.",
+   "role": "protagonist",
+   "chapters": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "mentions": 48
+  },
+  {
+   "id": "e2",
+   "name": "Teun Wit",
+   "kind": "character",
+   "aliases": [
+    "Teun"
+   ],
+   "description": "Jonge veerman, zwijgzaam, schuldig aan de dood van Geertjes man.",
+   "role": "antagonist",
+   "chapters": [
+    1,
+    2,
+    4
+   ],
+   "mentions": 31
+  },
+  {
+   "id": "e3",
+   "name": "Juffrouw Pel",
+   "kind": "character",
+   "aliases": [
+    "de juffrouw"
+   ],
+   "description": "Onderwijzeres, leest en schrijft de brieven voor het dorp.",
+   "role": "confidante",
+   "chapters": [
+    1,
+    3,
+    4
+   ],
+   "mentions": 19
+  },
+  {
+   "id": "e4",
+   "name": "Dominee Kalf",
+   "kind": "character",
+   "aliases": [
+    "de dominee"
+   ],
+   "description": "Dominee die het dorp met harde preken in toom houdt.",
+   "role": "moral authority",
+   "chapters": [
+    2,
+    3
+   ],
+   "mentions": 12
+  },
+  {
+   "id": "e5",
+   "name": "Klaas Bos",
+   "kind": "character",
+   "aliases": [],
+   "description": "Geertjes overleden man; alleen in herinneringen.",
+   "role": "absent catalyst",
+   "chapters": [
+    1,
+    3
+   ],
+   "mentions": 9
+  },
+  {
+   "id": "e6",
+   "name": "Hoogwoude",
+   "kind": "place",
+   "aliases": [],
+   "description": "Vissersdorp achter de dijk.",
+   "role": "",
+   "chapters": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "mentions": 22
+  },
+  {
+   "id": "e7",
+   "name": "De Zwaan",
+   "kind": "place",
+   "aliases": [],
+   "description": "Herberg van Geertje aan de dijk.",
+   "role": "",
+   "chapters": [
+    1,
+    2,
+    4
+   ],
+   "mentions": 15
+  },
+  {
+   "id": "e8",
+   "name": "Het veer",
+   "kind": "place",
+   "aliases": [],
+   "description": "Overzetplaats over het water, Teuns werkplek.",
+   "role": "",
+   "chapters": [
+    1,
+    2,
+    4
+   ],
+   "mentions": 11
+  },
+  {
+   "id": "e9",
+   "name": "De kerk",
+   "kind": "place",
+   "aliases": [],
+   "description": "Witte kerk midden in het dorp.",
+   "role": "",
+   "chapters": [
+    2,
+    3
+   ],
+   "mentions": 7
+  },
+  {
+   "id": "e10",
+   "name": "De brief",
+   "kind": "object",
+   "aliases": [],
+   "description": "Onverstuurde brief van Klaas aan Geertje.",
+   "role": "",
+   "chapters": [
+    1,
+    3,
+    4
+   ],
+   "mentions": 14
+  },
+  {
+   "id": "e11",
+   "name": "Het visserijgilde",
+   "kind": "organisation",
+   "aliases": [],
+   "description": "Gilde dat de weduwenkas beheert.",
+   "role": "",
+   "chapters": [
+    2,
+    3
+   ],
+   "mentions": 6
+  }
+ ],
+ "relations": [
+  {
+   "source": "e1",
+   "target": "e5",
+   "type": "weduwe van",
+   "description": "Klaas verdronk een jaar voor het verhaal."
+  },
+  {
+   "source": "e2",
+   "target": "e5",
+   "type": "schuldig aan dood van",
+   "description": "Teun liet het veer te vroeg vertrekken."
+  },
+  {
+   "source": "e3",
+   "target": "e1",
+   "type": "vertrouwelinge van",
+   "description": "Leest Geertje de brieven voor."
+  },
+  {
+   "source": "e4",
+   "target": "e2",
+   "type": "berispt",
+   "description": "Wil een openlijke bekentenis."
+  },
+  {
+   "source": "e1",
+   "target": "e2",
+   "type": "wantrouwt",
+   "description": ""
+  },
+  {
+   "source": "e1",
+   "target": "e7",
+   "type": "woont in",
+   "description": ""
+  },
+  {
+   "source": "e2",
+   "target": "e8",
+   "type": "werkt bij",
+   "description": ""
+  },
+  {
+   "source": "e7",
+   "target": "e6",
+   "type": "ligt in",
+   "description": ""
+  },
+  {
+   "source": "e8",
+   "target": "e6",
+   "type": "ligt bij",
+   "description": ""
+  },
+  {
+   "source": "e9",
+   "target": "e6",
+   "type": "ligt in",
+   "description": ""
+  },
+  {
+   "source": "e10",
+   "target": "e5",
+   "type": "geschreven door",
+   "description": ""
+  },
+  {
+   "source": "e10",
+   "target": "e3",
+   "type": "bewaard door",
+   "description": "Tot hoofdstuk 3."
+  },
+  {
+   "source": "e1",
+   "target": "e11",
+   "type": "lid van",
+   "description": "Ontvangt uit de weduwenkas."
+  },
+  {
+   "source": "e4",
+   "target": "e11",
+   "type": "voorzitter van",
+   "description": ""
+  }
+ ],
+ "chapters": [
+  {
+   "index": 1,
+   "title": "Storm",
+   "summary": "Een jaar na de ramp vindt Geertje een brief van Klaas.",
+   "word_count": 3100,
+   "scenes": [
+    {
+     "summary": "Geertje sluit de herberg tijdens de storm.",
+     "setting": "De Zwaan, avond",
+     "characters": [
+      "Geertje Bos",
+      "Teun Wit"
+     ],
+     "purpose": "exposition",
+     "pov": "Geertje",
+     "location": "De Zwaan"
+    },
+    {
+     "summary": "Juffrouw Pel brengt een gevonden brief.",
+     "setting": "De Zwaan, nacht",
+     "characters": [
+      "Juffrouw Pel",
+      "Geertje"
+     ],
+     "purpose": "inciting incident",
+     "pov": "Geertje",
+     "location": "De Zwaan"
+    },
+    {
+     "summary": "Teun staart bij het veer naar het water.",
+     "setting": "Het veer",
+     "characters": [
+      "Teun"
+     ],
+     "purpose": "characterisation",
+     "pov": "Teun",
+     "location": "Het veer"
+    }
+   ],
+   "events": [
+    {
+     "description": "De storm slaat de schuur open en een kist met papieren komt vrij.",
+     "characters": [],
+     "caused_by": "",
+     "cause_index": null,
+     "location": "Hoogwoude"
+    },
+    {
+     "description": "Juffrouw Pel vindt de brief van Klaas tussen de papieren.",
+     "characters": [
+      "Juffrouw Pel"
+     ],
+     "caused_by": "",
+     "cause_index": 0,
+     "location": ""
+    },
+    {
+     "description": "Geertje weigert de brief te laten voorlezen.",
+     "characters": [
+      "Geertje Bos",
+      "Juffrouw Pel"
+     ],
+     "caused_by": "",
+     "cause_index": 1,
+     "location": "De Zwaan"
+    }
+   ]
+  },
+  {
+   "index": 2,
+   "title": "Preek",
+   "summary": "De dominee preekt over schuld; Teun wordt gemeden.",
+   "word_count": 2700,
+   "scenes": [
+    {
+     "summary": "Dominee Kalf preekt over verzwegen schuld.",
+     "setting": "De kerk, zondag",
+     "characters": [
+      "Dominee Kalf",
+      "Teun Wit",
+      "Geertje Bos"
+     ],
+     "purpose": "rising action",
+     "pov": "Teun",
+     "location": "De kerk"
+    },
+    {
+     "summary": "Het gilde weigert Teun een plaats aan tafel.",
+     "setting": "De Zwaan",
+     "characters": [
+      "Teun",
+      "Dominee Kalf"
+     ],
+     "purpose": "conflict",
+     "pov": "Teun",
+     "location": "De Zwaan"
+    }
+   ],
+   "events": [
+    {
+     "description": "De dominee zinspeelt in zijn preek op de ramp.",
+     "characters": [
+      "Dominee Kalf"
+     ],
+     "caused_by": "",
+     "cause_index": null,
+     "location": "De kerk"
+    },
+    {
+     "description": "Het dorp keert zich tegen Teun.",
+     "characters": [
+      "Teun Wit"
+     ],
+     "caused_by": "de preek over de ramp",
+     "cause_index": null,
+     "location": ""
+    },
+    {
+     "description": "Teun besluit het veer stil te leggen.",
+     "characters": [
+      "Teun"
+     ],
+     "caused_by": "",
+     "cause_index": 1,
+     "location": "Het veer"
+    }
+   ]
+  },
+  {
+   "index": 3,
+   "title": "De brief",
+   "summary": "Geertje laat de brief toch voorlezen en hoort de waarheid.",
+   "word_count": 3300,
+   "scenes": [
+    {
+     "summary": "Geertje gaat naar de juffrouw.",
+     "setting": "Schoolhuis, avond",
+     "characters": [
+      "Geertje",
+      "Juffrouw Pel"
+     ],
+     "purpose": "turning point",
+     "pov": "Geertje",
+     "location": "Hoogwoude"
+    },
+    {
+     "summary": "De dominee eist een bekentenis voor het gilde.",
+     "setting": "De kerk",
+     "characters": [
+      "Dominee Kalf",
+      "Geertje Bos"
+     ],
+     "purpose": "complication",
+     "pov": "Geertje",
+     "location": "De kerk"
+    }
+   ],
+   "events": [
+    {
+     "description": "Juffrouw Pel leest de brief voor.",
+     "characters": [
+      "Juffrouw Pel",
+      "Geertje Bos"
+     ],
+     "caused_by": "Geertje weigert de brief eerst te laten voorlezen",
+     "cause_index": null,
+     "location": ""
+    },
+    {
+     "description": "Geertje hoort dat Klaas het veer zelf liet vertrekken.",
+     "characters": [
+      "Geertje Bos",
+      "Klaas Bos"
+     ],
+     "caused_by": "",
+     "cause_index": 0,
+     "location": ""
+    },
+    {
+     "description": "Geertje verzwijgt de waarheid voor het gilde.",
+     "characters": [
+      "Geertje"
+     ],
+     "caused_by": "",
+     "cause_index": 1,
+     "location": "De kerk"
+    }
+   ]
+  },
+  {
+   "index": 4,
+   "title": "Overtocht",
+   "summary": "Geertje vaart met Teun over en spreekt hem vrij.",
+   "word_count": 2900,
+   "scenes": [
+    {
+     "summary": "Geertje vraagt Teun haar over te zetten.",
+     "setting": "Het veer, ochtend",
+     "characters": [
+      "Geertje Bos",
+      "Teun Wit"
+     ],
+     "purpose": "climax",
+     "pov": "Geertje",
+     "location": "Het veer"
+    },
+    {
+     "summary": "Teun opent het veer opnieuw.",
+     "setting": "Het veer",
+     "characters": [
+      "Teun",
+      "Juffrouw Pel"
+     ],
+     "purpose": "resolution",
+     "pov": "Teun",
+     "location": "Het veer"
+    }
+   ],
+   "events": [
+    {
+     "description": "Geertje vertelt Teun de inhoud van de brief.",
+     "characters": [
+      "Geertje Bos",
+      "Teun Wit"
+     ],
+     "caused_by": "Geertje hoort dat Klaas het veer zelf liet vertrekken",
+     "cause_index": null,
+     "location": ""
+    },
+    {
+     "description": "Teun legt het veer weer aan.",
+     "characters": [
+      "Teun Wit"
+     ],
+     "caused_by": "",
+     "cause_index": 0,
+     "location": "Het veer"
+    }
+   ]
+  }
+ ],
+ "style_notes": []
+}

@@ -1,0 +1,23 @@
+name: full
+description: >
+  C1. Extract a dimension spec and story bible from the source (map-reduce), transform it
+  under the per-dimension policy (clean-room boundary), plan hierarchically, draft
+  chapter by chapter, calibrated review + targeted repair, verbatim-leakage guard.
+stages:
+  extract: {params: {chunk_words: 4000, parallel: 8, consolidate: true}}
+  spec: {}
+  transform: {params: {parallel: 8}}
+  plan: {params: {parallel: 6}}
+  draft: {impl: chapter, params: {continuity: plan, top_up: true, rhythm: scaffold}}  # scaffold | brief | off
+  conform: {params: {tolerance: 0.12, rounds: 2, max_length_change: 0.12}}  # rhythm onto the source's measured targets
+  review: {params: {rounds: 1, threshold: major, max_issues: 6, repair_mode: edits, keep_if_not_worse: true,
+                    replan: true, max_backtracks: 1, backtrack_threshold: blocker}}
+  guard: {params: {min_span: 10, rounds: 2}}
+  assemble: {}
+  recover: {}      # measurement: re-extract the synthetic text (graph comparison, KG instrument)
+  evaluate: {}
+models:
+  default:
+    name: anthropic/claude-sonnet-5-5
+    max_output_tokens: 16000
+    max_concurrency: 6

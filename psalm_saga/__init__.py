@@ -1,27 +1,14 @@
-"""PSALM SAGA Init."""
+"""PSALM-SAGA v2: dimension-controlled synthesis of literary texts."""
 
-from .agent import (
-    CHAPTER_WRITER_SUBAGENT,
-    DIMENSION_REVIEWER_SUBAGENT,
-    SKILLS_MOUNT,
-    build_agent,
-    build_backend,
-    build_model,
-)
-from .bootstrap import SKILLS_DIR, build_bootstrap, compose_system_prompt
-from .settings import Settings
+from psalm_saga.artifacts import Bible, ChapterDraft, Plan, Spec, TransformMap
+from psalm_saga.config import PipelineConfig, load_config, preset_names
+from psalm_saga.pipeline import Pipeline
+from psalm_saga.sdk import Run, Saga
+from psalm_saga.stages.base import RunContext, Stage, register
+
+__version__ = "2.0.0a1"
 
 __all__ = [
-    "CHAPTER_WRITER_SUBAGENT",
-    "DIMENSION_REVIEWER_SUBAGENT",
-    "SKILLS_DIR",
-    "SKILLS_MOUNT",
-    "Settings",
-    "build_agent",
-    "build_backend",
-    "build_bootstrap",
-    "build_model",
-    "compose_system_prompt",
+    "Bible", "ChapterDraft", "Pipeline", "PipelineConfig", "Plan", "Run", "RunContext", "Saga", "Spec", "Stage",
+    "TransformMap", "load_config", "preset_names", "register",
 ]
-
-__version__ = "0.1.0"

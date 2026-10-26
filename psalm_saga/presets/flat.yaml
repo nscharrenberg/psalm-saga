@@ -1,0 +1,12 @@
+name: flat
+description: >
+  C5. One call: the model gets the source (or premise) and is asked for a synthetic
+  counterpart. No extraction, spec, plan or review. Guard off so raw leakage is measured.
+stages:
+  draft: {impl: oneshot, params: {inputs: [source, premise], continuations: 3}}
+  assemble: {}
+  evaluate: {}
+models:
+  default:
+    name: anthropic/claude-sonnet-5-5
+    max_output_tokens: 32000
