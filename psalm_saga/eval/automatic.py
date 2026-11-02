@@ -379,6 +379,9 @@ def missing_reasons(report: dict, language: str) -> dict[str, str]:
     if ps.get("appropriation") is None:
         out["psalm_expression"] = (ps.get("reason_missing_appropriation") or ps.get("reason_missing")
                                    or (off if not jd else "this judge was not selected"))
+    if ps.get("residual_function") is None:
+        out["psalm_residual"] = ("not applicable: the policy replaces no dimension" if ps.get("dimensions")
+                                 else ps.get("reason_missing") or (off if not jd else "this judge was not selected"))
     return out
 
 

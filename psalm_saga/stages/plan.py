@@ -5,7 +5,7 @@ novel no longer depends on one enormous generation finishing without truncation.
 
 from __future__ import annotations
 
-from psalm_saga.artifacts import Bible, ChapterPlan, Outline, Plan, ScenePlan, Spec
+from psalm_saga.artifacts import ChapterPlan, Outline, Plan, ScenePlan, Spec
 from psalm_saga.llm import Part
 from psalm_saga.stages.base import RunContext, Stage, gather_limited, register
 from psalm_saga.stages.transform import render_skeleton
@@ -41,7 +41,7 @@ class PlanStage(Stage):
 
     async def run(self, ctx: RunContext) -> None:
         spec = ctx.store.read_json("spec.json", Spec)
-        bible = ctx.store.maybe("bible.json", Bible)
+        bible = ctx.design()
         skeletons = bible.chapters if bible and bible.chapters else []
         n = len(skeletons) or spec.chapters
         spec_txt = spec.render()
@@ -73,7 +73,7 @@ class PlanStage(Stage):
 
         lines = [f"Ch {c.index} \"{c.title}\" ({c.target_words} words, POV {c.pov}): {c.summary}" for c in chapters]
         outline_ctx = f"{spec_txt}\n\n# Arc\n{outline.arc}\n\n# Chapter outline\n" + "\n".join(lines)
-        if bible:
+        if bible and bible.entities:
             outline_ctx += f"\n\n{bible.render()}"
 
         async def expand(c: ChapterPlan) -> ChapterPlan:
@@ -96,7 +96,14 @@ class PlanStage(Stage):
             full.summary = full.summary or c.summary
             if not full.scenes:
                 full.scenes = [ScenePlan(summary=full.summary)]
-            for s, w in zip(full.scenes, _budget(c.target_words, [float(s.target_words or 1) for s in full.scenes]), strict=True):
+            weights = [float(s.target_words or 1) for s in full.scenes]
+            if sk and len(sk.scenes) == len(full.scenes) and all(x.words > 0 for x in sk.scenes):
+                # One-to-one with the source's scenes: their measured lengths set the budgets (the
+                # pacing), and their measured telling (speech, sentence length) goes with them.
+                weights = [float(x.words) for x in sk.scenes]
+                for s, x in zip(full.scenes, sk.scenes, strict=True):
+                    s.dialogue, s.sentence_words, s.mode = x.dialogue, x.sentence_words, x.mode or s.mode
+            for s, w in zip(full.scenes, _budget(c.target_words, weights), strict=True):
                 s.target_words = w
             ctx.store.write_json(name, full)
             return full
@@ -112,7 +119,15 @@ class PlanStage(Stage):
 def render_chapter_plan(c: ChapterPlan) -> str:
     out = [f"Chapter {c.index}: {c.title} (~{c.target_words} words, POV: {c.pov})", f"Summary: {c.summary}"]
     for i, s in enumerate(c.scenes, 1):
-        out.append(f"\nScene {i} (~{s.target_words} words) — {s.summary}\nSetting: {s.setting}\nCharacters: {', '.join(s.characters)}\nPurpose: {s.purpose}")
+        how = []
+        if s.dialogue is not None:
+            how.append("no direct speech" if s.dialogue < 0.01 else f"about {round(100 * s.dialogue)}% of its words in direct speech")
+        if s.sentence_words:
+            how.append(f"sentences of about {s.sentence_words:.0f} words on average")
+        if s.mode:
+            how.append(f"told mainly as {s.mode}")
+        out.append(f"\nScene {i} (~{s.target_words} words) — {s.summary}\nSetting: {s.setting}\nCharacters: {', '.join(s.characters)}\nPurpose: {s.purpose}"
+                   + (f"\nTelling (as in the source): {'; '.join(how)}" if how else ""))
         out += [f"  {j}. {b}" for j, b in enumerate(s.beats, 1)]
     if c.commitments:
         out.append("\nMust visibly realise:\n" + "\n".join(f"- {x}" for x in c.commitments))

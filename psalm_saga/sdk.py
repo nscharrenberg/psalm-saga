@@ -118,6 +118,13 @@ class Run:
         marked kept / changed / source_only / synthetic_only."""
         from psalm_saga.graph import build_graph, compare_graphs, counterpart_map
 
+        if which == "trace":
+            from psalm_saga.eval.kg_align import trace
+
+            out = trace(self.store)
+            if out is None:
+                raise FileNotFoundError("The synthetic text has not been analysed and aligned yet (stage recover)")
+            return out
         if which == "compare":
             tmap = self.store.maybe("transform.json", TransformMap)
             if against == "calibration":
@@ -188,6 +195,31 @@ class Run:
 
     def run(self, **kw) -> Run:
         return _sync(self.arun(**kw))
+
+    # -------------------------------------------------------------- run control
+
+    def pause(self, *, after_stage: bool = False) -> None:
+        """Pause the executing run: now (calls in flight finish, new ones wait) or after the current stage."""
+        from datetime import UTC, datetime
+
+        self.store.set_control("pause_after_stage" if after_stage else "pause",
+                               requested=datetime.now(UTC).isoformat(timespec="seconds"))
+
+    def resume(self) -> None:
+        """Resume a paused run (in the process that runs it)."""
+        if self.store.control().get("action") in ("pause", "pause_after_stage"):
+            self.store.set_control(None)
+
+    def stop(self, *, after_stage: bool = False) -> None:
+        """Stop cleanly, now or after the current stage. Finished work is kept; `run()` continues later."""
+        self.store.set_control("stop_after_stage" if after_stage else "stop")
+
+    async def acheck(self, **kw) -> dict:
+        """Pre-flight check of the settings for the stages still to run (see psalm_saga/preflight.py)."""
+        return await self.pipeline.check(**kw)
+
+    def check(self, **kw) -> dict:
+        return _sync(self.acheck(**kw))
 
     # -------------------------------------------------------------- editing
 

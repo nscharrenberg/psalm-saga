@@ -203,7 +203,7 @@ class DraftChapters(Stage):
     async def run(self, ctx: RunContext) -> None:
         spec = ctx.store.read_json("spec.json", Spec)
         plan = ctx.store.read_json("plan.json", Plan)
-        bible = ctx.store.maybe("bible.json", Bible) or Bible()
+        bible = ctx.design() or Bible()
         spec_txt = story_context(spec, plan)
         continuity = self.params.get("continuity", "plan")
         total = len(plan.chapters)

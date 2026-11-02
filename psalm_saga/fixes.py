@@ -190,8 +190,12 @@ def fix_context(store) -> dict:
                 b = (dn[e["target"]].get("details") or {}).get("description", "")
                 miss["causes"].append(f"{a} → leads to → {b}")
         out["missing"] = {k: v[:12] for k, v in miss.items() if v}
+        from psalm_saga.stages.transform import is_name_form
+
+        # Named characters only: descriptions ("the mare", "the cow") are often animals or groups, and
+        # listing them would push pronouns the wrong way.
         out["genders"] = [{"name": e.name, "gender": e.gender} for e in sorted(design.characters(), key=lambda e: -e.mentions)
-                          if e.gender in ("female", "male", "nonbinary")][:12]
+                          if e.gender in ("female", "male", "nonbinary") and is_name_form(e.name)][:12]
     return out
 
 
@@ -204,6 +208,7 @@ def function_word_gaps(rows: list[dict], k: int = 8) -> list[str]:
         a, b = float(r.get("source") or 0), float(r.get("synthetic") or 0)
         if a < 2 and b < 2:
             continue
-        scored.append((abs(math.log((a + 0.5) / (b + 0.5))), r["word"], a, b))
+        # a frequent word off by half matters more than a rare one missing
+        scored.append((abs(a - b) / math.sqrt(a + b + 0.5), r["word"], a, b))
     return [f"“{w}”: {a:.0f} per 1,000 words in the source, {b:.0f} in the previous version"
             for _, w, a, b in sorted(scored, reverse=True)[:k]]

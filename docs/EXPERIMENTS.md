@@ -9,32 +9,36 @@ and why, is in [Appendix: from the v1 to the v2 design](APPENDIX_V1_V2.md). Refe
 
 ## 1. Hypotheses
 
-Let *T* be a source text, *S* = SAGA(*T*, π) its synthetic counterpart under transformation
-policy π, and φ a property of a text measured by a fixed procedure (§4). A property is
-*declared* when π preserves the dimension it belongs to.
+The paper's Section 4 is the authoritative version of this design; this document maps it onto
+the implementation. The experiments ask whether a language model, steered by measurements of
+the properties a researcher needs, keeps those properties, and whether the transformation
+policy controls what a judge finds.
 
-- **H1 Fidelity.** For declared properties, φ(*S*) agrees with φ(*T*) more closely than
-  φ(*S'*) does for *S'* the counterpart of a different text, and within a pre-registered
-  margin of the run-to-run noise of SAGA itself.
-- **H2 Distance.** *S* contains no verbatim span of *T* of 12 words or more, no original
-  proper names, and less non-literal reuse of *T*'s concrete particulars, and less
-  recoverable wording, than a paraphrase of *T*.
-- **H3 Corpus validity.** Across a corpus {*T*ᵢ}, analyses run on {*S*ᵢ} reach the same
-  conclusions as on {*T*ᵢ}: books are ranked alike per property, between-book variation is
-  kept, pre-registered group differences and correlations replicate, and a classifier
-  trained on synthetic texts transfers to originals.
-- **H4 Trade-off.** SAGA is not dominated on fidelity × distance by the two obvious
-  alternatives (paraphrasing the source; one-step rewriting), and its components (the
-  specification, the review loop) each contribute measurably.
+- **H1 Steering by the data properties.** With the same design, the full procedure keeps the
+  properties it measures and corrects (sentence- and paragraph-length distributions; the
+  design's events and causal links) better than the same procedure without the
+  measure-and-correct loop (`no_feedback`), under every policy setting, with no loss on the
+  unsteered frequent-word profile.
+- **H2 Knowledge graph.** Writing from the story graph realises more of the design's events,
+  causal links, characters and relations, and keeps character salience better, than writing
+  without the graph (`no_graph`).
+- **H3 Policy control (PSALM).** On the story dimensions: *re-invent* keeps the function and
+  lowers the expression compared with *preserve*; *replace* lowers the function as well. The
+  style dimensions keep their function under every setting.
+- **H4 Against renaming and paraphrase.** Under *preserve*: not worse than paraphrase on the
+  retained properties beyond a margin, and less of the source's protected expression (8-gram
+  overlap, longest shared span, PSALM expression).
+- **H5 Against a single call.** Better retention and closer adherence to the policy (share of
+  PSALM ratings in the expected range) than one call given the source and the policy, with
+  copying not worse.
 
 The claim is about the text as **data for the declared properties**. It is not a claim that
-*S* can replace reading *T*, nor a legal verdict: the distance measures are evidence for a
-legal assessment by the library, which decides where on the trade-off curve (§3.3) it sits.
+*S* can replace reading *T*, nor a legal verdict.
 
 ## 2. Materials
 
 **Public-domain development and test corpus.** Dutch (DBNL) and English (Project Gutenberg)
-prose fiction, 1840–1930, stratified by period, length (short stories, novellas, novels of
+prose fiction, 1840–1930, stratified by date of first publication (1840–1884, 1885–1930), length (short stories, novellas, novels of
 60k–150k words) and author gender; 40 items (20 per language), of which 8 are held out for
 development and prompt tuning and never used in the reported results. Public-domain texts
 allow the leakage results, the texts and the synthetic counterparts to be published and
@@ -42,67 +46,79 @@ re-examined. Because well-known public-domain texts are likely to have been seen
 generator in training (Chang et al., 2023; Cooper et al., 2025), the distance test on this
 corpus is conservative: memorisation can only increase measured leakage.
 
-**In-copyright pilot.** 10–20 in-copyright Dutch novels from the KB collection, run on the
-library's infrastructure with a locally hosted open-weight generator. Only aggregate
-measurements leave the library. This is the population the claim concerns.
-
-**Metadata.** Per item: year of first publication, period (two bins), author gender, genre
-label and language. Metadata drive the corpus-level analyses (H3) and are fixed before any
+**Metadata.** Per item: year of first publication, author gender, genre
+label and language; `period` (early / late) is derived by splitting at the median year
+(`period_split` in the plan). Metadata drive the corpus-level analyses (secondary) and are fixed before any
 synthetic text is generated.
 
 ## 3. Conditions
 
-### 3.1 Systems
+### 3.1 Setups
 
-| Condition | Description | Purpose |
-|---|---|---|
-| SAGA | full pipeline: analysis, specification, transformation, hierarchical planning, drafting, calibrated review, leakage guard | the system under test |
-| SAGA − review | review and repair disabled | contribution of the review loop |
-| SAGA − spec | drafting from the transformed story skeleton without the dimension specification | contribution of the specification |
-| SAGA − conform | no numeric rhythm targets in drafting, no conformance step (`no_conform`) | contribution of measured style steering |
-| Paraphrase | the generator rewrites the source passage by passage with new names | high-fidelity, high-leakage reference; the naive way to make a synthetic corpus |
-| One-step rewrite | the generator rewrites the whole source in one instruction | the "just ask the model" reference |
-| Agents' Room | multi-agent long-form generation from the same specification (Huot et al., 2024); short items only | literature reference for long-form generation |
-
-The two baselines see the source text when writing; SAGA's writer does not (clean-room
-boundary). This is the contrast H2 and H4 test.
-
-### 3.2 Generators and judge
-
-Two generator families: one frontier API model and one open-weight model that the library can
-host. A third family serves as judge, so that no judge rates text from its own family. All
-judge calls run at temperature 0; generators use their defaults.
-
-### 3.3 Transformation policies
-
-The policy fixes, per dimension, whether it is preserved, abstracted (function kept,
-particulars replaced) or regenerated. Three policies are run with SAGA on all items:
-
-| Policy | Writing style, narrative voice | Plot structure | Character, scene sequence, world |
+| Setup (plan name) | Preset | Writer sees | Purpose |
 |---|---|---|---|
-| conservative | preserve | preserve | preserve (names replaced) |
-| default | preserve | preserve | abstract |
-| aggressive | preserve | abstract | regenerate |
+| `full` | `full` | specification, story graph, plan, measured style; drafts measured and corrected | reference |
+| `no_graph` | `no_graph` (`use_graph: false`) | specification, chapter synopses, measured scene shapes; drafts measured and corrected | H2 |
+| `no_feedback` | `no_feedback` (conform and review off) | specification, story graph, plan, measured style stated once | H1 |
+| `paraphrase` | `paraphrase` | the source, passage by passage, with renamed entities | H4 |
+| `single_call` | `flat` (told the policy per dimension) | the source and the policy, one generation | H5 |
 
-Plotting fidelity against distance per policy gives an operating curve rather than one point.
+### 3.2 Policy settings
 
-### 3.4 Replicates
+Every setup except `paraphrase` runs under each setting (`policies:` in the plan; a condition
+`full` becomes `full@preserve`, `full@reinvent`, `full@replace`):
 
-Every item is run once per condition and generator. SAGA (default policy) is run a second
-time on a random 20% of items; the difference between the two runs gives the noise floor of
-every measure (§6.3).
+| Setting | Style, voice | Character, plot, scenes, world | PSALM function / expression expected |
+|---|---|---|---|
+| preserve | preserve | preserve | 4–5 / 3–4 |
+| reinvent | preserve | abstract | 4–5 / 1–2 |
+| replace | preserve | regenerate | 1–2 / 1–2 |
+
+### 3.3 Models
+
+Writers: Mistral Large 4 (`mistral/mistral-large-4-0`, API) and Gemma 4 E4B
+(`ollama_chat/gemma4:e4b`, local, 128k context). Judges: Claude (primary; decides the grades),
+an OpenAI model and Qwen3.5-397B-A17B (self-hosted) as the agreement panel on the full
+procedure's runs (`judges.panel` on `full`; reused by `judge.check_models`). No judge shares a
+family with a writer.
+
+### 3.4 Samples
+
+The full procedure runs k = 3 times per item, writer and setting; the other setups once.
+32 test items × 2 writers × 19 samples = 1,216 runs.
 
 ## 4. Measures
 
+**Primary and secondary measures.** The hypotheses are decided on a small, pre-specified set of
+primary measures (paper, Section 4.2, Table 1); everything else below is secondary: computed for
+every run, reported in the appendix, used to explain results and never to decide them. Two of
+them are steered on purpose (H1 claims that steering keeps them); the unsteered ones check that
+the property, not only its measurement, survives.
+
+| Label (paper) | Primary measure | Steered by | Key (`value.<key>` in results.csv) |
+|---|---|---|---|
+| R1 | KS distance of sentence- and paragraph-length distributions | conform | `sentence_overlap`, `paragraph_overlap` |
+| R2 | recall of the design's events and causal links | review checklist | `kg_events`, `kg_causes` |
+| R3 | recall of the design's characters and relations | review checklist | `kg_characters`, `kg_social` |
+| R4 | salience: Spearman ρ of mention counts | none | `salience` |
+| R5 | frequent-word cosine per text; Cosine Delta attribution (corpus) | none | `fw_cosine`; corpus `F1b_cosine_delta` |
+| J1 | PSALM function / expression on story and style dimensions (1–5); share in expected range | none | `psalm.function.story`, `psalm.expression.story`, `psalm.function.style`, `psalm.in_range` |
+| L1 | longest shared span; 8-gram overlap | guard (≥ 10 words) | `span`, `ngram8` |
+| G1, G2 | language, form, length, invented names; blind pairwise quality vs the single call | — | `length_ratio`, `form_match`, `names`; `judge.quality.win` |
+
+These are `grading.CORE`, marked *core* in the web app. The instrument descriptions below cover
+both primary and secondary measures; F4 (specification recovery), F5 and F8, D3–D5, R1, R4 and R5,
+C1 and J1–J2 are secondary.
+
 All measures are computed with the same code on *T* and *S*. Deterministic measures come
-first; model judges are used only where no deterministic measure exists, and are validated
-against human raters (§5.3). Each measure is listed with the property it operationalises and
+first; model judges are used only where no deterministic measure exists, and are validated by
+agreement among three judges and known-answer anchors (§5.3). Each measure is listed with the property it operationalises and
 the work that establishes the property as a research object or the measure as valid.
 
 ### 4.1 Property catalogue
 
 The properties are chosen from what computational literary studies measure in fiction, so
-that H3 is tested on the analyses researchers actually run:
+that the corpus analyses are the ones researchers actually run:
 
 | Property family | Representative research | Instruments |
 |---|---|---|
@@ -116,7 +132,7 @@ that H3 is tested on the analyses researchers actually run:
 Every per-text measure contributes one or more numbers to the run's property profile
 (`evaluation.json → features`), which is what the corpus-level measures (4.4) operate on.
 
-### 4.2 Fidelity (H1)
+### 4.2 Fidelity (retention: H1, H2, H4, H5)
 
 | Id | Measure | Operationalisation | Type |
 |---|---|---|---|
@@ -130,7 +146,7 @@ Every per-text measure contributes one or more numbers to the run's property pro
 | F7 | Gender representation | share of character mentions referring to women (gender from extraction), and share of gendered pronouns that are feminine; absolute difference *S* − *T* | deterministic |
 | F8 | Emotional arc | valence of 10 evenly spaced passages, rated separately on *T* and *S*; Pearson r between arcs (LLM sentiment rating: Zhang et al., 2024) | judge |
 | F2 | (pacing) | per unit, mean sentence length and direct-speech share, z-scored, correlated *T*–*S*; only series that vary beyond chance in *T* (permutation test) | deterministic |
-| KG | Realised structure | the story-knowledge graph re-extracted from *S* is aligned with that of *T* (renames, inflection-aware name matching, content-based alignment of scenes and events): recall of characters, places, events, causal links, social relations and relations to places and objects, raw and relative to the ceiling of a second analysis of *T* | deterministic after extraction |
+| KG | Realised structure | *S* is analysed once and its graph aligned with the design graph (same ids as *T*'s graph): rules, then a model pairing of remaining entities and of scenes/events per chapter, then a model check of the chapter text for design items still unmatched (with evidence). Recall of characters, places, events, causal links, social relations and relations to places and objects; through the design ids, every item of *T* is marked kept / changed / lost. Optional: relative to the ceiling of a second analysis of *T* (`stages.recover.params.calibrate=true`) | extraction + model alignment |
 | C1 | Design coverage | share of each chapter's design facts (events, causes, relations, places/objects) the verifier finds realised; diagnostic, not independent of generation | judge (internal) |
 | J1 | Same story | judge compares chapter summaries of *T* and *S* (same analysis), rates 1–5 overall and per chapter, at the level the policy declares | judge |
 | J2 | Same style | judge compares three name-masked excerpts of each text, rates 1–5 | judge |
@@ -140,7 +156,7 @@ The run-level judges (J1–J3) are optional (`judges.enabled`, `judges.model`, `
 experiment, enable them in `overrides` with a judge model of another family than every generator, so that
 `score.psalm_fidelity` etc. appear in `results.csv`.
 
-### 4.3 Distance (H2)
+### 4.3 Distance (H4, H5)
 
 | Id | Measure | Operationalisation | Type |
 |---|---|---|---|
@@ -154,7 +170,7 @@ D4 is reported in both directions: too low means *S* is distributionally a copy,
 means the style was lost (F1). It is interpreted against the paraphrase baseline and the
 noise floor.
 
-### 4.4 Corpus validity (H3)
+### 4.4 Corpus validity (secondary)
 
 Computed across items, separately per condition and generator, on the property profiles.
 
@@ -167,7 +183,7 @@ Computed across items, separately per condition and generator, on the property p
 | R5 | Classifier transfer | train on synthetic, test on real (TSTR; Esteban et al., 2017) against train on real, test on real: a metadata label (period) predicted from chapter profiles, leave one book out |
 
 Pre-registered analyses for the main study (fixed in `experiments/kb_main.yaml` before the
-main run): sentence length by period; dialogue share against year; women's share of
+main run): sentence length against year; dialogue share against year; women's share of
 character mentions against year; women's share by author gender.
 
 ### 4.5 Guardrails
@@ -193,60 +209,66 @@ re-extraction for F4 and KG run after generation with the judge model; the corpu
 run once all jobs of a condition are finished. Nothing in the measurement reads the
 configuration of the condition except the declared policy (F4, D3).
 
-### 5.3 Human validation
+### 5.3 Validity of the model-based measures (no human raters)
 
-On a stratified subset of 30 items (by language, length and condition), two raters per item
-(a) answer the F4 question on the two specifications, (b) rate D3 on the same chapter pairs,
-and (c) read *S* for anything recognisably lifted from *T*. Agreement between raters
-(Krippendorff's α) and between raters and the judge is reported; a judge instrument whose
-agreement with the raters falls below the raters' agreement with each other by more than
-0.1 is reported but not used for H1/H2 decisions.
+The study uses no human raters. The model-based primary measures are validated inside the
+experiment (paper, Section 4.5; `psalm_saga/eval/validity.py`; judge instruments `psalm_check`,
+`psalm_anchor`, `alignment_anchor`):
+
+- **Agreement.** Two further judges (`judge.check_models`: OpenAI and a self-hosted open-weight
+  model, Qwen3.5-397B-A17B), each of a family other than the writers' (Mistral, Gemma) and the primary judge's
+  (Claude), repeat the PSALM judgement on every item of the full procedure; Krippendorff's α
+  (interval) across all three judges and pairwise against the primary judge, on function and
+  expression ratings. α < 0.667: reported, not used for decisions; α ≥ 0.8: reliable. The mean
+  rating of the three judges (`validity.panel.*`) is reported as a sensitivity analysis.
+- **Lower anchors.** The PSALM judge on two unrelated sources of the corpus (function and
+  expression should be low); the alignment of one item's design against another item's synthetic
+  text (event recall should be near zero). The paraphrase condition is the upper anchor.
+  A measure decides a hypothesis only if its anchors are separated by at least [0.5].
+
+Results are in `summary.json → corpus.validity` and per run in `results.csv` (`validity.*`).
 
 ## 6. Analysis
 
-### 6.1 Per-item comparisons (H1, H2, H4)
+The tests are part of the plan (`hypotheses:` in `experiments/kb_main.yaml`, 64 per writer)
+and run by `psalm_saga/experiments/hypotheses.py` after the runs: item means over samples,
+paired differences oriented so that positive favours the first condition, 10,000 bootstrap
+resamples over items, one-sided p-values, Holm within each family and writer, α = 0.05.
+Test types: `superiority`, `non_inferiority` (margin), `equivalence` (TOST), `above` / `below`
+(one sample) and `share_below` (a share of samples, e.g. the 12-word span criterion).
+`hypotheses: default` generates the paper's five families from the setups' presets and the
+policy settings. Results: `summary.json → hypotheses` and the *Hypotheses* table in
+`report.md`.
 
-For every measure, the per-item paired difference between SAGA and each other condition,
-with 95% bootstrap CIs over items (percentile method, fixed seed) and medians next to means (leakage is
-heavy-tailed). The fidelity × distance scatter per condition is reported with its Pareto
-frontier. Families of comparisons are corrected with Holm's method.
+Margins (pre-registered after the pilot): KS distance 0.05, recall 0.05, Spearman 0.1, PSALM
+rating 0.5, frequent-word cosine 0.02, longest span 2 words.
 
-### 6.2 Decision rules (pre-registered after the pilot)
-
-| Hypothesis | Supported if |
-|---|---|
-| H1 | for each declared property, SAGA's agreement is within the equivalence margin of the null replicate (two one-sided tests at α = 0.05), and F1b top-1 accuracy is above chance |
-| H2 | longest copied span < 12 words for ≥ 95% of items, no names leaked, D3 below the paraphrase baseline and below a pre-registered rate per 1,000 words, D5 identification and recovered overlap no better than for the paraphrase baseline |
-| H3 | R1 lower CI bound > 0.7 for the style properties; R2 CI includes 1 or exceeds 0.8; ≥ 3 of 4 analyses replicate; TSTR/TRTR ≥ 0.9 |
-| H4 | SAGA lies on the Pareto frontier for every generator; each ablation is worse on at least one primary measure with a CI excluding zero |
-
-Margins and thresholds are fixed after the pilot on the development items and before the
-main run.
-
-### 6.3 Noise floor
-
-The difference between the two SAGA runs on the replicate items sets the noise floor of each
-measure. Differences between conditions smaller than the floor are not interpreted.
+Secondary: corpus analyses (R3 replication with TOST, dispersion ratio), Cosine Delta
+attribution, run-to-run variation of the full procedure, cost and time per stage.
 
 ## 7. Threats to validity
 
-- **Steered features.** The conform step steers sentence and paragraph length, speech share and
-  punctuation toward the source's values, so agreement on exactly those features (part of F1) is
-  partly by construction. The function-word profile (F1b), character-trigram divergence (D4),
-  the full length distributions and the judge instruments are not steered and carry the evidence
-  about style; the `no_conform` ablation shows what steering adds.
+- **Steered features.** The conform step steers the sentence- and paragraph-length
+  distributions, and review checks the design's events and causal links; H1 measures exactly
+  these, on purpose. The frequent-word profile (F1b), character salience and the judges are not
+  steered and show whether the property survives or only its measurement.
+- **Small writer.** Gemma 4 E4B cannot read a whole novel (128k context); the single call
+  then sees a truncated source (recorded). Results for the small writer are what a library can
+  run on its own hardware, not the method's ceiling.
+- **Priorities.** Measure priorities (`priorities`) raise the generation's effort on chosen
+  measures and weight them when a stage chooses between revisions. All conditions of an
+  experiment run with the same priorities (default: none); a condition with priorities is a
+  different condition and is reported as such.
 - **Shared extractor.** F4 and KG use the same model-based analysis on *T* and *S*; a
   systematic extractor error appears on both sides and inflates agreement. The deterministic
-  measures (F1–F3, F6, F7) and the human subset do not share this dependency.
+  measures (F1–F3, F6, F7) and the alignment anchors do not share this dependency.
 - **Generator memorisation.** On famous public-domain texts the generator may reproduce the
-  original from memory; this works against SAGA on H2 and is the reason for the in-copyright
-  pilot.
+  original from memory; this works against SAGA on H4 and H5, so the distance results on this corpus are conservative.
 - **Judge bias.** Judges may prefer text of a particular style or length; the judge family is
-  disjoint from the generators, presentation order is randomised, and judges are validated
-  against humans (§5.3).
-- **Small corpora for H3.** With 20 items per language, rank correlations have wide
-  intervals; CIs are reported rather than point estimates alone, and the corpus measures are
-  repeated per language.
+  disjoint from the generators, pairwise judgements are made in both orders, and the judges are
+  validated by agreement and anchors (§5.3).
+- **Small corpora for the corpus analyses.** With 20 items per language, rank correlations
+  have wide intervals; CIs are reported rather than point estimates alone.
 - **Property choice.** The catalogue (4.1) covers properties with established measurement.
   Properties outside it (imagery, intertextuality, humour) are not claimed and are listed as
   unmeasured in each release's datasheet.
@@ -257,6 +279,7 @@ measure. Differences between conditions smaller than the floor are not interpret
 saga experiment experiments/offline_demo.yaml          # the whole loop offline, no cost
 saga experiment experiments/kb_main.yaml --dry-run     # list jobs
 saga experiment experiments/kb_main.yaml               # resumable; re-run to continue
+# or in the web app: Experiment plans → kb_main (or + New experiment) → Save and start
 # → experiments_out/<name>/{results.csv, summary.json, report.md, judgements.json, runs/}
 ```
 
@@ -281,22 +304,24 @@ with the formula in `grades.<key>.formula`; `results.csv → score.<key>`):
 | difference or distance d (0 = identical) | s = max(0, 1 − d / c), **inverted** | KS D (c = 0.5), drift (c = 0.5), 8-gram overlap (c = 0.01), copied span (c = 40 words) |
 | ratio x (1 ideal) | s = max(0, 1 − abs(x − 1) / c) | length (c = 0.5), variety retention (c = 1) |
 
-Green ≥ 0.80, orange ≥ 0.60 unless a measure states its own cut-offs; c is chosen so these fall at the
+Green ≥ 0.80, orange ≥ 0.60 unless a measure states its own cut-offs (the judges: green from 0.75 —
+a rating of 4, "largely the same with minor differences" — and orange from 0.5, a rating of 3); c is chosen so these fall at the
 working thresholds. The full list with every formula is `psalm_saga/eval/grading.py` (and the web app's
 "how is this computed?").
 
-**Core set** (`grading.CORE`), the measures compared across conditions; everything else is supporting detail:
-length ratio, form, stylometric drift, sentence-length distribution, events / causal links / characters realised (KG,
-relative to the ceiling), character salience, design coverage, same story (J1), PSALM dimension fidelity (J3),
-8-word overlap, longest copied span, leaked names (judge measures only when the judges are enabled). `question.<group>` in `results.csv` is the mean core score per question. The report leads with
+**Core set** (`grading.CORE`) = the primary measures and guardrails of §4: length ratio, form, invented
+names, frequent-word cosine, events and causal links realised, character salience, PSALM dimension fidelity,
+8-word overlap, longest copied span, PSALM expression on changed dimensions (judge measures only when the
+judges are enabled). Steered measures (stylometric drift, length distributions) and self-reported ones
+(design coverage) are deliberately not in it. `question.<group>` in `results.csv` is the mean core score per question. The report leads with
 these two tables; the primary measures of the decision rules (§6.2) are the core measures' raw values.
 
 ## Calibration of grades
 
-Every evaluation also records two baselines (see paper §4.7.4):
+Every evaluation also records two baselines (see paper §4.3, P1, and §4.7):
 
 - `self_agreement` — the source's first half against its second half (verse: split at a stanza break), on the style measures. Style scores are computed on the excess over this value minus a margin, so green means "within the author's own variation".
-- `structure_ceiling` — a second, independent extraction of the source. KG recall is shown raw and relative to this ceiling.
+- `structure_ceiling` — optional (`stages.recover.params.calibrate=true`): a second, independent extraction of the source; KG recall is then also shown relative to it. By default the source is analysed once and the synthetic text is aligned with the design (`recovered/alignment.json`).
 
 Distribution grades use the KS statistic with a p-value override; measures with too few observations (gender < 10 mentions / 20 pronouns, characters < 3) and narrative measures on non-narrative sources (essays, treatises) are listed as not applicable.
 

@@ -190,6 +190,11 @@ class LLM:
         self.limiters = limiters
         self.usage = Usage()
         self._fake = FakeBackend(seed=config.seed or 0)
+        # Part of every cache key: the run id when cache_scope is "run", so identical requests in a
+        # different run are sampled afresh instead of replayed (see PipelineConfig.cache_scope).
+        self.cache_salt = ""
+        # Awaited before every call: the pipeline uses it to pause or stop a run between calls.
+        self.gate: Callable[[], Any] | None = None
 
     # ------------------------------------------------------------------ public API
 
@@ -280,7 +285,7 @@ class LLM:
     def _cache_key(self, mc: ModelConfig, messages, schema, max_tokens, temperature, hints) -> str:
         blob = json.dumps(
             [mc.name, messages, schema.__name__ if schema else None, max_tokens, temperature,
-             mc.extra, self.config.seed, hints.get("variant")],
+             mc.extra, self.config.seed, hints.get("variant"), *([self.cache_salt] if self.cache_salt else [])],
             sort_keys=True, ensure_ascii=False, default=str,
         )
         return hashlib.sha256(blob.encode()).hexdigest()
@@ -349,6 +354,8 @@ class LLM:
                 pass
 
     async def _call(self, role, messages, schema, max_tokens, temperature, hints, tag, use_cache=True) -> dict:
+        if self.gate is not None:
+            await self.gate()
         mc = self.config.model_for(role)
         max_tokens = self.allowance(mc, max_tokens)
         temperature = mc.temperature if temperature is None else temperature
@@ -371,6 +378,7 @@ class LLM:
         est = sum(len(json.dumps(m["content"], ensure_ascii=False)) for m in messages) // 4 + max_tokens
         limiter = self.limiters.get(mc.name, mc.max_concurrency, mc.rpm, mc.tpm)
         delay = 2.0
+        timeouts = 0
         for attempt in range(mc.max_retries + 1):
             await limiter.acquire(est)
             t0 = time.monotonic()
@@ -385,6 +393,14 @@ class LLM:
                 )
             except BaseException as exc:
                 limiter.release()
+                if isinstance(exc, asyncio.TimeoutError):
+                    timeouts += 1
+                    if timeouts > mc.timeout_retries:
+                        self._log(call_id, {**base, "status": "failed", "attempt": attempt + 1, "started": started,
+                                            "error": f"timed out {timeouts} times"})
+                        raise LLMError(f"{tag or role} via {mc.name}: no answer within {mc.timeout_s:g} s, {timeouts} times. "
+                                       f"Raise models.{role if role in self.config.models else 'default'}.timeout_s, or "
+                                       "lower the reasoning effort or max_output_tokens.") from exc
                 if isinstance(exc, asyncio.CancelledError) or not _is_retryable(exc) or attempt == mc.max_retries:
                     if isinstance(exc, asyncio.CancelledError):
                         self._log(call_id, {**base, "status": "cancelled", "attempt": attempt + 1, "started": started})
@@ -458,7 +474,8 @@ class LLM:
         litellm.drop_params = True  # tolerate provider-specific unsupported params (e.g. temperature on reasoning models)
         litellm.suppress_debug_info = True
         kwargs: dict[str, Any] = {"model": mc.name, "messages": messages, "max_tokens": max_tokens,
-                                  "timeout": mc.timeout_s, "num_retries": 0, **mc.extra}
+                                  "timeout": mc.timeout_s, "num_retries": 0,
+                                  **{k: v for k, v in mc.extra.items() if v is not None}}
         if temperature is not None:
             kwargs["temperature"] = temperature
         if self.config.seed is not None:

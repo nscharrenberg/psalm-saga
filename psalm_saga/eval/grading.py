@@ -189,22 +189,31 @@ METRICS: list[Metric] = [
            "that the reviewer found realised in the final chapters.", "unit", fmt="pct", raw_unit="share"),
     Metric("judge_content", "judges.content.score", "content", "same story (judge)", "J1",
            "An LLM judge, given the source's and the synthetic text's chapter summaries side by side, rates how "
-           "far the synthetic text tells the same story (events, order, outcome, who does what) on a 1–5 scale; "
-           "score = (rating − 1) / 4.", "unit", raw_unit="score"),
+           "far the synthetic text tells the same story (events, order, outcome, who does what) on a 1–5 scale "
+           "(1 a different story · 3 the same outline with clear losses · 5 the same story); score = (rating − 1) / 4. "
+           "Green from 4 (0.75: the same story with minor differences), orange from 3.", "unit",
+           s_good=0.75, s_warn=0.5, raw_unit="score"),
     Metric("psalm_fidelity", "judges.psalm.fidelity", "content", "dimension fidelity (PSALM judge)", "J3",
            "The PSALM judge compares the two texts on the six dimensions and 36 sub-dimensions, citing evidence from both "
            "and arguing each verdict; this is the mean FUNCTION similarity (does the synthetic text do the same thing?) "
-           "over the dimensions the policy does not replace; ratings 1–5 become (rating − 1) / 4.", "unit",
+           "over the dimensions the policy does not replace; ratings 1–5 (1 unrelated · 2 loosely related · 3 clearly "
+           "related, substantial differences · 4 largely the same · 5 the same) become (rating − 1) / 4. Green from "
+           "0.75 (on average 'largely the same'), orange from 0.5.", "unit", s_good=0.75, s_warn=0.5,
            raw_unit="score"),
     Metric("judge_style", "judges.style.score", "content", "same style (judge)", "J2",
            "An LLM judge compares an excerpt of each text (names masked) and rates how similar the writing is "
-           "in voice, register, rhythm and imagery on a 1–5 scale; score = (rating − 1) / 4.", "unit",
-           raw_unit="score"),
+           "in voice, register, rhythm and imagery on a 1–5 scale (1 clearly different · 3 related but "
+           "distinguishable · 5 indistinguishable); score = (rating − 1) / 4. Green from 4 (0.75), orange from 3.",
+           "unit", s_good=0.75, s_warn=0.5, raw_unit="score"),
     Metric("psalm_expression", "judges.psalm.appropriation", "distance", "concrete expression kept (PSALM judge)", "J3",
            "Where the policy asks for change (re-invented or replaced dimensions), how far the synthetic text still keeps "
            "the source's concrete particulars — traits, events, images, settings, phrasing — per the PSALM judge's "
-           "expression ratings on the identifying (surface) aspects. Scored inverted: 0 similarity gives 1. Green below "
-           "0.20 similarity, orange below 0.40.", "diff", 1.0, raw_unit="similarity"),
+           "expression ratings on the identifying (surface) aspects. Scored inverted: similarity 0 (rating 1) gives 1. "
+           "Green up to a rating of 2 (loosely related), orange at 3.", "diff", 1.25, raw_unit="similarity"),
+    Metric("psalm_residual", "judges.psalm.residual_function", "distance", "source function left where replaced (PSALM judge)",
+           "J3", "Where the policy REPLACES a dimension, how far the synthetic text still does what the source does there "
+           "(the judge's function ratings on the replaced dimensions). Scored inverted: rating 1 gives 1. Green up to a "
+           "rating of 2 (loosely related), orange at 3.", "diff", 1.25, raw_unit="similarity"),
     Metric("ngram8", "leakage.ngram8_overlap", "distance", "8-word overlap", "D1",
            "Share of the synthetic text's 8-word sequences that also occur in the source. Green below 0.2%, "
            "orange below 0.4%.", "diff", 0.01, fmt="pct", raw_unit="overlap"),
@@ -220,11 +229,15 @@ METRICS: list[Metric] = [
 ]
 BY_KEY = {m.key: m for m in METRICS}
 
-# A compact core for experiments: one or two measures per question, chosen to be robust on short
-# and long texts and not redundant with each other. Everything else stays in the report as
-# supporting detail (see docs/EXPERIMENTS.md).
-CORE = ("length_ratio", "form_match", "style_drift", "sentence_overlap", "kg_events", "kg_causes", "kg_characters",
-        "salience", "design_coverage", "judge_content", "psalm_fidelity", "ngram8", "span", "names")
+# The primary measures of the experiments (paper, Section 4.2): one or two per claim, chosen for
+# established validity and for not being steered by the generation, plus the guardrails (length,
+# form, names). Everything else stays in the report and the interface as diagnostic detail.
+#   style       fw_cosine (per-text frequent-word profile; Cosine Delta across the corpus)
+#   story       kg_events, kg_causes          characters  salience
+#   dimensions  psalm_fidelity (judge)        distance    ngram8, span, psalm_expression
+CORE = ("length_ratio", "form_match", "names", "sentence_overlap", "paragraph_overlap", "fw_cosine", "kg_events",
+        "kg_causes", "kg_characters", "kg_social", "salience", "psalm_fidelity", "ngram8", "span", "psalm_expression",
+        "psalm_residual")
 
 
 def lookup(report: dict, path: str) -> Any:
@@ -249,6 +262,32 @@ def grade(m: Metric, v: Any) -> str:
     return color(m, m.score(float(v)))
 
 
+# Measures that compare a property of the synthetic text with the SOURCE's value are targets only when
+# the policy keeps the dimension the property belongs to; graph measures compare with the design and
+# apply under every policy. (metric -> (dimension, policies under which the source's value is a target))
+POLICY_SCOPE: dict[str, tuple[str, tuple[str, ...]]] = {
+    **{k: ("writing_style", ("preserve",)) for k in ("style_drift", "fw_cosine", "sentence_overlap", "paragraph_overlap",
+                                                       "word_overlap", "retention", "judge_style", "verse_lines",
+                                                       "verse_stanzas", "verse_rhyme")},
+    "chapter_r": ("plot_structure", ("preserve",)), "judge_content": ("plot_structure", ("preserve",)),
+    "scenes": ("scene_sequence", ("preserve",)), "pacing": ("scene_sequence", ("preserve",)),
+    **{k: ("character", ("preserve", "abstract")) for k in ("salience", "presence", "jaccard", "gender_mentions",
+                                                             "gender_pronouns")},
+}
+_POL_WORD = {"abstract": "re-invents", "regenerate": "replaces"}
+
+
+def policy_exclusions(policy: dict | None) -> dict[str, str]:
+    """Measures whose source value is not a target under this policy, with the reason."""
+    out = {}
+    for k, (dim, ok) in POLICY_SCOPE.items():
+        p = (policy or {}).get(dim, "preserve")
+        if p not in ok:
+            out[k] = (f"not applicable: the policy {_POL_WORD.get(p, p)} the {dim.replace('_', ' ')}, so the source's "
+                      "value is not a target")
+    return out
+
+
 DIST_KEYS = ("sentence_overlap", "paragraph_overlap", "word_overlap")
 
 
@@ -262,7 +301,7 @@ def grades(report: dict) -> dict[str, dict]:
     for m in METRICS:
         v = lookup(report, m.path)
         if v is None or isinstance(v, bool) or not isinstance(v, int | float) \
-                or str(na.get(m.key, "")).startswith("not applicable: the source is"):
+                or str(na.get(m.key, "")).startswith(("not applicable: the source is", "not applicable: the policy")):
             continue
         x = float(v)
         formula, note = m.formula, ""
@@ -294,12 +333,20 @@ def grades(report: dict) -> dict[str, dict]:
             g = ""  # modernised on purpose: no target
         rule = m.rule + (f" ({note})" if note else "")
         out[m.key] = {"value": v, "score": s, "grade": g, "formula": formula, "rule": rule}
+    from psalm_saga.priorities import resolve
+
+    for k in resolve(report.get("priorities")) & set(out):
+        out[k]["priority"] = True
     return out
 
 
 def summary_scores(report: dict, keys: tuple[str, ...] = CORE) -> dict:
-    """Mean normalised score per question, over the core measures that could be computed."""
+    """Mean normalised score per question, over the core measures that could be computed, plus the
+    mean over the run's prioritised measures (`priority`), when it has any."""
     g = grades(report)
+    from psalm_saga.priorities import resolve
+
+    keys = tuple(dict.fromkeys([*keys, *sorted(resolve(report.get("priorities")) & set(BY_KEY))]))
     by: dict[str, list[float]] = {}
     for k in keys:
         if k in g and g[k]["score"] is not None and g[k]["grade"]:
@@ -329,6 +376,7 @@ class Fix:
     metrics: list[str] = field(default_factory=list)
     severity: str = "bad"  # bad: a red measure; warn: only orange — may be within run-to-run noise
     scores: dict[str, Any] = field(default_factory=dict)
+    priority: bool = False  # serves a measure the run prioritises
 
 
 def _bullets(items: list[str]) -> str:
@@ -425,11 +473,56 @@ def suggest_fixes(report: dict, config: dict | None = None) -> list[dict]:
     if m:
         gl = ctx.get("genders") or []
         lst = "; ".join(f"{x['name']}: {x['gender']}" for x in gl)
-        add(Fix("gender", "characters", "Redraft keeping every character's gender",
-                "Redraft with each main character's gender stated, so that pronouns and forms of address follow the design "
-                "(the renaming itself is kept).",
-                "draft", {"stages.draft.params.fix_instruction":
-                          ("Keep each character's gender consistently, in pronouns and forms of address: " + lst + ".") if lst else
+        gd = ((report.get("fidelity") or {}).get("gender") or {})
+        shares = []
+        for key, what in (("female_pronoun_share", "of the gendered pronouns (he/she, him/her …) are feminine"),
+                          ("female_mention_share", "of the character mentions refer to women")):
+            v = gd.get(key) or {}
+            if v.get("source") is not None and v.get("synthetic") is not None:
+                shares.append(f"in the source {round(100 * v['source'])}% {what}; in the previous version "
+                              f"{round(100 * v['synthetic'])}%")
+        instr = ("Keep the balance of genders as in the source: " + "; ".join(shares) + ". "
+                 "Do not add female or male figures, pronouns for animals or objects, or gendered forms of address that "
+                 "the design does not have.") if shares else ""
+        if lst:
+            instr += (" " if instr else "") + "Each named character's gender, in pronouns and forms of address: " + lst + "."
+        add(Fix("gender", "characters", "Redraft keeping the source's gender balance",
+                "Redraft with the source's measured shares of feminine pronouns and mentions stated, and each named "
+                "character's gender (the renaming itself is kept).",
+                "draft", {"stages.draft.params.fix_instruction": instr or
                           "Keep each character's gender exactly as in the cast notes, in pronouns and forms of address."},
                 "expensive: redrafts all chapters", m, sev))
+    m, sev = hit("psalm_expression", "psalm_residual")
+    if m:
+        n = int(((report.get("evaluation_guided_fixes") or [{}])[-1] or {}).get("version") or 1)
+        add(Fix("reinvent", "distance", "Re-invent the design again, further from the source",
+                "Redo the transformation of the design (a new sample, with one more attempt per chapter for events and "
+                "scenes that stay too close to the original) and everything after it. Under 'Re-invent' the particulars "
+                "of events, scenes, people and places must change; under 'Replace' the dimension is invented anew without "
+                "the source's values.",
+                "transform", {"stages.transform.params.variant": n + 1, "stages.transform.params.reskin_retries": 2},
+                "expensive: redoes the design, plan and text", m, sev))
+    psalm = ((report.get("judges") or {}).get("psalm") or {}).get("dimensions") or []
+    weak = [sd for d in psalm if d.get("policy") != "regenerate" for sd in d.get("subdimensions") or []
+            if (sd.get("function_similarity") or 5) <= 3 and sd.get("confidence") != "low"]
+    if weak and "psalm_fidelity" in g and g["psalm_fidelity"]["grade"] in ("warn", "bad"):
+        from psalm_saga.taxonomy import load_taxonomy
+
+        guide = {s_.key: s_.guidance for dim in load_taxonomy("psalm").dimensions for s_ in dim.subdimensions}
+        aspects = [f"{sd.get('label') or sd['key']} (judged {sd['function_similarity']}/5): {guide.get(sd['key'], '')}".strip()
+                   for sd in weak][:10]
+        add(Fix("psalm", "content", "Re-plan with attention to the weakly kept aspects",
+                "Plan again and redraft, pointing the planner and writer at the aspects the PSALM judge found clearly "
+                "related but substantially different (function 3/5 or lower). Only the aspect names and what they cover "
+                "are passed on — not the judge's quotations of the source.",
+                "plan", {"stages.plan.params.fix_instruction":
+                         "Pay particular attention to these aspects of the specification; in the previous version they were "
+                         "only partly kept. Realise each as the specification describes it:\n" + _bullets(aspects)},
+                "expensive: re-plans and redrafts everything", ["psalm_fidelity"], g["psalm_fidelity"]["grade"]))
+    from psalm_saga.priorities import resolve
+
+    chosen = resolve(report.get("priorities"))
+    for f in fixes:
+        f.priority = bool(chosen & set(f.metrics))
+    fixes.sort(key=lambda f: (not f.priority, f.severity != "bad"))
     return [f.__dict__ for f in fixes]

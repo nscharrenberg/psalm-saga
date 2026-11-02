@@ -58,10 +58,15 @@ class InputSpec(BaseModel):
 class Condition(BaseModel):
     preset: str = "full"
     overrides: dict = Field(default_factory=dict)
+    repeats: int | None = None  # samples per item for this condition (default: the plan's `repeats`)
+    # with plan-level `policies`: the policy settings this condition runs under (default: all of them)
+    policies: list[str] | None = None
+    base: str | None = None  # set when crossed with a policy: the condition's own name
+    policy: str | None = None  # set when crossed with a policy: the policy setting's name
 
 
 JUDGE_INSTRUMENTS = ("spec_recovery", "dimension_fidelity", "quality_pairwise", "emotional_arc", "surface_reuse",
-                     "reconstruction")
+                     "reconstruction", "psalm_check", "psalm_anchor", "alignment_anchor")
 
 
 class JudgeSpec(BaseModel):
@@ -71,6 +76,17 @@ class JudgeSpec(BaseModel):
     dimension_fidelity_max_words: int = 12000
     arc_segments: int = 10
     reuse_samples: int = 3
+    # validity checks of the model-based primary measures (psalm_saga/eval/validity.py)
+    # further judges for psalm_check, each of a model family other than the writers' and the primary judge's
+    check_models: list[str] = Field(default_factory=list)
+    check_model: str | None = None  # one further judge (older plans); merged into check_models
+    anchor_condition: str = "full"  # the condition whose runs get the lower anchors
+
+    def further_judges(self) -> list[str]:
+        out = list(self.check_models)
+        if self.check_model and self.check_model not in out:
+            out.insert(0, self.check_model)
+        return out
 
 
 class ExperimentPlan(BaseModel):
@@ -87,6 +103,17 @@ class ExperimentPlan(BaseModel):
     metadata: str | None = Field(None, description="CSV with an `item` (file stem) column and covariates.")
     analyses: list[dict] = Field(default_factory=list, description="R3 analyses: {feature, by, groups} or {feature, vs}.")
     tstr_label: str | None = Field(None, description="R5: metadata column to predict.")
+    # Policy settings crossed with the conditions: {name: {dimension: preserve | abstract | regenerate}}; a
+    # condition then runs once per setting, as `<condition>@<setting>`. `all: <policy>` sets every dimension.
+    policies: dict[str, dict[str, str]] = Field(default_factory=dict)
+    # Pre-registered tests (experiments/hypotheses.py), or "default": the paper's five families, generated
+    # from the conditions' presets and the policy settings (default_hypotheses).
+    hypotheses: list[dict] | str = Field(default_factory=list)
+    margins: dict[str, float] = Field(default_factory=dict, description="Override the default margins of `default`.")
+    alpha: float = 0.05
+    bootstrap: int = 10000
+    period_split: dict | None = Field(None, description="Derive a two-level `period` column: {from: year, at: median "
+                                      "| <number>}; items at or before the split are `early`, after it `late`.")
 
 
 @dataclass
@@ -107,8 +134,48 @@ def _slug(p: Path) -> str:
     return re.sub(r"[^\w.-]+", "_", p.stem)[:80]
 
 
+DIMENSIONS = ("writing_style", "narrative_voice", "character", "plot_structure", "scene_sequence", "world_building")
+
+
+def policy_setting(spec: dict[str, str]) -> dict[str, str]:
+    base = {d: spec.get("all", "preserve") for d in DIMENSIONS}
+    return {**base, **{k: v for k, v in spec.items() if k != "all"}}
+
+
+def materialise(plan: ExperimentPlan) -> ExperimentPlan:
+    """Cross the conditions with the plan's policy settings: `full` x {preserve, reinvent} becomes
+    `full@preserve`, `full@reinvent`, each with the setting's transform.policy overrides."""
+    if not plan.policies or any(c.policy for c in plan.conditions.values()):
+        return plan
+    crossed: dict[str, Condition] = {}
+    for name, cond in plan.conditions.items():
+        for pol in cond.policies or list(plan.policies):
+            if pol not in plan.policies:
+                raise ValueError(f"condition {name!r}: unknown policy setting {pol!r} (plan.policies: {list(plan.policies)})")
+            ov = {f"transform.policy.{d}": v for d, v in policy_setting(plan.policies[pol]).items()}
+            crossed[f"{name}@{pol}"] = cond.model_copy(update={"overrides": {**ov, **cond.overrides}, "base": name,
+                                                                "policy": pol})
+    return plan.model_copy(update={"conditions": crossed})
+
+
+def _same_policy(plan: ExperimentPlan, name: str | None, condition: str) -> str | None:
+    """A condition named in the judge settings (e.g. the quality baseline `flat`), under the same policy
+    setting as `condition` when the plan crosses conditions with policies."""
+    if not name or name in plan.conditions:
+        return name
+    pol = (plan.conditions.get(condition) or Condition()).policy
+    return f"{name}@{pol}" if pol and f"{name}@{pol}" in plan.conditions else name
+
+
 def load_plan(path: Path) -> tuple[ExperimentPlan, Path]:
-    plan = ExperimentPlan.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+    plan = materialise(ExperimentPlan.model_validate(yaml.safe_load(path.read_text(encoding="utf-8"))))
+    if plan.hypotheses == "default":
+        from psalm_saga.experiments.hypotheses import default_hypotheses
+
+        bases = {c.base or n: c.preset for n, c in plan.conditions.items()}
+        plan = plan.model_copy(update={"hypotheses": default_hypotheses(bases, plan.policies, plan.margins)})
+    elif isinstance(plan.hypotheses, str):
+        raise ValueError(f"hypotheses: a list of tests or 'default', not {plan.hypotheses!r}")
     out = Path(plan.output) if plan.output else Path("experiments_out") / plan.name
     return plan, out if out.is_absolute() else (Path.cwd() / out)
 
@@ -128,7 +195,32 @@ def load_metadata(plan: ExperimentPlan, base: Path) -> dict[str, dict[str, str]]
         key = r.get("item") or (Path(r["file"]).stem if r.get("file") else None)
         if key:
             out[re.sub(r"[^\w.-]+", "_", key)[:80]] = r
+    if plan.period_split:
+        derive_period(out, **plan.period_split)
     return out
+
+
+def derive_period(meta: dict[str, dict], at="median", name: str = "period", **kw) -> float | None:
+    """Split the items into `early` and `late` at a value of a numeric column (default: its median),
+    so that the split is fixed by rule rather than chosen after seeing the data."""
+    col = kw.get("from", "year")
+    vals = {}
+    for k, r in meta.items():
+        try:
+            vals[k] = float(r.get(col))
+        except (TypeError, ValueError):
+            continue
+    if not vals:
+        return None
+    if at == "median":
+        xs = sorted(vals.values())
+        n = len(xs)
+        cut = xs[(n - 1) // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
+    else:
+        cut = float(at)
+    for k, v in vals.items():
+        meta[k][name] = "early" if v <= cut else "late"
+    return cut
 
 
 def expand(plan: ExperimentPlan, base: Path) -> list[Job]:
@@ -138,8 +230,8 @@ def expand(plan: ExperimentPlan, base: Path) -> list[Job]:
         items += [(_slug(p), p, spec.kind) for p in paths if p.is_file()]
     if plan.limit_items:
         items = items[: plan.limit_items]
-    return [Job(i, p, k, c, m, r) for i, p, k in items for c in plan.conditions for m in plan.models
-            for r in range(1, plan.repeats + 1)]
+    return [Job(i, p, k, c, m, r) for i, p, k in items for c, cond in plan.conditions.items() for m in plan.models
+            for r in range(1, (cond.repeats or plan.repeats) + 1)]
 
 
 _SKIP = {"copied_spans", "per_character", "name_leakage", "chapters_off_language"}
@@ -224,9 +316,10 @@ async def _judge(plan: ExperimentPlan, jobs: list[Job], runs: Path, out: Path, l
                 src = store.read_text("input/source.txt")
                 if len(src.split()) <= plan.judge.dimension_fidelity_max_words:
                     res["dimension_fidelity"] = await judges.dimension_fidelity(llm, tax, src, story)
-            base = plan.judge.quality_baseline
+            base = _same_policy(plan, plan.judge.quality_baseline, job.condition)
             if "quality_pairwise" in plan.judge.instruments and base and job.condition != base and "quality" not in res:
-                other = by_id.get(f"{job.item}--{base}--{job.model}--r{job.repeat}")
+                other = (by_id.get(f"{job.item}--{base}--{job.model}--r{job.repeat}")
+                         or by_id.get(f"{job.item}--{base}--{job.model}--r1"))
                 if other and RunStore(runs / other.run_id).exists("story.md"):
                     b_store = RunStore(runs / other.run_id)
                     b_story = "\n\n".join(json.loads(p.read_text(encoding="utf-8"))["text"] for p in b_store.glob("chapters/ch_*.json"))
@@ -243,6 +336,7 @@ async def _judge(plan: ExperimentPlan, jobs: list[Job], runs: Path, out: Path, l
                     pol = PipelineConfig_from(store).transform.policy
                     res["surface_reuse"] = await judges.surface_reuse(
                         llm, [c.text for c in split_chapters(src)], syn_ch, pol, samples=plan.judge.reuse_samples)
+                await _validity(plan, job, jobs, runs, store, res, src, story)
                 if "reconstruction" in inst and "reconstruction" not in res:
                     md = (metadata or {}).get(job.item, {})
                     res["reconstruction"] = await judges.reconstruction(llm, src, story, title=md.get("title"),
@@ -253,6 +347,69 @@ async def _judge(plan: ExperimentPlan, jobs: list[Job], runs: Path, out: Path, l
     await asyncio.gather(*(one(j) for j in jobs))
     path.write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
     return results
+
+
+async def _validity(plan: ExperimentPlan, job: Job, jobs: list[Job], runs: Path, store: RunStore, res: dict,
+                    src: str, story: str) -> None:
+    """Second-judge agreement and lower anchors (psalm_saga/eval/validity.py)."""
+    from psalm_saga.artifacts import Bible
+    from psalm_saga.config import JudgesConfig
+    from psalm_saga.eval.run_judges import psalm_judge
+    from psalm_saga.eval.validity import JudgeContext
+
+    inst = plan.judge.instruments
+    ev = store.read_json("evaluation.json") if store.exists("evaluation.json") else {}
+    own = ((ev.get("judges") or {}).get("psalm")) or None
+    if own and "psalm_own" not in res:
+        res["psalm_own"] = own
+    pol = PipelineConfig_from(store).transform.policy
+    tax = load_taxonomy("psalm")
+    lang = ev.get("language", {}).get("expected") if isinstance(ev.get("language"), dict) else "en"
+    src_bible, rec = store.maybe("bible_source.json", Bible), store.maybe("recovered/bible_source.json", Bible)
+    if "psalm_check" in inst and own:
+        checks = res.setdefault("psalm_checks", {})
+        # a judge already on the run's own panel (judges.panel) is reused, not asked twice
+        for pj in (ev.get("judges") or {}).get("panel") or []:
+            if pj.get("model") in plan.judge.further_judges() and (pj.get("psalm") or {}).get("dimensions"):
+                checks.setdefault(pj["model"], pj["psalm"])
+        for model in plan.judge.further_judges():
+            if model not in checks:
+                llm2 = judges.judge_llm(model, cache_dir=runs.parent / ".judge_cache")
+                checks[model] = await psalm_judge(JudgeContext(llm2, lang or "en"), tax, src, story, src_bible, rec, pol,
+                                                  JudgesConfig())
+        if not checks:
+            res.pop("psalm_checks")
+    if job.condition != _same_policy(plan, plan.judge.anchor_condition, job.condition) or job.repeat != 1:
+        return
+    # the next item of the same condition and model serves as the unrelated partner
+    peers = [j for j in jobs if j.condition == job.condition and j.model == job.model and j.repeat == 1]
+    other = peers[(peers.index(job) + 1) % len(peers)] if len(peers) > 1 else None
+    if other is None:
+        return
+    o_store = RunStore(runs / other.run_id)
+    if "psalm_anchor" in inst and "psalm_anchor" not in res and o_store.exists("input/source.txt"):
+        llm = judges.judge_llm(plan.judge.model, cache_dir=runs.parent / ".judge_cache")
+        res["psalm_anchor"] = await psalm_judge(JudgeContext(llm, lang or "en"), tax, src, o_store.read_text("input/source.txt"),
+                                                src_bible, o_store.maybe("bible_source.json", Bible), pol, JudgesConfig())
+        res["psalm_anchor"]["partner"] = other.item
+    if "alignment_anchor" in inst and "alignment_anchor" not in res:
+        design = store.maybe("bible.json", Bible)
+        o_rec = o_store.maybe("recovered/bible_source.json", Bible)
+        if design and o_rec:
+            from psalm_saga.eval.kg_align import align_to_design
+            from psalm_saga.graph import build_graph, compare_graphs
+            from psalm_saga.pipeline import Pipeline
+
+            ctx = Pipeline.open(store.root).context()
+            chapters = {int(p.stem.split("_")[1]): json.loads(p.read_text(encoding="utf-8"))["text"]
+                        for p in o_store.glob("chapters/ch_*.json")}
+            al = await align_to_design(ctx, design, o_rec, chapters)
+            cmp = compare_graphs(build_graph(design), build_graph(o_rec), {}, prealign=[(p["design"], p["text"]) for p in al["pairs"]],
+                                 checks=al["checks"])
+            ev_ = (cmp["summary"]["nodes"].get("event") or {})
+            ca = (cmp["summary"]["edges"].get("causes") or {})
+            res["alignment_anchor"] = {"partner": other.item, "events_recall": ev_.get("recall"),
+                                       "causes_recall": ca.get("recall"), "stats": al["stats"]}
 
 
 def PipelineConfig_from(store: RunStore):
@@ -304,6 +461,9 @@ def _collect(jobs: list[Job], runs: Path, judgements: dict) -> list[dict]:
             for k, g in (ev.get("grades") or {}).items():
                 if g.get("score") is not None:
                     row[f"score.{k}"] = g["score"]
+                if g.get("value") is not None and g.get("grade"):
+                    row[f"value.{k}"] = g["value"]
+            row.update(psalm_columns((ev.get("judges") or {}).get("psalm")))
             for grp, v in (ev.get("summary_scores") or {}).items():
                 row[f"question.{grp}"] = v
         jd = judgements.get(j.run_id, {})
@@ -321,12 +481,64 @@ def _collect(jobs: list[Job], runs: Path, judgements: dict) -> list[dict]:
         if "surface_reuse" in jd:
             for k in ("per_1k", "close_paraphrase", "distinctive_particular"):
                 row[f"judge.surface_reuse.{k}"] = jd["surface_reuse"].get(k)
+        from psalm_saga.eval.validity import checks_of
+
+        if checks_of(jd) and "psalm_own" in jd:
+            from psalm_saga.eval.validity import krippendorff_alpha_units, psalm_units
+
+            js = [jd["psalm_own"], *checks_of(jd).values()]
+            row["validity.judge_alpha.function"] = krippendorff_alpha_units(psalm_units(js, "function_similarity"))
+            row["validity.judge_alpha.expression"] = krippendorff_alpha_units(psalm_units(js, "expression_similarity"))
+            from psalm_saga.eval.validity import mean_rating as _mr
+
+            for fld, key in (("function_similarity", "function"), ("expression_similarity", "expression")):
+                ms = [m for m in (_mr(j, fld) for j in js) if m is not None]
+                row[f"validity.panel.{key}"] = round(sum(ms) / len(ms), 3) if ms else None
+        if "psalm_anchor" in jd:
+            from psalm_saga.eval.validity import mean_rating
+
+            row["validity.anchor.function"] = mean_rating(jd["psalm_anchor"], "function_similarity")
+            row["validity.anchor.expression"] = mean_rating(jd["psalm_anchor"], "expression_similarity")
+        if "alignment_anchor" in jd:
+            row["validity.anchor.events_recall"] = jd["alignment_anchor"].get("events_recall")
         if "reconstruction" in jd:
             for k in ("ngram5_gain", "longest_span", "identified", "author_identified"):
                 if k in jd["reconstruction"]:
                     row[f"judge.reconstruction.{k}"] = jd["reconstruction"][k]
         rows.append(row)
     return rows
+
+
+STORY_DIMS = ("character", "plot_structure", "scene_sequence", "world_building")
+STYLE_DIMS = ("writing_style", "narrative_voice")
+
+
+def psalm_columns(ps: dict | None) -> dict:
+    """PSALM ratings (1–5) averaged over the story dimensions and over the style dimensions, and the share
+    of ratings inside the range expected under each dimension's policy (eval/run_judges.py EXPECTED)."""
+    from psalm_saga.eval.run_judges import EXPECTED
+
+    out: dict = {}
+    dims = (ps or {}).get("dimensions") or []
+    if not dims:
+        return out
+    for group, keys in (("story", STORY_DIMS), ("style", STYLE_DIMS)):
+        for field, name in (("function_similarity", "function"), ("expression_similarity", "expression")):
+            v = [s[field] for d in dims if d.get("dimension") in keys for s in d.get("subdimensions") or []
+                 if s.get(field) is not None]
+            if v:
+                out[f"psalm.{name}.{group}"] = round(statistics.fmean(v), 3)
+    inside = total = 0
+    for d in dims:
+        ex = d.get("expected") or EXPECTED.get(d.get("policy") or "preserve")
+        for s in d.get("subdimensions") or []:
+            for field, key in (("function_similarity", "function"), ("expression_similarity", "expression")):
+                if s.get(field) is not None:
+                    total += 1
+                    inside += ex[key][0] <= s[field] <= ex[key][1]
+    if total:
+        out["psalm.in_range"] = round(inside / total, 3)
+    return out
 
 
 USAGE_KEYS = ("calls", "cached_calls", "prompt_tokens", "completion_tokens", "cache_read_tokens", "cost_usd",
@@ -532,7 +744,7 @@ async def run_experiment(plan_path: Path, *, dry_run: bool = False, extra_overri
     jobs = expand(plan, plan_path.parent)
     log = (console.print if console else print)
     log(f"{plan.name}: {len(jobs)} jobs = {len({j.item for j in jobs})} items × {len(plan.conditions)} conditions × "
-        f"{len(plan.models)} models × {plan.repeats} repeats → {out}")
+        f"{len(plan.models)} models, {plan.repeats} sample(s) per item unless a condition sets its own → {out}")
     if dry_run:
         for j in jobs:
             log(f"  {j.run_id}  [{plan.conditions[j.condition].preset}]  {j.path}")
@@ -557,10 +769,20 @@ async def run_experiment(plan_path: Path, *, dry_run: bool = False, extra_overri
         w.writerows(rows)
     summary = _summarise(rows)
     replication = _corpus(rows, runs, plan, metadata)
+    if judgements:
+        from psalm_saga.eval.validity import summarise as _validity_summary
+
+        replication["validity"] = _validity_summary(judgements)
+    from psalm_saga.experiments.hypotheses import evaluate as _hypotheses
+    from psalm_saga.experiments.hypotheses import report_lines
+
+    tests = _hypotheses(rows, plan.hypotheses, alpha=plan.alpha, B=plan.bootstrap) if plan.hypotheses else None
     (out / "summary.json").write_text(json.dumps({"name": plan.name, "jobs": len(jobs),
                                                   "failed": sum(r["status"] == "failed" for r in results),
-                                                  "summary": summary, "corpus": replication}, indent=1), encoding="utf-8")
-    (out / "report.md").write_text(_report(plan, summary, replication), encoding="utf-8")
+                                                  "summary": summary, "corpus": replication, "hypotheses": tests},
+                                                 indent=1), encoding="utf-8")
+    (out / "report.md").write_text(_report(plan, summary, replication) + "\n".join(report_lines(tests)) + "\n",
+                                   encoding="utf-8")
     from psalm_saga.experiments.report_html import render
 
     (out / "report.html").write_text(render(plan.name, replication), encoding="utf-8")

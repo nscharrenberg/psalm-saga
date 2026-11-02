@@ -70,8 +70,9 @@ def _datasheet(store: RunStore, release: bool) -> str:
               "graph-synthetic.graphml — knowledge graph; evaluation.json — measurements; run.json — configuration and usage."]
     fixes = meta.get("evaluation_guided_fixes") or []
     if fixes:
+        names = [n for f in fixes for n in (f.get("fixes") or [f.get("id")]) if n]  # history entries list the fix ids
         lines += ["", f"Note: this run was revised {len(fixes)} time(s) using its own evaluation "
-                  f"({', '.join(f['id'] for f in fixes)}). Its measurements are therefore not independent of the "
+                  f"({', '.join(dict.fromkeys(names)) or 'fixes'}). Its measurements are therefore not independent of the "
                   "generation and should not be pooled with unrevised runs in an experiment."]
     if not release:
         lines += ["", "This bundle CONTAINS THE SOURCE TEXT (input/source.txt) and material derived from it. Do not share it outside the institution."]

@@ -1,0 +1,8 @@
+extends: flat
+name: flat_refine
+description: >
+  Compute-matched single-step baseline: the one-step rewrite of the source, followed by rounds of
+  self-critique and revision against the source until it has used about as much inference as the
+  full procedure. Set `refine_rounds` from the pilot so that the median tokens per item match.
+stages:
+  draft: {impl: oneshot, params: {inputs: [source, premise], continuations: 3, refine_rounds: 3}}

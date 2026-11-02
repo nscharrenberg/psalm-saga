@@ -35,7 +35,26 @@ textarea{font-family:var(--sans);resize:vertical} label{font-size:12px;color:var
 .runs .item:hover{background:var(--soft)} .runs .item.active{border-color:var(--accent);background:var(--soft)}
 .runs .t{font-weight:500;font-size:13px;display:flex;gap:6px;align-items:center} .runs .s{font-size:11px;color:var(--muted);font-family:var(--mono)}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted);flex:none}
-.dot.done{background:var(--ok)} .dot.running{background:var(--warn);animation:pulse 1s infinite} .dot.failed,.dot.budget_exceeded,.dot.cancelled{background:var(--bad)} .dot.partial{background:var(--accent)}
+.dot.done{background:var(--ok)} .dot.running{background:var(--warn);animation:pulse 1s infinite} .dot.failed,.dot.budget_exceeded,.dot.cancelled{background:var(--bad)} .dot.partial,.dot.paused{background:var(--accent)} .dot.stopped{background:var(--muted)} .dot.needs_attention{background:var(--warn)}
+.ctl{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .ctl .sep{width:1px;height:22px;background:var(--line);margin:0 2px}
+.statecard{display:flex;gap:12px;align-items:flex-start} .statecard .grow p{margin:4px 0}
+.pf{margin:6px 0;padding:8px 10px;border-radius:6px;background:var(--soft);font-size:13px} .pf.error{border-left:3px solid var(--bad)} .pf.warning{border-left:3px solid var(--warn)} .pf.ok{border-left:3px solid var(--ok)}
+.pf .w{font:12px var(--mono);color:var(--muted)}
+.prio{display:grid;grid-template-columns:180px 1fr;gap:4px 12px;align-items:start;margin:6px 0;padding:6px 0;border-bottom:1px dashed var(--line)}
+.prio .ms{display:flex;flex-wrap:wrap;gap:4px 12px} .prio label{margin:0;color:var(--ink);font-size:12.5px;display:inline-flex;gap:5px;align-items:center} .prio input{width:auto}
+.prio .gl{font-weight:600}
+.prioeff{font-size:12.5px;margin-top:8px} .prioeff li{margin:2px 0}
+.star{color:var(--warm);font-size:12px;margin-left:4px}
+.kgnav .row{margin:4px 0} .kgl{font-size:12px;color:var(--muted);min-width:96px}
+.kgflow{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap} .kgf{padding:3px 10px;border:1px solid var(--line);border-radius:99px;background:var(--soft)} .kgf.on{border-color:var(--accent);color:var(--accent)} .kga{color:var(--muted);font-size:11.5px} .kga.on{color:var(--accent);font-weight:600}
+.kgs{font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line)} .kgs-kept{color:var(--ok)} .kgs-changed{color:var(--warn);border-color:var(--warn)} .kgs-source_only{color:var(--bad);border-color:var(--bad)} .kgs-synthetic_only{color:var(--ok);border-style:double}
+.kgrow:hover td{background:var(--soft)}
+.tbar{display:flex;height:12px;border-radius:3px;overflow:hidden;background:var(--soft)} .tbar i{display:block;height:100%}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.accent{color:var(--accent)}
+.scale5{display:inline-flex;gap:2px;vertical-align:middle} .scale5 i{width:14px;height:8px;border-radius:2px;background:var(--line);display:inline-block}
+.scale5 i.on{background:var(--accent)} .scale5 i.exp{outline:1px solid var(--ok);outline-offset:1px}
+td.out{background:color-mix(in srgb,var(--warn) 12%,transparent)}
 @keyframes pulse{50%{opacity:.3}}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap} .grow{flex:1}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px} .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -167,9 +186,17 @@ details summary{cursor:pointer} .empty{color:var(--muted);text-align:center;padd
 .kg-link{display:flex;align-items:center;gap:6px;font-size:13px;padding:2px 0;cursor:pointer;color:var(--ink)} .kg-link:hover{color:var(--accent)}
 .kg-note{font-size:11.5px} .kg-empty{padding:40px;text-align:center}
 @media (max-width:1100px){.kg-main{grid-template-columns:1fr;height:auto}.kg-canvas{height:520px}.kg-side{max-height:360px}}
+.allsettings h4{margin:12px 0 4px;font:600 13px var(--sans)}
+.asg{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0;background:var(--bg)}
+.asg>summary{cursor:pointer}
+.asgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 14px;margin-top:6px}
+.asf label{margin:4px 0 2px}.asf .k{font-family:var(--mono,monospace);font-size:12px;color:var(--ink)}
+.asf input,.asf select,.asf textarea{font-size:12.5px}
+.asf .small{font-size:11.5px;line-height:1.3}
 </style>
 <script src="/static/vendor/cytoscape-3.34.4.min.js"></script>
 <script src="/static/kg.js"></script>
+<script src="/static/experiments.js"></script>
 </head>
 <body><div id="netbar"></div>
 <header><h1>PSALM<span>·</span>SAGA</h1><p>Synthetic counterparts of literary texts: the same research-relevant properties, new wording.</p><span class="grow"></span><button class="small nobusy" onclick="showKeys()" title="API keys and endpoints for the model providers">API keys</button><button class="small nobusy" onclick="helpFor('glossary')">Help &amp; glossary</button></header>
@@ -177,6 +204,7 @@ details summary{cursor:pointer} .empty{color:var(--muted);text-align:center;padd
   <button class="primary" style="width:100%" onclick="showNew()">+ New run</button>
   <div class="runs" id="runs" style="margin-top:12px"></div>
   <div id="exps" style="margin-top:18px"></div>
+  <div id="expPlans"></div>
 </aside>
 <main id="main"></main>
 <div class="toast" id="toast"></div>
@@ -260,7 +288,7 @@ function helpFor(topic, key){
       <dt><code>max(0, 1 − |x − 1| / c)</code></dt><dd>ratios where 1 is ideal (length, variety)</dd></dl>
       <p><i class="good dot2"></i> green: score ≥ 80% · <i class="warn dot2"></i> orange: ≥ 60% · <i class="bad dot2"></i> red: below — unless a measure states other cut-offs. The cut-offs are provisional working values.</p>
       <p>Some measures are calibrated on the source itself: style allows for how much the source's two halves already differ, and graph measures are relative to how far a second analysis of the source agrees with the first. A measure that cannot be taken on this text (too few characters, no verse, …) is listed as not applicable rather than given a misleading number.</p>
-      <p><span class="core">core</span> marks the compact set of measures used to compare conditions in experiments; the others are supporting detail.</p>`); }
+      <p><span class="core">core</span> marks the primary measures of the experiments — the properties the method keeps (including the ones it steers on purpose, sentence- and paragraph-length distributions and the design's events, causes, characters and relations), the measures no stage steers that check them (frequent-word profile, character salience, the judges), and the guardrails (length, form, names). The others are diagnostic detail for inspecting a run.</p>`); }
   // glossary (default)
   const tabs = Object.entries(h.tabs||{}).map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
   return modal("Help & glossary", `<p>PSALM·SAGA turns a literary text into a <b>synthetic counterpart</b>: a new text that keeps the properties researchers measure (style, structure, characters, …) but none of the original wording, so it can be shared and studied where the original cannot.</p>
@@ -308,10 +336,16 @@ let PRESET = "full";
 const JUDGES = {psalm: ["PSALM dimensions", "six dimensions × six aspects; function and expression rated separately, with evidence and reasoning (6 calls)"],
   content: ["Same story", "chapter summaries of both texts compared (1 call)"], style: ["Same style", "name-masked excerpts compared (1 call)"]};
 function judgePicker(prefix){ return `<div class="stagepick">${Object.entries(JUDGES).map(([k,[l,h]])=>`<label title="${esc(h)}"><input type="checkbox" class="jpick-${prefix}" value="${k}" checked> ${esc(l)}</label>`).join("")}</div>`; }
+// Further judges, one per line: "model-id" or "model-id @ http://endpoint" (a self-hosted model)
+function parsePanel(txt){ return (txt||"").split("\n").map(l=>l.trim()).filter(Boolean).map(l=>{ const i=l.indexOf("@");
+  return i>0 ? {name:l.slice(0,i).trim(), api_base:l.slice(i+1).trim()} : l; }); }
+function panelText(p){ return (p||[]).map(x=>typeof x==="string"?x:`${x.name}${x.api_base?" @ "+x.api_base:""}`).join("\n"); }
+const PANEL_HELP = `Further judges <span class="muted" style="font-weight:400">(optional; one per line — a model id, or <code>id @ endpoint</code> for a self-hosted model). Each runs the same judges; the first judge still decides the grades, the others show where judges agree.</span>`;
 async function runJudges(){
   const model = ($("#jModelEv")||{}).value||"", instruments=[...document.querySelectorAll(".jpick-ev:checked")].map(x=>x.value);
+  const panel = parsePanel(($("#jPanelEv")||{}).value);
   if(!instruments.length){ toast("Choose at least one judge."); return; }
-  try{ await api(`/api/runs/${CUR}/judge`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({model, instruments})}); toast("Judges running — only the evaluation is redone."); TAB="activity"; await openRun(CUR); }
+  try{ await api(`/api/runs/${CUR}/judge`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({model, instruments, panel})}); toast("Judges running — only the evaluation is redone."); TAB="activity"; await openRun(CUR); }
   catch(e){ toast(e.message); }
 }
 function showNew(){
@@ -354,6 +388,7 @@ function showNew(){
       <label>Reasoning effort <span class="muted" style="font-weight:400">(reasoning models only: how much the model thinks before answering — more costs more)</span></label>
       <select id="effort"><option value="">provider default</option><option>low</option><option>medium</option><option>high</option></select>
       <label>Budget in US dollars <span class="muted" style="font-weight:400">(the run stops when it is spent)</span></label><input id="budget" type="number" step="0.5" placeholder="no limit">
+      <label>Time limit in minutes <span class="muted" style="font-weight:400">(the run stops there, keeps everything, and can be continued)</span></label><input id="minutes" type="number" step="5" placeholder="no limit">
     </div>
     <div class="card"><h3>5 · Language and length</h3>
       <div class="grid3"><div><label title="Output language; auto = the input's language">Language</label><input id="lang" placeholder="as input"></div>
@@ -367,13 +402,23 @@ function showNew(){
     <label style="margin:0 0 6px;color:var(--ink);font-size:13px"><input type="checkbox" id="jOn" style="width:auto"> run the judges in this run's evaluation</label>
     <div class="grid2"><div><label>Judge model <span class="muted" style="font-weight:400">(LiteLLM id; empty = the writer's model, not advised)</span></label><input id="jModel" placeholder="e.g. anthropic/claude-sonnet-5-5 when the writer is an OpenAI model"></div>
       <div><label>Judges</label>${judgePicker("j")}</div></div>
+    <label>${PANEL_HELP}</label><textarea id="jPanel" rows="2" class="mono" placeholder="openai/gpt-…&#10;hosted_vllm/deepseek-… @ http://localhost:8000/v1"></textarea>
   </div>
+  <details class="card"><summary><b>7 · Priorities</b> <span class="muted small">— optional: which evaluation measures matter most for your study</span></summary>
+    ${priorityPicker("nr", [])}
+  </details>
+  <details class="card" id="allNew"><summary><b>All settings</b> <span class="muted small">— every setting of the run, from the chosen preset: models, stages and their parameters, judges, limits</span></summary>
+    <div id="allNewBody"></div>
+  </details>
   <details class="card"><summary><b>Advanced</b> <span class="muted small">— pause points and raw settings</span></summary>
     <label>Pause after <span class="muted" style="font-weight:400">(stop to inspect or edit, then resume)</span></label><select id="until"><option value="">run to the end</option><option value="spec">the specification (check it before anything is written)</option><option value="transform">the transform step (check names and design)</option><option value="plan">the plan (check it before drafting)</option></select>
+    <label style="color:var(--ink);font-size:13px" title="Every model answer is kept on disk. By default a run only replays its own answers (resuming is free), so running the same text again gives a new sample. Tick this to replay the answers of an earlier identical run instead: free and identical, but not an independent sample."><input type="checkbox" id="sharedCache" style="width:auto"> reuse answers from earlier identical runs (free, but not a new sample)</label>
     <label>Extra settings <span class="muted" style="font-weight:400">(one key=value per line; see the config tab of a run for all keys)</span></label><textarea id="extra" rows="2" class="mono" placeholder="stages.review.params.rounds=2&#10;stages.guard.params.min_span=8"></textarea>
   </details>
-  <button class="primary" onclick="createRun()">Start run</button>`;
-  presetChanged(PRESET);
+  <div class="row"><button class="primary" onclick="createRun()" title="The settings are checked first (models, keys, one tiny test call per model); if something is wrong the run waits for you to fix it">Start run</button>
+    <button onclick="checkNew()" title="Check the models, API keys and settings without starting">Check settings</button><span class="muted small">Starting checks the settings first; a run with a problem waits for you to fix it instead of failing halfway.</span></div>
+  <div id="pfnew"></div>`;
+  presetChanged(PRESET); prioWire("nr");
 }
 function setPolicies(kind){
   const sets = {all: {}, surface: {character:"abstract", world_building:"abstract"},
@@ -388,8 +433,9 @@ function presetChanged(name){
   $("#stages").innerHTML = order.filter(s=>s in p.config.stages).map(s=>{const c=p.config.stages[s];
     return `<label title="${esc(((H().stages||{})[s]||{}).what||s)}"><input type="checkbox" data-stage="${s}" ${c.enabled?"checked":""}> ${esc(stageTitle(s))}${c.impl&&c.impl!==s?` <span class="muted">(${esc(c.impl)})</span>`:""}</label>`}).join("");
   for(const [k,v] of Object.entries(p.config.transform.policy)){ const r=document.querySelector(`input[data-pol="${k}"][value="${v}"]`); if(r) r.checked=true; }
+  const ab = $("#allNewBody"); if(ab){ window.__extraRoles = {}; ab.innerHTML = allSettingsBox("nr", p.config); }
 }
-async function createRun(){
+function newOverrides(){
   const p = META.presets.find(x=>x.name===PRESET);
   const ov = {};
   document.querySelectorAll("[data-stage]").forEach(c=>{ if(c.checked!==p.config.stages[c.dataset.stage].enabled) ov[`stages.${c.dataset.stage}.enabled`]=c.checked; });
@@ -404,8 +450,23 @@ async function createRun(){
   if($("#chapters").value) ov["length.chapters"]= isNaN(+$("#chapters").value)? $("#chapters").value : +$("#chapters").value;
   if($("#budget").value) ov["limits.max_cost_usd"]=+$("#budget").value;
   if($("#jOn").checked){ ov["judges.enabled"]=true; if($("#jModel").value.trim()) ov["judges.model"]=$("#jModel").value.trim();
-    ov["judges.instruments"]=[...document.querySelectorAll(".jpick-j:checked")].map(x=>x.value); }
+    ov["judges.instruments"]=[...document.querySelectorAll(".jpick-j:checked")].map(x=>x.value);
+    const pn = parsePanel($("#jPanel").value); if(pn.length) ov["judges.panel"]=pn; }
+  if($("#minutes") && $("#minutes").value) ov["limits.max_minutes"]=+$("#minutes").value;
   $("#extra").value.split("\n").map(l=>l.trim()).filter(Boolean).forEach(l=>{const i=l.indexOf("="); let v=l.slice(i+1).trim(); try{v=JSON.parse(v)}catch{} ov[l.slice(0,i).trim()]=v;});
+  const pr = readPriorities("nr"); if(pr.length) ov["priorities"]=pr;
+  if($("#sharedCache") && $("#sharedCache").checked) ov["cache_scope"]="shared";
+  Object.assign(ov, readAllSettings("nr"));   // the full editor wins where both set a value
+  return ov;
+}
+async function checkNew(){
+  const box=$("#pfnew"); box.innerHTML = `<div class="card"><span class="muted">Checking the settings, with one tiny test call per model…</span></div>`;
+  try{ const r = await api("/api/check", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({preset:PRESET, overrides:newOverrides()})}); box.innerHTML = `<div class="card">${pfHTML(r)}</div>`; }
+  catch(e){ box.innerHTML = `<div class="card"><div class="pf error">${esc(e.message)}</div></div>`; }
+}
+async function createRun(){
+  const p = META.presets.find(x=>x.name===PRESET);
+  const ov = newOverrides();
   if(!$("#text").value.trim() && !$("#file").files[0]){ toast("Add a text first: upload a file or paste it."); return; }
   const fd = new FormData();
   fd.append("text", $("#text").value); fd.append("kind", $("#kind").value); fd.append("preset", p.name);
@@ -423,7 +484,7 @@ async function openRun(id){
   ES.onmessage = m => { const e=JSON.parse(m.data); EVENTS.push(e); if(e.call && (e.type==="llm_call"||e.type==="llm_retry")) delete ACT.calls[e.call]; if(TAB==="activity") ACT.schedule();
     if(e.type==="stage_progress" && e.stage==="recover"){ const b=$("#recoverBtn"); if(b) b.textContent=recoverLabel(); }
     if(["stage_progress","llm_start","llm_call"].includes(e.type)){ const n=$("#nowline"); if(n && window.ST) n.innerHTML = nowLine(window.ST); }
-    if(["stage_finished","stage_started","run_finished","run_failed","invalidated"].includes(e.type)){ clearTimeout(pending); pending=setTimeout(()=>{ renderRun(true); loadRuns(); }, 300);} };
+    if(["stage_finished","stage_started","run_finished","run_failed","invalidated","run_paused","run_resumed","run_stopped","preflight"].includes(e.type)){ clearTimeout(pending); pending=setTimeout(()=>{ renderRun(true); loadRuns(); }, 300);} };
   ES.addEventListener("idle", ()=>closeES());
 }
 async function upgradeRun(){
@@ -440,10 +501,8 @@ async function renderRun(keepTab){
   let title = ""; try{ const sp = await api(`/api/runs/${CUR}/artifact/spec`); title = sp.title; }catch{}
   $("#main").innerHTML = `
     <div class="row"><div class="grow"><div style="font:600 24px var(--serif)">${esc(title||st.run)}</div>
-      <div class="muted small">${esc(presetTitle(st.meta.preset))}${info("preset", st.meta.preset)} · ${esc({source:"from a source text", premise:"from a premise", spec:"from a specification"}[st.mode]||st.mode)} · language ${esc(st.language)} · <span class="dot ${st.executing?"running":st.status}"></span> ${esc(st.executing?"running":({done:"finished", partial:"paused", failed:"failed", cancelled:"cancelled", budget_exceeded:"stopped: budget spent", created:"not started"}[st.status]||st.status))} · <span class="mono">${esc(st.run)}</span></div></div>
-      <button onclick="runAgain()" ${st.executing?"disabled":""} title="${st.status==="done"?"Re-run everything that is not up to date (finished steps are reused)":"Continue where the run stopped"}">${st.status==="done"?"Run again":"Resume"}</button>
-      <select id="rerun" style="width:auto" title="Redo the run from a chosen stage onwards (that stage and everything after it are recomputed)"><option value="">Redo from…</option>${st.stages.filter(s=>s.applies).map(s=>`<option value="${s.name}">${esc(stageTitle(s.name))}</option>`).join("")}</select>
-      ${st.executing?`<button onclick="cancelRun()">Cancel</button>`:""}
+      <div class="muted small">${esc(presetTitle(st.meta.preset))}${info("preset", st.meta.preset)} · ${esc({source:"from a source text", premise:"from a premise", spec:"from a specification"}[st.mode]||st.mode)} · language ${esc(st.language)} · <span class="dot ${runState(st)}"></span> ${esc(STATE_WORD[runState(st)]||runState(st))} · <span class="mono">${esc(st.run)}</span></div></div>
+      ${controlsHTML(st)}
       <select id="dl" style="width:auto" title="Download this run"><option value="">Download…</option>
         <option value="story">Story (markdown)</option><option value="release">Release bundle (synthetic only)</option>
         <option value="full">Full bundle (incl. source, internal)</option></select></div>
@@ -451,12 +510,13 @@ async function renderRun(keepTab){
     <div class="track">${stages}</div>
     <div class="nowline" id="nowline">${nowLine(st)}</div>
     <div class="muted mono" title="model calls (served from cache) · tokens sent / received · cost · retries · time">${u.calls||0} calls (${u.cached_calls||0} cached) · ${(u.prompt_tokens||0).toLocaleString()} in / ${(u.completion_tokens||0).toLocaleString()} out · $${(u.cost_usd||0).toFixed(3)} · ${u.retries||0} retries · ${dur((st.timing||{}).wall_seconds)} wall clock</div>
-    ${st.error?`<div class="card bad">${esc(st.error)}</div>`:""}
+    ${stateCard(st)}
     ${(st.missing_stages||[]).length && !st.executing?`<div class="card warn">This run was created with older settings and lacks stages its preset now has: <b>${st.missing_stages.map(esc).join(", ")}</b>. Running it again keeps its original settings. <button class="small" onclick="upgradeRun()">Add them and redo from there</button> or start a new run.</div>`:""}
     <div class="tabs">${["story","spec","bible","plan","chapters","evaluation","usage","activity","config"].map(t=>`<button class="${t===TAB?"on":""}" data-tab="${t}" onclick="setTab('${t}')" title="${esc((H().tabs||{})[t]||"")}">${t}</button>`).join("")}</div>
     <p class="tabdesc" id="tabdesc">${esc((H().tabs||{})[TAB]||"")}</p>
     <div id="tab"></div>`;
-  $("#rerun").onchange = e => { if(e.target.value) runAgain(e.target.value); };
+  const rr=$("#rerun"); if(rr) rr.onchange = e => { if(e.target.value) runAgain(e.target.value); };
+  if(runState(st)==="needs_attention" && !window.PF_SHOWN){ window.PF_SHOWN=true; }
   $("#dl").onchange = e => { const v=e.target.value; e.target.value=""; if(!v) return;
     location.href = v==="story" ? `/api/runs/${CUR}/download/story.md` : `/api/runs/${CUR}/bundle?kind=${v}`; };
   window.ST = st;
@@ -473,8 +533,198 @@ function nowLine(st){
   const inflight = (()=>{ let n=0; const open=new Set(); for(const e of EVENTS){ if(e.type==="llm_start") open.add(e.call); else if((e.type==="llm_call"||e.type==="llm_retry") && e.call) open.delete(e.call); } return open.size; })();
   return `<b>Now: ${esc(stageTitle(cur))}</b> — ${esc(((H().stages||{})[cur]||{}).what||"")}${prog?` <span class="muted">· ${esc(prog)}</span>`:""}${inflight?` <span class="muted">· ${inflight} model call${inflight>1?"s":""} in progress</span>`:""} <a href="#" onclick="setTab('activity');return false">see details</a>`;
 }
-async function runAgain(from){ try{ await api(`/api/runs/${CUR}/run`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({rerun_from:from||null})}); openRun(CUR);}catch(e){toast(e.message)} }
-async function cancelRun(){ await api(`/api/runs/${CUR}/cancel`, {method:"POST"}); toast("cancelling…"); }
+async function runAgain(from){ try{ await api(`/api/runs/${CUR}/run`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({rerun_from:from||null})}); toast("starting — checking the settings first"); openRun(CUR);}catch(e){toast(e.message)} }
+async function cancelRun(){ if(!confirm("Abort now? Model calls in flight are dropped (finished stages and chapters are kept). To stop more gently, use Stop.")) return; await api(`/api/runs/${CUR}/cancel`, {method:"POST"}); toast("aborting…"); }
+
+// ------------------------------------------------------------------ run control and settings
+const STATE_WORD = {running:"running", paused:"paused", done:"finished", partial:"paused at the chosen point", failed:"failed",
+  cancelled:"aborted", budget_exceeded:"stopped: budget spent", created:"not started", stopped:"stopped — work kept",
+  needs_attention:"settings need attention"};
+function runState(st){ if(st.executing) return st.status==="paused" ? "paused" : "running"; return st.status||"created"; }
+function controlsHTML(st){
+  const s = runState(st), redo = `<select id="rerun" style="width:auto" title="Redo the run from a chosen stage onwards (that stage and everything after it are recomputed)"><option value="">Redo from…</option>${st.stages.filter(x=>x.applies).map(x=>`<option value="${x.name}">${esc(stageTitle(x.name))}</option>`).join("")}</select>`;
+  if(s==="running") return `<div class="ctl">
+      <button onclick="ctl('pause')" title="Let the model calls in flight finish, then hold every new call until you resume. Nothing is lost.">Pause</button>
+      <button onclick="ctl('pause_after_stage')" title="Finish the current stage (${esc(stageTitle(st.meta.current_stage||""))}), then pause before the next one — a clean point to inspect or edit its output.">Pause after this stage</button>
+      <span class="sep"></span>
+      <button onclick="ctl('stop')" title="End the run cleanly after the calls in flight. Finished stages and chapters are kept; Continue carries on later, also with changed settings.">Stop</button>
+      <button onclick="cancelRun()" title="Abort immediately, dropping the calls in flight.">Abort</button></div>`;
+  if(s==="paused") return `<div class="ctl"><button class="primary" onclick="ctl('resume')">Resume</button>
+      <button onclick="ctl('stop')" title="End the run here (work kept), e.g. to change its settings before continuing.">Stop</button></div>`;
+  const cont = s==="done" ? "Run again" : s==="created" ? "Start" : "Continue";
+  return `<div class="ctl"><button class="${s==="done"?"":"primary"}" onclick="runAgain()" title="${s==="done"?"Re-run what is not up to date (finished steps are reused)":"Carry on from where the run stopped; finished stages are kept"}">${cont}</button>
+      <button onclick="checkSettings()" title="Check the models, keys and settings for the stages still to run, with one tiny test call per model">Check settings</button>
+      <button onclick="editSettings()" title="Change models, judges, priorities, budget or any other setting before continuing">Edit settings</button>${redo}</div>`;
+}
+function stateCard(st){
+  const s = runState(st), next = (st.stages.find(x=>x.applies && !x.done)||{}).name;
+  if(s==="paused"){ const ev=[...EVENTS].reverse().find(e=>e.type==="run_paused");
+    return `<div class="card notice statecard"><div class="grow"><b>Paused${ev&&ev.reason&&ev.reason!=="paused by the user"?` — ${esc(ev.reason)}`:""}.</b>
+      <p class="small">The model calls that were in flight have finished; nothing new is sent until you resume. Look through the tabs freely (spec, design, plan, chapters so far). To change settings, <b>Stop</b> (work is kept), then <b>Edit settings</b> and <b>Continue</b>.</p></div></div>`; }
+  if(s==="needs_attention") return `<div class="card warn statecard"><div class="grow"><b>The run was not started: some settings need attention.</b>
+      <p class="small">The pre-flight check found problems that would make the run fail. Fix them under <b>Edit settings</b> (or add a key under <a href="#" onclick="showKeys();return false">API keys</a>), then <b>Continue</b> — nothing has been spent on the stages still to run.</p><div id="pfbox">${pfFromRun()}</div></div></div>`;
+  if(s==="failed" || s==="budget_exceeded") return `<div class="card bad statecard"><div class="grow"><b>${s==="failed"?"The run failed":"The budget was spent"}${st.meta.current_stage||next?` in ${esc(stageTitle(st.meta.current_stage||next))}`:""}.</b>
+      <p class="small mono">${esc(st.error||"")}</p><p class="small">Finished stages and chapters are kept. If a setting caused this (a model name, a key, a budget), change it under <b>Edit settings</b> and <b>Continue</b>: the run carries on from the stage that failed. <b>Check settings</b> tests the models first.</p></div></div>`;
+  if(s==="stopped") return `<div class="card notice small">Stopped — finished work is kept.${next?` <b>Continue</b> carries on with ${esc(stageTitle(next))}.`:""} You can change settings first.</div>`;
+  if(st.error && s!=="done") return `<div class="card bad">${esc(st.error)}</div>`;
+  return "";
+}
+function pfHTML(rep){
+  if(!rep) return "";
+  const probs = (rep.problems||[]).map(p=>`<div class="pf ${p.severity}"><b>${p.severity==="error"?"Problem":"Note"}</b> <span class="w">${esc(p.where)}</span><div>${esc(p.message)}</div>${p.hint?`<div class="muted small">${esc(p.hint)}</div>`:""}</div>`).join("");
+  const models = (rep.models||[]).filter(m=>m.ok).map(m=>`<div class="pf ok"><b>${esc(m.model)}</b> <span class="w">${esc(m.used_by)}</span> — answered in ${m.seconds}s</div>`).join("");
+  const stages = (rep.stages||[]).length ? `<p class="muted small">Checked for the stages still to run: ${rep.stages.map(stageTitle).map(esc).join(", ")}.</p>` : "";
+  return (rep.ok?`<div class="pf ok"><b>Ready.</b> No problems found${(rep.models||[]).length?"; every model answered":""}.</div>`:"") + probs + models + stages;
+}
+function pfFromRun(){ setTimeout(async()=>{ const r = await get("preflight.json"); const b=$("#pfbox"); if(b && r) b.innerHTML = pfHTML(r); }, 0); return `<span class="muted small">loading the check…</span>`; }
+async function ctl(action){
+  try{ await api(`/api/runs/${CUR}/control`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({action})});
+    toast({pause:"pausing — the calls in flight finish first", pause_after_stage:"will pause when this stage is done", resume:"resuming", stop:"stopping — the calls in flight finish first"}[action]||action);
+    setTimeout(()=>renderRun(true), 800); }catch(e){ toast(e.message); }
+}
+async function checkSettings(){
+  modal("Check settings", `<p class="muted small">Checking the settings for the stages still to run, with one tiny test call per model…</p><div id="pfm"><span class="muted">working…</span></div>`);
+  try{ const r = await api(`/api/runs/${CUR}/check`, {method:"POST"}); const b=$("#pfm"); if(b) b.innerHTML = pfHTML(r) + `<div class="row" style="margin-top:10px">${r.ok?`<button class="primary small" onclick="closeModal();runAgain()">Continue the run</button>`:""}<button class="small" onclick="editSettings()">Edit settings</button></div>`; }
+  catch(e){ const b=$("#pfm"); if(b) b.innerHTML = `<div class="pf error">${esc(e.message)}</div>`; }
+}
+function cfgGet(cfg, path){ return path.split(".").reduce((o,k)=>o&&o[k], cfg); }
+
+// ------------------------------------------------------------------ all settings (from META.settings)
+// One editor for every setting of a run: models, story design, length, language, limits, judges, run
+// options and every stage's parameters. Inputs carry their dotted key; readAllSettings returns the
+// keys whose value differs from the configuration the editor was opened with.
+const STAGE_ORDER = ["extract","spec","transform","plan","draft","conform","review","guard","assemble","recover","evaluate"];
+function _fieldHTML(id, key, f, cur){
+  const v = cur===undefined ? f.default : cur, orig = esc(JSON.stringify(v===undefined?null:v));
+  const attrs = `class="as-${id}" data-key="${esc(key)}" data-type="${f.type}" data-orig="${orig}"`;
+  const lab = `<span class="k">${esc(key.split(".").slice(-1)[0].replace(/_/g," "))}</span>`;
+  const help = `<div class="muted small">${esc(f.help||"")}${f.impl?` <i>(only for ${esc(f.impl)})</i>`:""}</div>`;
+  let input;
+  if(f.type==="bool") input = `<input type="checkbox" ${attrs} ${v?"checked":""} style="width:auto">`;
+  else if(f.type==="choice") input = `<select ${attrs}>${f.choices.map(c=>`<option value="${esc(JSON.stringify(c))}" ${JSON.stringify(c)===JSON.stringify(v??null)?"selected":""}>${c===null?"(default)":esc(String(c))}</option>`).join("")}</select>`;
+  else if(f.type==="list") input = `<span class="stagepick">${(f.choices||[]).map(c=>`<label><input type="checkbox" ${attrs} data-item="${esc(c)}" ${(v||[]).includes(c)?"checked":""} style="width:auto"> ${esc(c)}</label>`).join("")}</span>`;
+  else if(f.type==="panel") input = `<textarea rows="2" class="mono" ${attrs}>${esc(panelText(v))}</textarea>`;
+  else if(f.type==="text") input = `<textarea rows="2" ${attrs}>${esc(v||"")}</textarea>`;
+  else input = `<input ${f.type==="int"||f.type==="float"?`type="number" step="${f.type==="int"?1:"any"}"`:""} ${attrs} value="${v===null||v===undefined?"":esc(String(v))}" placeholder="${f.default===null||f.default===undefined?"(default)":esc(String(f.default))}">`;
+  return `<div class="asf"><label>${lab}</label>${input}${help}</div>`;
+}
+function allSettingsHTML(id, cfg){
+  const S = META.settings||{}; if(!S.stages) return "";
+  const groups = {};
+  (S.run_fields||[]).forEach(f=>{ (groups[f.group]=groups[f.group]||[]).push(_fieldHTML(id, f.key, f, cfgGet(cfg, f.key))); });
+  const roles = Object.keys(cfg.models||{default:{}}).filter(r=>!r.startsWith("__") && !/^judge_\d+$/.test(r));
+  const modelBlock = roles.map(r=>`<details class="asg"><summary><b>Model role <code>${esc(r)}</code></b> <span class="muted small">${esc(cfgGet(cfg,`models.${r}.name`)||"")}</span></summary><div class="asgrid">
+      ${Object.entries(S.model_fields).map(([k,f])=>_fieldHTML(id, `models.${r}.${k}`, f, cfgGet(cfg, `models.${r}.${k}`))).join("")}</div></details>`).join("")
+    + `<div class="row small" style="margin:6px 0"><input id="as-${id}-newrole" placeholder="add a model role, e.g. judge, extract, plan" style="max-width:280px"><button class="small" onclick="addRole('${id}')">Add role</button></div>`;
+  const stageBlock = STAGE_ORDER.filter(s=>(cfg.stages||{})[s]).map(s=>{ const sc = cfg.stages[s], params = (S.stages||{})[s]||{};
+    const impls = (S.impls||{})[s]||[]; const impl = sc.impl || (s==="draft"?"chapter":s);
+    const own = Object.entries(params).filter(([k,f])=>!f.impl || f.impl===impl);
+    const others = Object.entries(params).filter(([k,f])=>f.impl && f.impl!==impl);
+    const known = new Set(Object.keys(params)); const extra = Object.entries(sc.params||{}).filter(([k])=>!known.has(k));
+    return `<details class="asg"><summary><b>${esc(stageTitle(s))}</b> <span class="muted small">${sc.enabled?"on":"off"}${sc.impl&&sc.impl!==s?` · ${esc(sc.impl)}`:""}${Object.keys(sc.params||{}).length?` · ${Object.keys(sc.params).length} set`:""}</span></summary><div class="asgrid">
+      ${_fieldHTML(id, `stages.${s}.enabled`, {type:"bool", default:true, help:"Run this stage."}, sc.enabled)}
+      ${impls.length>1?_fieldHTML(id, `stages.${s}.impl`, {type:"choice", default:null, choices:[null, ...impls], help:"Which implementation of the stage."}, sc.impl):""}
+      ${_fieldHTML(id, `stages.${s}.model`, {type:"str", default:null, help:"Model role for this stage (empty = the stage name, then default)."}, sc.model)}
+      ${own.map(([k,f])=>_fieldHTML(id, `stages.${s}.params.${k}`, f, (sc.params||{})[k])).join("")}
+      ${extra.map(([k,v])=>_fieldHTML(id, `stages.${s}.params.${k}`, {type: typeof v==="boolean"?"bool":typeof v==="number"?"float":"str", default:v, help:"set in this configuration"}, v)).join("")}
+      </div>${others.length?`<details class="small"><summary class="muted">parameters of other implementations (${others.length})</summary><div class="asgrid">${others.map(([k,f])=>_fieldHTML(id, `stages.${s}.params.${k}`, f, (sc.params||{})[k])).join("")}</div></details>`:""}</details>`; }).join("");
+  return `<div class="allsettings">
+    <p class="muted small">Every setting of the run. Changed values are applied on top of the preset; the rest stays as it is. Hover a name for what it does, or read the line under it.</p>
+    <h4>Models</h4>${modelBlock}
+    ${Object.entries(groups).map(([g,fs])=>`<details class="asg"><summary><b>${esc(g)}</b></summary><div class="asgrid">${fs.join("")}</div></details>`).join("")}
+    <h4>Stages</h4>${stageBlock}</div>`;
+}
+function addRole(id){ const n = ($(`#as-${id}-newrole`).value||"").trim(); if(!n) return;
+  window.__extraRoles = window.__extraRoles||{}; (window.__extraRoles[id]=window.__extraRoles[id]||new Set()).add(n);
+  const box = $(`#as-${id}-box`); if(!box) return; const cfg = JSON.parse(box.dataset.cfg); cfg.models = cfg.models||{}; 
+  [...window.__extraRoles[id]].forEach(r=>{ if(!cfg.models[r]) cfg.models[r] = {...(cfg.models.default||{}), __new:true}; });
+  box.dataset.cfg = JSON.stringify(cfg); box.innerHTML = allSettingsHTML(id, cfg); }
+function allSettingsBox(id, cfg){ return `<div id="as-${id}-box" data-cfg="${esc(JSON.stringify(cfg))}">${allSettingsHTML(id, cfg)}</div>`; }
+function readAllSettings(id){
+  const ov = {}; const seen = new Set();
+  document.querySelectorAll(`.as-${id}`).forEach(el=>{
+    const key = el.dataset.key, type = el.dataset.type, orig = JSON.parse(el.dataset.orig||"null");
+    let v;
+    if(type==="list"){ if(seen.has(key)) return; seen.add(key); v = [...document.querySelectorAll(`.as-${id}[data-key="${CSS.escape(key)}"]`)].filter(x=>x.checked).map(x=>x.dataset.item); }
+    else if(type==="bool") v = el.checked;
+    else if(type==="choice") v = JSON.parse(el.value);
+    else if(type==="panel") v = parsePanel(el.value);
+    else if(type==="int"||type==="float") v = el.value==="" ? null : +el.value;
+    else v = el.value==="" ? null : el.value;
+    if(type==="text" && v===null) v = "";
+    const isNewRole = /^models\.[^.]+\./.test(key) && (window.__extraRoles||{})[id] && [...window.__extraRoles[id]].some(r=>key.startsWith(`models.${r}.`)) && key.endsWith(".name");
+    if(JSON.stringify(v)!==JSON.stringify(orig) || isNewRole) ov[key] = v;
+  });
+  return ov;
+}
+function editSettings(){
+  const cfg = (ST.meta||{}).config||{};
+  const roles = Object.keys(cfg.models||{}).filter(r=>r!=="default" && !r.startsWith("__"));
+  const stageModels = Object.entries(cfg.stages||{}).filter(([n,s])=>s.enabled && s.model).map(([n,s])=>[n,s.model]);
+  modal("Edit settings", `<p class="small">Changes apply to what the run still has to do (and to anything you redo). Finished stages are kept — to apply a change to them, use <i>Redo from…</i> afterwards. <a href="#" onclick="showKeys();return false">API keys</a> are set separately.</p>
+    <div class="grid2"><div><label>Model (default for every stage)</label><input id="es-model" value="${esc(cfgGet(cfg,"models.default.name")||"")}"></div>
+      <div><label>Reasoning effort (reasoning models)</label><select id="es-effort">${["","low","medium","high"].map(v=>`<option value="${v}" ${(cfgGet(cfg,"models.default.extra.reasoning_effort")||"")===v?"selected":""}>${v||"provider default"}</option>`).join("")}</select></div></div>
+    ${roles.map(r=>`<label>Model for role <code>${esc(r)}</code></label><input class="es-role" data-role="${esc(r)}" value="${esc(cfgGet(cfg,`models.${r}.name`)||"")}">`).join("")}
+    ${stageModels.length?`<p class="muted small">Stages with their own model role: ${stageModels.map(([n,m])=>`${esc(stageTitle(n))} → <code>${esc(m)}</code>`).join(", ")}.</p>`:""}
+    <div class="grid2"><div><label>Budget (US dollars; empty = no limit)</label><input id="es-budget" type="number" step="0.5" value="${cfgGet(cfg,"limits.max_cost_usd")??""}"></div>
+      <div><label style="margin-top:28px;color:var(--ink)"><input type="checkbox" id="es-jon" style="width:auto" ${cfgGet(cfg,"judges.enabled")?"checked":""}> run the judges in the evaluation</label></div></div>
+    <label>Judge model</label><input id="es-jmodel" value="${esc(cfgGet(cfg,"judges.model")||"")}" placeholder="empty = the writer's model (not advised)">
+    <label>${PANEL_HELP}</label><textarea id="es-jpanel" rows="2" class="mono">${esc(panelText(cfgGet(cfg,"judges.panel")))}</textarea>
+    <label>Time limit (minutes of work; empty = none — the run stops there and can be continued)</label><input id="es-minutes" type="number" step="5" value="${cfgGet(cfg,"limits.max_minutes")??""}">
+    <h3 style="margin-top:14px">Priorities</h3>${priorityPicker("es", cfg.priorities||[])}
+    <details style="margin-top:12px"><summary><b>All settings</b> <span class="muted small">— models, stages and their parameters, judges, limits</span></summary>${allSettingsBox("es", cfg)}</details>
+    <label>Other settings <span class="muted" style="font-weight:400">(one key=value per line, e.g. stages.review.params.rounds=2)</span></label><textarea id="es-extra" rows="2" class="mono"></textarea>
+    <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSettings(true)">Save, check and continue</button><button onclick="saveSettings(false)">Save and check</button><span class="muted small" id="es-msg"></span></div>
+    <div id="pfm"></div>`);
+  prioWire("es");
+}
+async function saveSettings(go){
+  const cfg = (ST.meta||{}).config||{}, ov = {};
+  const set = (k, v, cur) => { if(v!==cur) ov[k]=v; };
+  set("models.default.name", $("#es-model").value.trim(), cfgGet(cfg,"models.default.name"));
+  const eff = $("#es-effort").value; if(eff!==(cfgGet(cfg,"models.default.extra.reasoning_effort")||"")) ov["models.default.extra.reasoning_effort"] = eff||null;
+  document.querySelectorAll(".es-role").forEach(i=>set(`models.${i.dataset.role}.name`, i.value.trim(), cfgGet(cfg,`models.${i.dataset.role}.name`)));
+  const b = $("#es-budget").value; const bv = b===""?null:+b; if(bv!==(cfgGet(cfg,"limits.max_cost_usd")??null)) ov["limits.max_cost_usd"]=bv;
+  if($("#es-jon").checked!==!!cfgGet(cfg,"judges.enabled")) ov["judges.enabled"]=$("#es-jon").checked;
+  set("judges.model", $("#es-jmodel").value.trim(), cfgGet(cfg,"judges.model")||"");
+  { const pn = parsePanel($("#es-jpanel").value); if(JSON.stringify(pn)!==JSON.stringify(cfgGet(cfg,"judges.panel")||[])) ov["judges.panel"]=pn; }
+  { const m=$("#es-minutes").value; const mv = m===""?null:+m; if(mv!==(cfgGet(cfg,"limits.max_minutes")??null)) ov["limits.max_minutes"]=mv; }
+  const pr = readPriorities("es"); if(JSON.stringify(pr)!==JSON.stringify(cfg.priorities||[])) ov["priorities"]=pr;
+  Object.assign(ov, readAllSettings("es"));
+  $("#es-extra").value.split("\n").map(l=>l.trim()).filter(Boolean).forEach(l=>{const i=l.indexOf("="); if(i<1) return; let v=l.slice(i+1).trim(); try{v=JSON.parse(v)}catch{} ov[l.slice(0,i).trim()]=v;});
+  const msg=$("#es-msg");
+  try{
+    if(Object.keys(ov).length){ await api(`/api/runs/${CUR}/config`, {method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify({overrides:ov})}); if(msg) msg.textContent=`saved ${Object.keys(ov).length} change${Object.keys(ov).length>1?"s":""} — checking…`; }
+    else if(msg) msg.textContent="no changes — checking…";
+    const st = await api(`/api/runs/${CUR}`); window.ST = st;
+    const r = await api(`/api/runs/${CUR}/check`, {method:"POST"}); const box=$("#pfm"); if(box) box.innerHTML = pfHTML(r);
+    if(r.ok && go){ closeModal(); await runAgain(); return; }
+    if(msg) msg.textContent = r.ok ? "saved; the settings are ready" : "saved; the check still finds problems";
+    renderRun(true);
+  }catch(e){ if(msg) msg.textContent = e.message; toast(e.message); }
+}
+function priorityPicker(id, selected){
+  const sel = new Set(selected||[]), G = META.evaluation.groups;
+  const rows = Object.entries(G).map(([g,gd])=>{ const ms = META.evaluation.metrics.filter(m=>m.group===g && m.norm);
+    const all = sel.has(g);
+    return `<div class="prio"><label class="gl" title="${esc(gd.question)}"><input type="checkbox" class="pg-${id}" data-g="${g}" ${all?"checked":""}> ${esc(gd.title)}</label>
+      <div class="ms">${ms.map(m=>`<label title="${esc(m.meaning)}"><input type="checkbox" class="pm-${id}" data-g="${g}" value="${m.key}" ${all||sel.has(m.key)?"checked":""}> ${esc(m.label)}${m.core?' <span class="core">core</span>':""}</label>`).join("")}</div></div>`; }).join("");
+  return `<p class="muted small">By default every measure counts equally. Tick the measures your study depends on: the generation then works harder on them (more revision rounds, stricter checks) and, where a stage chooses between revisions, they weigh ${META.priorities.weight}× — a revision that makes a prioritised measure worse is rejected. Other measures still count.</p>${rows}<div class="prioeff" id="pe-${id}"></div>`;
+}
+function readPriorities(id){
+  const out=[]; Object.keys(META.evaluation.groups).forEach(g=>{ const ms=[...document.querySelectorAll(`.pm-${id}[data-g="${g}"]`)]; const on=ms.filter(x=>x.checked).map(x=>x.value);
+    if(ms.length && on.length===ms.length) out.push(g); else out.push(...on); });
+  return out;
+}
+function prioWire(id){
+  const upd = () => { const pr = readPriorities(id), chosen = new Set(pr.flatMap(p=>META.evaluation.groups[p]?META.evaluation.metrics.filter(m=>m.group===p).map(m=>m.key):[p]));
+    const eff = META.priorities.effects.filter(e=>e.metrics.some(k=>chosen.has(k)));
+    const seen = new Set(), lines = eff.filter(e=>{ const k=e.stage+e.param; if(seen.has(k)) return false; seen.add(k); return true; }).map(e=>`<li><b>${esc(stageTitle(e.stage))}</b>: ${esc(e.why)}</li>`);
+    const box=$(`#pe-${id}`); if(box) box.innerHTML = chosen.size ? `<b>What this changes in the generation</b><ul>${lines.join("")}${[...chosen].some(k=>["style_drift","sentence_overlap","paragraph_overlap"].includes(k))?`<li><b>${esc(stageTitle("conform"))}</b>: the prioritised style quantities weigh ${META.priorities.weight}× when choosing between revisions</li>`:""}<li>The evaluation shows a <b>priority score</b> (mean of the prioritised measures) and lists their fixes first.</li></ul>` : `<span class="muted">No priorities: everything counts equally.</span>`; };
+  document.querySelectorAll(`.pg-${id}`).forEach(cb=>cb.onchange=()=>{ document.querySelectorAll(`.pm-${id}[data-g="${cb.dataset.g}"]`).forEach(x=>x.checked=cb.checked); upd(); });
+  document.querySelectorAll(`.pm-${id}`).forEach(cb=>cb.onchange=()=>{ const ms=[...document.querySelectorAll(`.pm-${id}[data-g="${cb.dataset.g}"]`)]; const g=document.querySelector(`.pg-${id}[data-g="${cb.dataset.g}"]`); if(g) g.checked = ms.every(x=>x.checked); upd(); });
+  upd();
+}
 async function get(name){ try{ return await api(`/api/runs/${CUR}/artifact/${name}`);}catch{ return null; } }
 
 async function renderTab(){
@@ -511,34 +761,125 @@ async function saveSpec(which){
   try{ await api(`/api/runs/${CUR}/artifact/${which}`, {method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify(SPEC)}); toast("saved"); renderRun(true);}catch(e){toast(e.message)}
 }
 
+const KGV = {
+  source:   {group:"one", label:"Source", what:"What the analysis found in the source: its characters, places, objects, scenes, events and the ties between them."},
+  synthetic:{group:"one", label:"Design", what:"The story design: the source's graph after renaming and the transform policy — what the writer was asked to realise."},
+  text:     {group:"one", label:"Synthetic text", what:"What the same analysis found in the synthetic text, once, with the synthetic names."},
+  compare:  {group:"pair", label:"Source ↔ Design", against:"design", a:"source", b:"design", what:"What the transform changed: renames are expected; anything else changed or left out was the policy's choice. With every dimension kept, this should be (almost) all kept."},
+  compare_text:{group:"pair", label:"Source ↔ Synthetic text", against:"text", a:"source", b:"synthetic text", what:"End to end: what of the source the synthetic text kept, changed or lost. The text is aligned with the design, which keeps the source's identities, so renamed items are related back."},
+  compare_dtext:{group:"pair", label:"Design ↔ Synthetic text", against:"design_text", a:"design", b:"synthetic text", what:"Did the writer realise the design? Everything here that is lost or changed was lost in the writing, not by the policy."},
+  compare_noise:{group:"pair", label:"Source ↔ its 2nd analysis", against:"calibration", a:"source", b:"second analysis", what:"The source analysed twice: every difference is analysis noise — the floor under the other comparisons."},
+  trace:    {group:"trace", label:"Where did each difference arise?", what:"Every source item followed through the design to the synthetic text, and the step where it changed: in the design (the policy — intended) or in the writing (the generation — a loss or drift)."},
+};
+const KTYPE = {character:"characters", place:"places", object:"objects", organisation:"organisations", other:"other entities", scene:"scenes", event:"events",
+  "relation:world":"ties to places & objects", "relation:social":"relationships", relation:"relations", causes:"causal links", cause:"causal links"};
+const kt = t => KTYPE[t]||t;
+const VERDICT_CLS = {kept:"good", policy:"accent", dropped:"accent", written_changed:"warn", written_lost:"bad", design_added:"accent", written_added:"muted"};
 async function tabBible(el){
-  const view = ST.mode==="source" ? (window.BIBVIEW||"synthetic") : "synthetic";
-  const src = view==="source";
-  const b = await get(src? "bible_source.json" : "bible"); const tm = ST.mode==="source"? await get("transform") : null;
+  if(ST.mode!=="source"){ window.BIBVIEW="synthetic"; }
+  let view = window.BIBVIEW || "synthetic";
   const recovered = (ST.artifacts||[]).includes("recovered/bible_source.json");
   const calibrated = (ST.artifacts||[]).includes("calibration/bible_source.json");
-  const btn = (v,l)=>`<button class="small nobusy ${view===v?"primary":""}" onclick="BIBVIEW='${v}';renderTab()">${l}</button>`;
-  const head = ST.mode==="source"? `<div class="row" style="margin-bottom:10px">${btn("synthetic","design (synthetic)")}${btn("source","source")}${btn("compare","compare: source ↔ design")}${recovered?btn("compare_text","compare: source ↔ synthetic text")+btn("compare_dtext","compare: design ↔ synthetic text"): (ST.meta||{}).current_stage==="recover" ? `<button class="small" id="recoverBtn" disabled>${recoverLabel()}</button>` : ST.status==="done"||ST.status==="partial" ? `<button class="small" id="recoverBtn" title="Analyse the synthetic text with the same extractor as the source (one extraction pass; costs tokens). Runs in the background." onclick="recoverGraph()">compare with the synthetic text…</button>` : `<button class="small" disabled title="available when the story is finished">compare with the synthetic text (after the run)</button>`}${calibrated?btn("compare_noise","noise: source ↔ its second analysis"):""}${info("tab","bible")}</div>
-    <p class="muted small" style="margin:-4px 0 10px">${{synthetic:"The story design: the source's bible after renaming and the transform policy — what the writer was asked to realise.", source:"What the analysis found in the source.", compare:"The source next to the design, item by item.", compare_text:"What the synthetic text kept, changed or lost of the source — found by aligning the text with the design, which shares the source's identities.", compare_dtext:"What the synthetic text realises of the design the writer was given.", compare_noise:"The source next to a second analysis of itself: every difference is analysis noise."}[view]||""} Click a node or link for details; each names its counterpart in the other text.</p>`:"";
-  if(!b){ el.innerHTML = head+`<div class="empty">No story bible yet (source mode extracts one).</div>`; return; }
-  if((view==="compare_text"||view==="compare_dtext") && !recovered){ el.innerHTML = head + `<div class="card"><p>${(ST.meta||{}).current_stage==="recover"? recoverLabel() + " The comparison opens here when it is done." : "The synthetic text has not been analysed yet."}</p></div>`; return; }
-  if(view.startsWith("compare")){
-    const note = {
-      compare: "The design is the source's bible after renaming and the chosen policies — what the writer was asked to realise. With everything preserved it matches by construction, so few or no changes is expected here.",
-      compare_text: "The synthetic text is analysed once and aligned with the <b>design</b> (the source's bible after renaming, which keeps the source's identities) — by names first, then by a model that pairs what names cannot, and finally by checking the synthetic chapters themselves for design items the analysis did not find. Through the design, every source item is marked kept, changed or lost; the source is not analysed again." + (calibrated? " Compare with <a href='#' onclick=\"BIBVIEW='compare_noise';renderTab();return false\">the source against its own second analysis</a> to see analysis noise." : ""),
-      compare_dtext: "The design the writer was given, next to what the synthetic text realises of it (same alignment as above, without the step back to the source).",
-      compare_noise: "The source analysed twice. Nothing changed in the text, so every difference here is analysis noise — the floor under the synthetic-text comparison."}[view] || "";
-    el.innerHTML = head + `<div class="card"><h3>Knowledge graph — differences</h3><p class="muted small">${note}</p><div class="kg" id="kg"></div></div>`;
-    window.KG = await mountKG($("#kg"), {runId: CUR, which: "compare", against: {compare_text:"text", compare_dtext:"design_text", compare_noise:"calibration"}[view] || "design"});
+  const needsText = v => ["text","compare_text","compare_dtext","trace"].includes(v);
+  const avail = v => ST.mode==="source" || v==="synthetic";
+  const btn = v => { const k=KGV[v]; if(!avail(v) || (v==="compare_noise" && !calibrated)) return "";
+    const dis = needsText(v) && !recovered; return `<button class="small nobusy ${view===v?"primary":""}" ${dis?'title="needs the analysis of the synthetic text (after the run)"':""} onclick="BIBVIEW='${v}';renderTab()">${esc(k.label)}${dis?" ·":""}</button>`; };
+  const recBtn = !recovered && ST.mode==="source" ? ((ST.meta||{}).current_stage==="recover" ? `<button class="small" id="recoverBtn" disabled>${recoverLabel()}</button>` : ST.status==="done"||ST.status==="partial" ? `<button class="small" id="recoverBtn" title="Analyse the synthetic text with the same extractor as the source and align it with the design (runs in the background)" onclick="recoverGraph()">analyse the synthetic text…</button>` : "") : "";
+  const head = `<div class="card kgnav">
+      ${(()=>{ const on = {source:["S"], synthetic:["D"], text:["T"], compare:["S","D","a1"], compare_text:["S","D","T","a1","a2"], compare_dtext:["D","T","a2"], compare_noise:["S"], trace:["S","D","T","a1","a2"]}[view]||[];
+        const c = k => on.includes(k)?"on":"";
+        return `<div class="kgflow small"><span class="kgf ${c("S")}">Source</span><span class="kga ${c("a1")}" title="transform: renaming and the policy">— design step (policy) →</span><span class="kgf ${c("D")}">Design</span><span class="kga ${c("a2")}" title="planning, drafting, style matching, review">— writing step (generation) →</span><span class="kgf ${c("T")}">Synthetic text</span></div>`; })()}
+      <div class="row"><span class="kgl">One graph</span>${["source","synthetic","text"].map(btn).join("")}</div>
+      ${ST.mode==="source"?`<div class="row"><span class="kgl">Compare two</span>${["compare","compare_text","compare_dtext","compare_noise"].map(btn).join("")}</div>
+      <div class="row"><span class="kgl">Follow through</span>${btn("trace")} ${recBtn} ${info("tab","bible")}</div>`:""}
+      <p class="muted small" style="margin:6px 0 0">${esc(KGV[view].what)}</p></div>`;
+  if(needsText(view) && !recovered){ el.innerHTML = head + `<div class="card"><p>${(ST.meta||{}).current_stage==="recover"? recoverLabel() + " This view opens when it is done." : "The synthetic text has not been analysed yet. It is analysed at the end of a run (stage <i>Analyse the synthetic text</i>)."}</p>${recBtn}</div>`; return; }
+  if(view==="trace") return traceView(el, head);
+  if(KGV[view].group==="pair"){
+    const k = KGV[view];
+    el.innerHTML = head + `<div class="card"><h3>${esc(k.a)} ↔ ${esc(k.b)}</h3><div class="kg" id="kg"></div></div><div id="kgdiff"></div>`;
+    window.KG = await mountKG($("#kg"), {runId: CUR, which: "compare", against: k.against,
+      onData: g => { window.KGDATA = g; window.KGDF = window.KGDF || {status:"changes", type:"", q:""}; drawDiffTable(k); }});
     return;
   }
-  const ents = b.entities.slice(0,60); const byId = Object.fromEntries(b.entities.map(e=>[e.id,e]));
-  el.innerHTML = head + `<div class="card"><h3>Knowledge graph</h3><div class="kg" id="kg"></div></div>
-    <div class="card"><h3>Renames</h3>${tm&&tm.renames.length? `<table><tr><th>original</th><th>new</th><th>note</th></tr>${tm.renames.slice(0,80).map(r=>`<tr><td>${esc(r.original)}</td><td>${esc(r.new)}</td><td class="muted">${esc(r.note)}</td></tr>`).join("")}</table>${tm.setting_shift?`<p><b>Setting shift.</b> ${esc(tm.setting_shift)}</p>`:""}${askBox("transform","e.g. ‘give the family a Frisian surname’")}`:`<p class="muted">—</p>`}</div>
+  const which = view==="source" ? "source" : view==="text" ? "recovered" : "synthetic";
+  const b = await get(view==="source"? "bible_source.json" : view==="text" ? "recovered/bible_source.json" : "bible");
+  const tm = ST.mode==="source" && view!=="source"? await get("transform") : null;
+  if(!b){ el.innerHTML = head+`<div class="empty">No story bible yet (source mode extracts one).</div>`; return; }
+  const ents = b.entities.slice(0,80); const byId = Object.fromEntries(b.entities.map(e=>[e.id,e]));
+  const renames = view==="synthetic" && tm ? `<div class="card"><h3>Renames</h3>${tm.renames.length? `<table><tr><th>original</th><th>new</th><th>note</th></tr>${tm.renames.slice(0,80).map(r=>`<tr><td>${esc(r.original)}</td><td>${esc(r.new)}</td><td class="muted">${esc(r.note)}</td></tr>`).join("")}</table>`:"<p class='muted'>No renames.</p>"}${(tm.kept||[]).length?`<p class="small"><b>Kept unchanged</b> (names of the real world, kept because world building is preserved): ${tm.kept.map(esc).join(", ")}</p>`:""}${tm.setting_shift?`<p><b>Setting shift.</b> ${esc(tm.setting_shift)}</p>`:""}${askBox("transform","e.g. ‘give the family a Frisian surname’")}</div>` : "";
+  el.innerHTML = head + `<div class="card"><h3>Knowledge graph — ${esc(KGV[view].label.toLowerCase())}</h3><div class="kg" id="kg"></div></div>${renames}
     <div class="card"><h3>Entities</h3><table><tr><th>name</th><th>kind</th><th>gender</th><th>role</th><th>mentions</th><th>chapters</th><th>description</th></tr>
-    ${ents.map(e=>`<tr><td><b>${esc(e.name)}</b>${e.aliases.length?`<div class="muted" style="font-size:11px">${esc(e.aliases.join(", "))}</div>`:""}</td><td>${esc(e.kind)}</td><td class="muted">${e.kind==="character"&&e.gender&&e.gender!=="unknown"?esc(e.gender):""}</td><td>${esc(e.role)}</td><td>${e.mentions}</td><td class="mono">${e.chapters.slice(0,12).join(",")}</td><td style="font-size:12.5px">${esc(e.description.slice(0,260))}</td></tr>`).join("")}</table></div>
-    <div class="card"><h3>Relations</h3><table>${b.relations.slice(0,80).map(r=>`<tr><td>${esc(byId[r.source]?.name||r.source)}</td><td class="muted">${esc(r.type)}</td><td>${esc(byId[r.target]?.name||r.target)}</td><td style="font-size:12.5px">${esc(r.description)}</td></tr>`).join("")}</table></div>`;
-  window.KG = await mountKG($("#kg"), {runId: CUR, which: src? "source" : "synthetic"});
+    ${ents.map(e=>`<tr><td><b>${esc(e.name)}</b>${e.aliases.length?`<div class="muted" style="font-size:11px">${esc(e.aliases.join(", "))}</div>`:""}</td><td>${esc(e.kind)}</td><td class="muted">${e.kind==="character"&&e.gender&&e.gender!=="unknown"?esc(e.gender):""}</td><td>${esc(e.role)}</td><td>${e.mentions}</td><td class="mono">${e.chapters.slice(0,12).join(",")}</td><td style="font-size:12.5px">${esc(e.description)}</td></tr>`).join("")}</table></div>
+    <div class="card"><h3>Relations</h3><table>${b.relations.slice(0,120).map(r=>`<tr><td>${esc(byId[r.source]?.name||r.source)}</td><td class="muted">${esc(r.type)}</td><td>${esc(byId[r.target]?.name||r.target)}</td><td style="font-size:12.5px">${esc(r.description)}</td></tr>`).join("")}</table></div>`;
+  window.KG = await mountKG($("#kg"), {runId: CUR, which});
+}
+const ST_WORD = {kept:"kept", changed:"changed", source_only:"missing", synthetic_only:"added"};
+function diffRows(g){
+  const lab = Object.fromEntries(g.nodes.map(n=>[n.id, n.label]));
+  const story = t => t==="scene"||t==="event";
+  const nodes = g.nodes.filter(n=>n.type!=="chapter").map(n=>{ const d=n.details||{};
+    return {id:n.id, node:true, status:n.status, type:n.type, item: story(n.type)? (d.summary||d.description||n.label) : n.label,
+      other: n.status==="kept"||n.status==="changed" ? (d.counterpart || (d.synthetic||{}).summary || (d.synthetic||{}).description || "") : "",
+      note: n.diff||"", evidence: (d.checked||{}).evidence||"", by: d.matched_by||"", chapters:(n.chapters||[]).join(",")}; });
+  const edges = g.edges.filter(e=>e.type==="relation"||e.type==="causes").map(e=>({id:e.id, node:false, status:e.status, type: e.type==="causes"?"cause":"relation",
+      item: e.type==="causes" ? `${lab[e.source]||e.source} → ${lab[e.target]||e.target}` : `${lab[e.source]||e.source} — ${e.label||""} → ${lab[e.target]||e.target}`,
+      other:"", note:e.diff||"", evidence:"", by:"", chapters:(e.chapters||[]).join(",")}));
+  return [...nodes, ...edges];
+}
+function drawDiffTable(k){
+  const g = window.KGDATA, f = window.KGDF, box = $("#kgdiff"); if(!g || !box) return;
+  const rows = diffRows(g);
+  const types = [...new Set(rows.map(r=>r.type))];
+  const sel = rows.filter(r=>(f.status==="all" || (f.status==="changes" ? r.status!=="kept" : r.status===f.status)) && (!f.type || r.type===f.type)
+      && (!f.q || [r.item,r.other,r.note,r.evidence].some(x=>String(x).toLowerCase().includes(f.q.toLowerCase()))));
+  const cnt = s => rows.filter(r=>r.status===s).length;
+  const chip = (v,l) => `<button class="small nobusy ${f.status===v?"primary":""}" onclick="KGDF.status='${v}';drawDiffTable(KGV['${BIBVIEW}'])">${l}</button>`;
+  box.innerHTML = `<div class="card"><h3>Differences, item by item</h3>
+    <p class="muted small">Every entity, scene, event, relation and causal link of the ${esc(k.a)}, with what became of it in the ${esc(k.b)}. <i>Missing</i> = not found in the ${esc(k.b)}; <i>added</i> = only there. Click a row to show it in the graph. The same list can be downloaded for analysis.</p>
+    <div class="row" style="margin-bottom:8px">${chip("changes",`differences (${rows.length-cnt("kept")})`)}${chip("source_only",`missing (${cnt("source_only")})`)}${chip("changed",`changed (${cnt("changed")})`)}${chip("synthetic_only",`added (${cnt("synthetic_only")})`)}${chip("kept",`kept (${cnt("kept")})`)}${chip("all",`all (${rows.length})`)}
+      <select class="nobusy" style="width:auto" onchange="KGDF.type=this.value;drawDiffTable(KGV['${BIBVIEW}'])"><option value="">every kind</option>${types.map(t=>`<option value="${esc(t)}" ${f.type===t?"selected":""}>${esc(kt(t))}</option>`).join("")}</select>
+      <input class="nobusy" style="max-width:220px" placeholder="search…" value="${esc(f.q)}" oninput="KGDF.q=this.value;clearTimeout(window.KGDT);window.KGDT=setTimeout(()=>{drawDiffTable(KGV['${BIBVIEW}']);const i=document.querySelector('#kgdiff input');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},250)">
+      <span class="grow"></span><button class="small nobusy" onclick="downloadCSV('differences', diffRows(KGDATA))">CSV</button></div>
+    <div style="max-height:520px;overflow:auto"><table class="small itable"><tr><th>status</th><th>kind</th><th>${esc(k.a)}</th><th>${esc(k.b)}</th><th>note</th><th>ch.</th></tr>
+    ${sel.slice(0,400).map(r=>`<tr class="kgrow" ${r.node?`onclick="KGgo('${esc(r.id)}')" style="cursor:pointer"`:""}><td><span class="kgs kgs-${r.status}">${ST_WORD[r.status]||r.status}</span></td><td>${esc(kt(r.type))}</td><td>${r.status==="synthetic_only"?"":esc(r.item)}</td><td>${r.status==="synthetic_only"?esc(r.item):esc(r.other)}${r.evidence?`<div class="muted">“${esc(r.evidence)}”</div>`:""}${r.by?`<div class="muted">matched by ${esc(r.by)}</div>`:""}</td><td class="muted">${esc(r.note)}</td><td class="mono">${esc(r.chapters)}</td></tr>`).join("")}</table>${sel.length>400?`<p class="muted small">first 400 of ${sel.length} — use the filters or the CSV</p>`:""}</div></div>`;
+}
+function KGgo(id){ if(window.KG && window.KG.go){ window.KG.go(id); document.getElementById("kg").scrollIntoView({behavior:"smooth", block:"center"}); } }
+function downloadCSV(name, rows){
+  if(!rows.length) return; const cols = Object.keys(rows[0]);
+  const q = v => `"${String(v??"").replace(/"/g,'""')}"`;
+  const csv = [cols.join(","), ...rows.map(r=>cols.map(c=>q(r[c])).join(","))].join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"})); a.download = `${CUR}-${name}.csv`; a.click();
+}
+async function traceView(el, head){
+  let t; try{ t = await api(`/api/runs/${CUR}/graph?which=trace`); }catch(e){ el.innerHTML = head + `<div class="card">${esc(e.message)}</div>`; return; }
+  window.TRACE = t; window.TRF = window.TRF || {verdict:"diff", type:""};
+  const V = t.verdicts, order = ["kept","policy","dropped","design_added","written_changed","written_lost","written_added"];
+  const types = Object.keys(t.summary);
+  const col = {kept:"var(--ok)", policy:"var(--accent)", dropped:"color-mix(in srgb,var(--accent) 55%,var(--panel))", design_added:"color-mix(in srgb,var(--accent) 30%,var(--panel))", written_changed:"var(--warn)", written_lost:"var(--bad)", written_added:"var(--muted)"};
+  const bars = types.map(ty=>{ const c=t.summary[ty], tot=order.reduce((a,k)=>a+(c[k]||0),0)||1;
+    return `<tr><td class="small">${esc(kt(ty))}</td><td style="width:70%"><div class="tbar">${order.filter(k=>c[k]).map(k=>`<i style="width:${100*c[k]/tot}%;background:${col[k]}" title="${esc(V[k])}: ${c[k]}"></i>`).join("")}</div></td><td class="small mono">${order.filter(k=>c[k]).map(k=>`<span title="${esc(V[k])}" style="color:${col[k]}">${c[k]}</span>`).join(" · ")}</td></tr>`; }).join("");
+  const legend = order.map(k=>`<span class="small" style="margin-right:12px"><i class="sw" style="background:${col[k]}"></i>${esc(V[k])}</span>`).join("");
+  const tot = k => types.reduce((a,ty)=>a+(t.summary[ty][k]||0),0);
+  const src = order.filter(k=>!["design_added","written_added"].includes(k)).reduce((a,k)=>a+tot(k),0)||1;
+  el.innerHTML = head + `<div class="card"><h3>Where the differences arose</h3>
+    <p class="small">Of the <b>${src}</b> items of the source, <b class="good">${tot("kept")}</b> came through unchanged, <b style="color:var(--accent)">${tot("policy")+tot("dropped")}</b> were changed or left out <b>by the design</b> (the policy you chose — intended), and <b class="warn">${tot("written_changed")}</b> changed and <b class="bad">${tot("written_lost")}</b> were lost <b>in the writing</b> (the generation). The writing also added <b>${tot("written_added")}</b> items the design did not have.</p>
+    <div>${legend}</div><table class="small" style="margin-top:6px">${bars}</table>
+    <p class="muted small">Losses and changes in the writing are what generation can still improve; a change by the design follows from the policy. Relations whose wording differs (“liked” for “values”) count as changed; an item the analysis missed but a check of the chapter found counts as kept.</p></div>
+    <div id="trtable"></div>`;
+  drawTrace();
+}
+function drawTrace(){
+  const t = window.TRACE, f = window.TRF, box = $("#trtable"); if(!t||!box) return;
+  const V = t.verdicts;
+  const rows = t.rows.filter(r=>(f.verdict==="all" || (f.verdict==="diff" ? r.verdict!=="kept" : f.verdict==="writing" ? r.verdict.startsWith("written") : r.verdict===f.verdict)) && (!f.type || r.type===f.type));
+  const chip = (v,l) => `<button class="small nobusy ${f.verdict===v?"primary":""}" onclick="TRF.verdict='${v}';drawTrace()">${l}</button>`;
+  const types = Object.keys(t.summary);
+  box.innerHTML = `<div class="card"><h3>Item by item</h3><div class="row" style="margin-bottom:8px">${chip("diff","all differences")}${chip("writing","in the writing")}${chip("written_lost","lost in the writing")}${chip("written_changed","changed in the writing")}${chip("policy","changed by the design")}${chip("written_added","added in the writing")}${chip("all","everything")}
+    <select class="nobusy" style="width:auto" onchange="TRF.type=this.value;drawTrace()"><option value="">every kind</option>${types.map(x=>`<option value="${esc(x)}" ${f.type===x?"selected":""}>${esc(kt(x))}</option>`).join("")}</select>
+    <span class="grow"></span><button class="small nobusy" onclick="downloadCSV('trace', TRACE.rows)">CSV</button></div>
+    <div style="max-height:560px;overflow:auto"><table class="small itable"><tr><th>where</th><th>kind</th><th>source</th><th>design</th><th>synthetic text</th><th>note</th></tr>
+    ${rows.slice(0,500).map(r=>`<tr><td><span class="${VERDICT_CLS[r.verdict]||""}">${esc(V[r.verdict]||r.verdict)}</span></td><td>${esc(kt(r.type))}</td><td>${esc(r.source)}</td><td>${esc(r.design)}</td><td>${esc(r.text)}${r.matched_by?`<div class="muted">matched by ${esc(r.matched_by)}</div>`:""}</td><td class="muted">${esc(r.note)}</td></tr>`).join("")}</table>${rows.length>500?`<p class="muted small">first 500 of ${rows.length} — download the CSV for all</p>`:""}</div></div>`;
 }
 function recoverLabel(){
   const ev = [...EVENTS].reverse().find(e=>e.type==="stage_progress" && e.stage==="recover");
@@ -614,7 +955,7 @@ function metricModal(key){
   const g = META.evaluation.groups[m.group]||{};
   modal(m.label, `<p>${esc(m.meaning)}</p>
     <dl><dt>Question</dt><dd>${esc(g.title||"")}: ${esc(g.question||"")}</dd>
-    <dt>Instrument</dt><dd><code>${esc(m.instrument)}</code>${m.core?' <span class="core">core</span> one of the measures compared across conditions in experiments':" supporting measure"}</dd>
+    <dt>Instrument</dt><dd><code>${esc(m.instrument)}</code>${m.core?' <span class="core">core</span> a primary measure of the experiments (or a guardrail)':" supporting measure"}</dd>
     ${gv?`<dt>This run</dt><dd><b class="${gv.grade}">${gv.score!=null?pct(gv.score):"–"}</b> · raw value ${esc(RAWFMT(m, gv.value))}${detail?` · ${detail}`:""}</dd>`:""}
     ${!gv&&reason?`<dt>This run</dt><dd>not measured: ${esc(reason)}</dd>`:""}
     <dt>From raw value to score</dt><dd><span class="formula">${esc(gv&&gv.formula||m.formula)}</span>${m.norm==="diff"?"The raw value is a difference or distance (0 = identical), so it is <b>inverted</b>: a smaller difference gives a higher score.":m.norm==="corr"?"A correlation runs from −1 to 1; anything at or below 0 means no agreement and scores 0.":m.norm==="ratio"?"A ratio of 1 is ideal; the score falls with the distance from 1.":m.norm==="unit"?"The raw value already runs from 0 (bad) to 1 (good) and is used as it is.":"Not graded."}</dd>
@@ -654,7 +995,7 @@ function metricCard(m, e){
   const detail = gv? metricDetail(m.key, e) : "";
   return `<div class="metric ${cls?"m-"+cls:""} ${gv?"":"m-na"}">
     <div class="mtop"><span class="score ${cls}">${big}</span><span class="inst" title="instrument ${esc(m.instrument)}">${esc(m.instrument)}</span></div>
-    <div class="l">${esc(m.label)}${m.core?'<span class="core" title="core measure: compared across conditions in experiments">core</span>':""}${cls?` <span class="gw ${cls}">· ${(m.group==="distance"?GRADE_WORD_DISTANCE:GRADE_WORD)[cls]}</span>`:""}</div>
+    <div class="l">${esc(m.label)}${m.core?'<span class="core" title="core measure: compared across conditions in experiments">core</span>':""}${gv&&gv.priority?'<span class="star" title="prioritised in this run: the generation worked harder on it">★ priority</span>':""}${cls?` <span class="gw ${cls}">· ${(m.group==="distance"?GRADE_WORD_DISTANCE:GRADE_WORD)[cls]}</span>`:""}</div>
     ${gv && window.EVCMP && window.EVCMP[m.key] && Math.abs(window.EVCMP[m.key].change)>0.02 ? `<div class="small ${window.EVCMP[m.key].change>0?"good":"bad"}">${window.EVCMP[m.key].change>0?"▲":"▼"} ${Math.round(100*Math.abs(window.EVCMP[m.key].change))} points vs previous version (${pct(window.EVCMP[m.key].before)})</div>`:""}
     ${gv? `<div class="raw">raw: ${esc(m.raw_name||m.raw_unit||"value")} = ${esc(RAWFMT(m, gv.value))}</div>` + (detail?`<div class="h">${detail}</div>`:"") + ruleHTML(m, gv) + `<button class="how nobusy" onclick="helpFor('metric','${m.key}')">how is this computed?</button>`
        : `<div class="h na">Not measurable: ${esc(reason)}.</div>${m.key.startsWith("kg_")&&reason.includes("not been analysed")?`<button class="small" onclick="recoverGraph(true)">Analyse the synthetic text now</button>`:""}`}
@@ -737,16 +1078,32 @@ function groupExtras(gkey, e){
     const jd = e.judges, ps = jd && jd.psalm;
     const runCard = `<div class="card"><h3>${jd?"Run the judges again":"Run the judges"}</h3><p class="small">${jd?`Last run with <b>${esc(jd.model)}</b>${jd.same_model_as_writer?' — <span class="warn">the same model that wrote the text, so it may be lenient</span>':""}.`:"The judges are optional and off by default."} Only the evaluation is redone; the text is not touched. Choose a model of a different family from the writer (${esc(((ST.meta||{}).config||{}).models?.default?.name||"")}).</p>
       <div class="grid2"><div><label>Judge model</label><input id="jModelEv" value="${esc(jd?jd.model:"")}" placeholder="LiteLLM model id"></div><div><label>Judges</label>${judgePicker("ev")}</div></div>
+      <label>${PANEL_HELP}</label><textarea id="jPanelEv" rows="2" class="mono">${esc(panelText(cfgGet((ST.meta||{}).config||{},"judges.panel")))}</textarea>
       <button class="small" style="margin-top:8px" onclick="runJudges()">Run the judges</button></div>`;
-    if(!ps || !ps.dimensions) return runCard;
-    const r5 = v => `<b class="${v>=4?"good":v>=3?"warn":"bad"}">${v}</b>`;
+    const panelCard = (jd && jd.per_judge) ? (()=>{ const ag = jd.agreement||{}, f = v => v==null?"—":pct(v);
+      const a = v => v==null?"—":(+v).toFixed(2);
+      return `<div class="card"><h3>Judges compared</h3><p class="small">The same judges, run by ${jd.per_judge.length} models. The first is the primary judge, whose results the grades use; the others show whether the verdict depends on the judge. Agreement on the 36 PSALM ratings (Krippendorff's α): function <b>${a(ag.psalm_function_alpha)}</b>, expression <b>${a(ag.psalm_expression_alpha)}</b>${ag.reading?` — ${esc(ag.reading)}`:""}. α ≥ 0.8 is reliable; below 0.667 the judges disagree too much to rely on any one of them.</p>
+        <table class="small"><tr><th>judge</th><th>PSALM function</th><th>PSALM expression</th><th>same story</th><th>same style</th></tr>
+        ${jd.per_judge.map((j,i)=>`<tr><td>${esc(j.model)}${i===0?' <span class="chip">primary</span>':""}${(j.failed||[]).length?` <span class="warn">failed: ${esc(j.failed.join(", "))}</span>`:""}</td><td>${f(j.psalm_function)}</td><td>${f(j.psalm_expression)}</td><td>${f(j.content)}</td><td>${f(j.style)}</td></tr>`).join("")}
+        ${["psalm_function","psalm_expression","content","style"].some(k=>ag[k])?`<tr><td><b>mean</b> <span class="muted">(range)</span></td>${["psalm_function","psalm_expression","content","style"].map(k=>`<td>${ag[k]?`<b>${pct(ag[k].mean)}</b> <span class="muted">(${pct(ag[k].min)}–${pct(ag[k].max)})</span>`:"—"}</td>`).join("")}</tr>`:""}</table></div>`; })() : "";
+    if(!ps || !ps.dimensions) return panelCard + runCard;
+    const SC = META.psalm_scale||{scale:{},expected:{}}, scale = SC.scale||{};
+    const r5 = (v, rng) => { const ok = !rng || (v>=rng[0] && v<=rng[1]);
+      return `<span class="scale5" title="${esc(v+" = "+(scale[v]||""))}${rng?esc(` · expected under this policy: ${rng[0]}–${rng[1]}`):""}">${[1,2,3,4,5].map(i=>`<i class="${i<=v?"on":""} ${rng&&i>=rng[0]&&i<=rng[1]?"exp":""}"></i>`).join("")}</span> <b class="${ok?"good":"warn"}">${v}</b> <span class="small">${esc(scale[v]||"")}</span>`; };
     const pol = k => ((H().policies||{})[k]||{}).title||k;
-    return `<details class="card"><summary><b>PSALM judge — dimension by dimension</b> <span class="muted small">(${esc(ps.mode)}; function = does it do the same thing, expression = are the concrete particulars the same; 1–5)</span></summary>
-      <p class="muted small">Under <i>Keep</i>, high function and expression similarity are both intended (only names change). Under <i>Re-invent</i>, function should stay high and expression low. Under <i>Replace</i>, neither is expected. Each verdict cites evidence from both texts and the judge's reasoning.</p>
-      ${ps.dimensions.map(d=>`<details style="margin:8px 0"><summary><b>${esc(d.label)}</b> <span class="chip ${d.policy}">${esc(pol(d.policy))}</span> <span class="small">function ${pct(d.function)} · expression ${pct(d.expression)}</span> <span class="muted small">— ${esc(d.summary||"")}</span></summary>
+    const legend = `<table class="small" style="width:auto;margin:6px 0"><tr><th>rating</th>${[1,2,3,4,5].map(i=>`<th>${i}</th>`).join("")}</tr><tr><td>meaning</td>${[1,2,3,4,5].map(i=>`<td>${esc(scale[i]||"")}</td>`).join("")}</tr></table>`;
+    const expect = Object.entries(SC.expected||{}).map(([k,v])=>`<li><span class="chip ${k}">${esc(pol(k))}</span> ${esc(v.meaning)}</li>`).join("");
+    const out = (d) => d.subdimensions.filter(x=>{ const ex=d.expected||(SC.expected||{})[d.policy]; return ex && (x.function_similarity<ex.function[0]||x.function_similarity>ex.function[1]||x.expression_similarity<ex.expression[0]||x.expression_similarity>ex.expression[1]); }).length;
+    return `<details class="card" open><summary><b>PSALM judge — dimension by dimension</b> <span class="muted small">(${esc(ps.mode)})</span></summary>
+      <p class="small">For every aspect the judge rates two things on the same 1–5 scale: <b>function</b> — does the synthetic text do the same thing here (role, effect, mechanism, structure)? — and <b>expression</b> — are the concrete particulars the same (traits, events, images, settings)? Names differ by design and do not count.</p>${legend}
+      <p class="small"><b>What a good result looks like depends on the policy:</b></p><ul class="small">${expect}</ul>
+      <p class="muted small">The outlined cells of each bar are the expected range; a rating outside it is highlighted. Under <i>Keep</i> a function of 3 or lower means the generation lost something the policy promised to keep — read the judge's reasoning to see what. An expression of 3–4 under <i>Keep</i> is what a rewrite in new words looks like; 5 would mean the wording itself was kept.</p>
+      ${ps.dimensions.map(d=>{ const ex = d.expected||(SC.expected||{})[d.policy]||null, n=out(d);
+        return `<details style="margin:8px 0"><summary><b>${esc(d.label)}</b> <span class="chip ${d.policy}">${esc(pol(d.policy))}</span> <span class="small">function ${pct(d.function)} · expression ${pct(d.expression)}</span>${n?` <span class="warn small">· ${n} aspect${n>1?"s":""} outside the expected range</span>`:` <span class="good small">· all aspects as expected</span>`} <span class="muted small">— ${esc(d.summary||"")}</span></summary>
         <table class="small"><tr><th>aspect</th><th>function</th><th>expression</th><th>source</th><th>synthetic</th><th>reasoning</th></tr>
-        ${d.subdimensions.map(x=>`<tr><td>${esc(x.label)}${x.surface?' <span class="chip" title="its concrete realisation is the most identifying part of a work">surface</span>':""}<div class="muted">confidence ${esc(x.confidence)}</div></td><td>${r5(x.function_similarity)}</td><td>${x.expression_similarity}</td><td>${esc(x.in_a)}${x.evidence_a?`<div class="muted"><i>“${esc(x.evidence_a)}”</i></div>`:""}</td><td>${esc(x.in_b)}${x.evidence_b?`<div class="muted"><i>“${esc(x.evidence_b)}”</i></div>`:""}</td><td>${esc(x.reasoning)}</td></tr>`).join("")}</table></details>`).join("")}
-    </details>` + runCard;
+        ${d.subdimensions.map(x=>{ const fo = ex && (x.function_similarity<ex.function[0]||x.function_similarity>ex.function[1]), eo = ex && (x.expression_similarity<ex.expression[0]||x.expression_similarity>ex.expression[1]);
+          return `<tr><td>${esc(x.label)}${x.surface?' <span class="chip" title="its concrete realisation is the most identifying part of a work">surface</span>':""}<div class="muted">confidence ${esc(x.confidence)}</div></td><td class="${fo?"out":""}">${r5(x.function_similarity, ex&&ex.function)}</td><td class="${eo?"out":""}">${r5(x.expression_similarity, ex&&ex.expression)}</td><td>${esc(x.in_a)}${x.evidence_a?`<div class="muted"><i>“${esc(x.evidence_a)}”</i></div>`:""}</td><td>${esc(x.in_b)}${x.evidence_b?`<div class="muted"><i>“${esc(x.evidence_b)}”</i></div>`:""}</td><td>${esc(x.reasoning)}</td></tr>`; }).join("")}</table></details>`; }).join("")}
+    </details>` + panelCard + runCard;
   }
   if(gkey==="characters") return D.characters&&D.characters.length? `<div class="grid3"><div class="card dist"><h3>Character attention</h3>${chartKey()}${barsSVG(D.characters)}<div class="h">Each main character's share of all main-character mentions (source name → synthetic name).</div></div></div>` : "";
   if(gkey==="distance") return lk.copied_spans&&lk.copied_spans.length? `<details class="card"><summary><b>Shared passages</b> <span class="muted">(${lk.copied_spans.length} of 12 words or more)</span></summary>${lk.copied_spans.map(s=>`<div class="ev">${s.length} words: ${esc(s.text)}</div>`).join("")}</details>` : "";
@@ -793,14 +1150,14 @@ async function tabEval(el){
       <button class="small ${view==="instruments"?"primary":""}" onclick="EVVIEW='instruments';renderTab()">By instrument</button>
       <label class="kg-check" style="margin-left:8px" title="show only orange and red measures"><input type="checkbox" class="nobusy" ${window.EVISSUES?"checked":""} onchange="EVISSUES=this.checked;renderTab()"> only issues</label>
       <label class="kg-check" title="only the compact set of measures used to compare conditions in experiments"><input type="checkbox" class="nobusy" ${window.EVCORE?"checked":""} onchange="EVCORE=this.checked;renderTab()"> core measures only</label>
-      <span class="grow"></span><span class="muted small">Scores 0–100%, higher is better · <i class="good dot2"></i> ≥ 80% · <i class="warn dot2"></i> ≥ 60% · <i class="bad dot2"></i> below <button class="how nobusy" onclick="helpFor('scores')">how to read this</button></span></div>`;
+      <span class="grow"></span><span class="muted small">Scores 0–100%, higher is better · colours follow each measure's own thresholds (most: <i class="good dot2"></i> ≥ 80% · <i class="warn dot2"></i> ≥ 60% · <i class="bad dot2"></i> below) <button class="how nobusy" onclick="helpFor('scores')">how to read this</button></span></div>`;
   const oldKG = e.structure && e.structure_basis !== "design";
   const stale = hasSrc && (oldKG || !e.text_kind || !e.self_agreement) && !(window.ST||{}).executing
     ? `<div class="card warn">This evaluation was made by an older version: it lacks ${[!e.text_kind&&"the text-kind check (does the source have a cast?)", oldKG&&"the alignment of the synthetic text with the story design (graph measures then compare two separate analyses and miss renamed items)", !e.self_agreement&&"the source's self-agreement"].filter(Boolean).join(", ")}. <button class="small" onclick="runAgain('recover')">Redo the analysis of the synthetic text</button> <span class="muted small">(the synthetic text is kept; one analysis plus a few alignment calls)</span></div>` : "";
   if(!hasSrc){ el.innerHTML = head + `<div class="card">This run has no source text, so there is nothing to compare against. Language and length:</div>` + groupExtras("form", e); return; }
   const tiles = `<div class="tiles">${Object.entries(G).map(([k,g])=>{ const c=groupStatus(k,e); const worst=c.bad?"bad":c.warn?"warn":c.good?"good":"";
       return `<a class="tile t-${worst}" href="#g-${k}" onclick="document.getElementById('g-${k}').open=true" title="${esc(g.why||"")}"><div class="tt">${esc(g.title)}</div><div class="tq">${esc(g.question)}</div><div class="ts ${c.mean==null?"":c.mean>=.8?"good":c.mean>=.6?"warn":"bad"}">${c.mean!=null?pct(c.mean):"–"}</div><div class="muted small">average score${dots(c)}</div></a>`; }).join("")}</div>`;
-  if(view==="instruments"){ el.innerHTML = head + stale + versionsHTML(vers) + tiles + fixesHTML(e) + instrumentTable(e) + corpusNote(); return; }
+  if(view==="instruments"){ el.innerHTML = head + stale + versionsHTML(vers) + tiles + priorityHTML(e) + fixesHTML(e) + instrumentTable(e) + corpusNote(); return; }
   const groups = Object.entries(G).map(([k,g])=>{
     let ms = META.evaluation.metrics.filter(m=>m.group===k);
     if(window.EVISSUES) ms = ms.filter(m=>{ const x=(e.grades||{})[m.key]; return x && (x.grade==="warn"||x.grade==="bad"); });
@@ -809,7 +1166,16 @@ async function tabEval(el){
     if(window.EVISSUES && !cards) return "";
     return `<details class="group" id="g-${k}" ${open?"open":""}><summary><span class="gt">${esc(g.title)}</span>${info("group",k)} <span class="muted">— ${esc(g.question)}</span> ${c.mean!=null?`<b class="${c.mean>=.8?"good":c.mean>=.6?"warn":"bad"}" title="average score of the measures in this group">${pct(c.mean)}</b>`:""} ${dots(c)}</summary>
       ${cards?`<div class="grid3">${cards}</div>`:""}${window.EVISSUES? "" : notApplicable(ms,e) + groupExtras(k,e)}</details>`; }).join("");
-  el.innerHTML = head + stale + versionsHTML(vers) + tiles + fixesHTML(e) + groups + corpusNote();
+  el.innerHTML = head + stale + versionsHTML(vers) + tiles + priorityHTML(e) + fixesHTML(e) + groups + corpusNote();
+}
+function priorityHTML(e){
+  const p = e.priority; if(!p) return "";
+  const lab = k => (META.evaluation.metrics.find(m=>m.key===k)||{}).label||k;
+  const sc = p.score;
+  return `<div class="card"><div class="row"><div class="grow"><h3 style="margin:0">Priorities of this run</h3>
+    <div class="small">${(e.priorities||[]).map(x=>esc((META.evaluation.groups[x]||{}).title||lab(x))).join(", ")} — ${p.n} measure${p.n!==1?"s":""} measured${p.lowest&&p.lowest.length?`; lowest: ${p.lowest.map(([k,v])=>`${esc(lab(k))} (${pct(v)})`).join(", ")}`:""}.</div>
+    ${(e.steering||[]).length?`<details class="small"><summary class="muted">what the priorities changed in the generation</summary><ul>${e.steering.map(x=>`<li><b>${esc(stageTitle(x.stage))}</b>: ${esc(x.why)}</li>`).join("")}</ul></details>`:""}</div>
+    <div style="text-align:right"><div class="ts ${sc==null?"":sc>=.8?"good":sc>=.6?"warn":"bad"}" style="font:600 26px var(--serif)">${sc!=null?pct(sc):"–"}</div><div class="muted small">priority score</div></div></div></div>`;
 }
 function versionsHTML(v){
   if(!v || (v.family||[]).length<2) return "";
@@ -864,11 +1230,12 @@ function actModel(events){
   const group = (name, ts) => { const g = {name, start: ts, end: null, status: "running", items: [], calls: 0, tok: 0, cost: 0, inflight: 0, problems: 0}; groups.push(g); return g; };
   for(const e of events){
     const t = e.type;
-    if(t==="run_started" || t==="invalidated" || t==="run_finished" || t==="run_failed" || t==="stage_skipped"){
+    if(t==="run_started" || t==="invalidated" || t==="run_finished" || t==="run_failed" || t==="stage_skipped" || t==="preflight" || t==="run_stopped"){
       let g = cur && cur.status==="running" ? cur : (groups.length && groups[groups.length-1].name==="run" ? groups[groups.length-1] : null);
       if(!g){ g = group("run", e.ts); g.status = "info"; }
       if(t==="run_failed"){ if(cur && cur.status==="running") cur.status="failed"; if(g.name==="run") g.status="failed"; }
-      if(t==="run_finished" && g.name==="run"){ g.status="done"; }
+      if((t==="run_finished"||t==="run_stopped") && g.name==="run"){ g.status="done"; }
+      if(t==="preflight" && !e.ok){ g.problems++; }
       if(g.name==="run") g.end = e.ts;
       g.items.push({kind:"note", e}); if(PROBLEM.has(t)) g.problems++; continue; }
     if(t==="stage_started"){ cur = group(e.stage, e.ts); continue; }
@@ -929,6 +1296,15 @@ function lineHTML(it){
     const id = `n${ts}${type}${e.chapter}${e.round}`;
     return `<details class="ln" data-id="${esc(id)}" ${ACT.open.has(id)&&!ACT.closed.has(id)?"open":""}><summary><span class="t">${tm(ts)}</span> <span class="adim">›</span> ${sum}</summary>${body}</details>`;
   }
+  if(type==="preflight"){
+    const errs=(e.problems||[]).filter(p=>p.severity==="error"), notes=(e.problems||[]).filter(p=>p.severity!=="error");
+    const ms=(e.models||[]).map(m=>`${m.model} ${m.ok?"✓":"✗"}`).join(", ");
+    return `<div class="ln"><span class="t">${tm(ts)}</span> <span class="${errs.length?"err":"ok"}">${errs.length?"✗":"✓"} settings check: ${errs.length?esc(errs.map(p=>p.where+": "+p.message).join("; ").slice(0,300)):"ready"}</span>${ms?` <span class="adim">· models: ${esc(ms)}</span>`:""}${notes.length?` <span class="wrn">· ${esc(notes.map(p=>p.message).join("; ").slice(0,200))}</span>`:""}</div>`;
+  }
+  if(type==="run_paused"||type==="run_resumed"||type==="run_stopped"){
+    const w = {run_paused:`❚❚ paused${e.reason&&e.reason!=="paused by the user"?" — "+e.reason:""}`, run_resumed:`▶ resumed after ${dur(e.paused_s)}`, run_stopped:`■ stopped — ${e.reason||""}; finished work kept`}[type];
+    return `<div class="ln"><span class="t">${tm(ts)}</span> <span class="wrn">${esc(w)}</span></div>`;
+  }
   if(JSON.stringify(rest).length > 220){
     const id = `n${ts}${type}`; const short = rest.message || type;
     return `<details class="ln" data-id="${esc(id)}" ${ACT.open.has(id)&&!ACT.closed.has(id)?"open":""}><summary><span class="t">${tm(ts)}</span> <span class="${PROBLEM.has(type)?"wrn":"adim"}">${PROBLEM.has(type)?"!":"·"} ${esc(type)} ${esc(String(short).slice(0,160))}</span></summary><pre class="pv">${esc(JSON.stringify(rest, null, 2))}</pre></details>`;
@@ -974,7 +1350,7 @@ function drawActivity(force){
   const calls = groups.reduce((a,g)=>a+g.calls,0), fly = groups.reduce((a,g)=>a+g.inflight,0), cost = groups.reduce((a,g)=>a+g.cost,0), tok = groups.reduce((a,g)=>a+g.tok,0);
   const first = EVENTS.length ? EVENTS[0].ts : null, lastTs = EVENTS.length ? EVENTS[EVENTS.length-1].ts : null;
   const live = ST && ST.executing;
-  const head = `<div class="head"><span>${live?`<span class="run spin">◐</span> running`:`<span class="ok">■</span> ${esc(ST?ST.status:"")}`}</span><span class="paused wrn"></span>
+  const head = `<div class="head"><span>${live && ST && ST.status==="paused" ? `<span class="wrn">❚❚</span> paused` : live?`<span class="run spin">◐</span> running`:`<span class="ok">■</span> ${esc(ST?(STATE_WORD[ST.status]||ST.status):"")}`}</span><span class="paused wrn"></span>
     <span>${EVENTS.length} events</span><span>${calls} model calls${fly?` · <span class="run">${fly} in flight</span>`:""}</span><span>${kfmt(tok)} tokens</span><span>$${cost.toFixed(3)}</span>
     ${first?`<span>${tm(first)} → ${live?"now":tm(lastTs)}</span>`:""}</div>`;
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
@@ -1017,7 +1393,7 @@ async function tabUsage(el){
 }
 async function tabConfig(el){ el.innerHTML = `<div class="card"><p class="muted small">Every setting of this run, after the preset and your overrides were combined. Any value can be changed for a new run with a <span class="mono">key=value</span> line under <i>Advanced</i> (e.g. <span class="mono">stages.review.params.rounds=2</span>); keys follow the nesting shown here.</p><pre class="mono" style="white-space:pre-wrap">${esc(JSON.stringify(ST.meta.config,null,2))}</pre></div>`; }
 
-(async()=>{ META = await api("/api/meta"); await loadRuns(); loadExperiments(); const runs = await api("/api/runs"); runs.length? openRun(runs[0].id) : showNew(); setInterval(loadRuns, 8000); })();
+(async()=>{ META = await api("/api/meta"); await loadRuns(); loadExperiments(); loadExperimentPlans(); const runs = await api("/api/runs"); runs.length? openRun(runs[0].id) : showNew(); setInterval(loadRuns, 8000); })();
 </script>
 </body>
 </html>

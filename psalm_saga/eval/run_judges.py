@@ -121,6 +121,21 @@ async def style_judge(ctx, source: str, story: str, names: list[str], policy: di
 # expression, not in its ideas or functions. Function similarity is what a faithful synthetic text
 # should have; expression similarity where the policy asks for change is an appropriation risk.
 
+# What a successful synthetic text looks like under each policy, on the 1–5 scales (shown with the
+# verdicts; ratings outside these ranges are flagged).
+EXPECTED = {
+    "preserve": {"function": [4, 5], "expression": [3, 4],
+                 "meaning": "same role and effect (function 4–5) and the same particulars in new words (expression 3–4; "
+                            "5 would mean the wording itself was kept)"},
+    "abstract": {"function": [4, 5], "expression": [1, 2],
+                 "meaning": "same role and effect (function 4–5) with re-invented particulars (expression 1–2)"},
+    "regenerate": {"function": [1, 2], "expression": [1, 2],
+                   "meaning": "replaced: as in a different story, neither the role and effect (function 1–2) nor the "
+                              "particulars (expression 1–2), unless a kept dimension requires them"},
+}
+SCALE = {1: "unrelated", 2: "loosely related", 3: "clearly related, substantial differences",
+         4: "largely the same, minor differences", 5: "the same"}
+
 LEVELS = ("1 = unrelated; 2 = loosely related; 3 = clearly related but with substantial differences; "
           "4 = largely the same with minor differences; 5 = the same")
 
@@ -182,9 +197,12 @@ async def psalm_judge(ctx, taxonomy, source: str, story: str, source_bible: Bibl
 
     async def one(dim) -> dict:
         pol = policy.get(dim.key, "preserve")
-        intent = {"preserve": "B is meant to keep this dimension as in A (only names changed).",
+        intent = {"preserve": "B is meant to keep this dimension as in A: the same particulars (traits, events, settings, "
+                              "devices), told in B's own words, with new names. Different wording alone is not a "
+                              "difference of expression; different particulars are.",
                   "abstract": "B is meant to keep the FUNCTION of this dimension but re-invent its concrete particulars.",
-                  "regenerate": "B is meant to replace this dimension freely; neither similarity is expected."}[pol]
+                  "regenerate": "B is meant to REPLACE this dimension, as in a different story: neither its function nor its "
+                                "particulars should be recognisable, except where a dimension that B keeps requires it."}[pol]
         subs = "\n".join(f"- {s.key} ({s.label}){' [surface: its concrete realisation is the most identifying part]' if s.surface else ''}: {s.guidance}"
                          for s in dim.subdimensions)
         prompt = (f"Compare two literary texts on the dimension **{dim.label}** — {dim.description}\n\n"
@@ -204,7 +222,7 @@ async def psalm_judge(ctx, taxonomy, source: str, story: str, source_bible: Bibl
         f = [(sv.function_similarity - 1) / 4 for sv in rows]
         e = [(sv.expression_similarity - 1) / 4 for sv in rows]
         surf = [(sv.expression_similarity - 1) / 4 for sv in rows if by.get(sv.key) and by[sv.key].surface]
-        return {"dimension": dim.key, "label": dim.label, "policy": pol, "summary": v.summary,
+        return {"dimension": dim.key, "label": dim.label, "policy": pol, "summary": v.summary, "expected": EXPECTED[pol],
                 "function": round(sum(f) / len(f), 3) if f else None, "expression": round(sum(e) / len(e), 3) if e else None,
                 "surface_expression": round(sum(surf) / len(surf), 3) if surf else None,
                 "subdimensions": [{**sv.model_dump(), "label": by[sv.key].label if sv.key in by else sv.key,
@@ -214,8 +232,11 @@ async def psalm_judge(ctx, taxonomy, source: str, story: str, source_bible: Bibl
     fid = [d["function"] for d in dims if d["function"] is not None and d["policy"] != "regenerate"]
     app = [d["surface_expression"] if d["surface_expression"] is not None else d["expression"]
            for d in dims if d["policy"] in ("abstract", "regenerate") and d["expression"] is not None]
+    # Where the policy replaces a dimension, how much of the source's function is still there.
+    resid = [d["function"] for d in dims if d["policy"] == "regenerate" and d["function"] is not None]
     return {"mode": mode, "dimensions": dims,
             "fidelity": round(sum(fid) / len(fid), 3) if fid else None,
+            "residual_function": round(sum(resid) / len(resid), 3) if resid else None,
             "appropriation": round(sum(app) / len(app), 3) if app else None,
             "reason_missing_appropriation": None if app else
             "every dimension is preserved, so similar concrete expression is intended; see the per-dimension table"}

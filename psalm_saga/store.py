@@ -115,3 +115,21 @@ class RunStore:
             m.update(kw)
             self.write_json("run.json", m)
         return m
+
+    # ------------------------------------------------------------------ run control (pause / stop)
+
+    def control(self) -> dict:
+        """The pending control request ({"action": "pause" | "pause_after_stage" | "stop" |
+        "stop_after_stage", ...}), or {} — a small file of its own, so a run executing in one
+        process can be paused from another (the web app, the CLI)."""
+        try:
+            return json.loads(self.path("control.json").read_text(encoding="utf-8")) or {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def set_control(self, action: str | None, **kw) -> None:
+        if not action:
+            self.delete("control.json")
+            return
+        self.write_json("control.json", {"action": action, **kw})
+

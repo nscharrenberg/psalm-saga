@@ -161,6 +161,14 @@ def replicate_analyses(records: list[ItemRecord], analyses: list[dict]) -> list[
                 bs.append(es)
                 bd.append(es - et)
         ci_t, ci_s, ci_d = _ci(bt), _ci(bs), _ci(bd)
+        # Equivalence (two one-sided tests at alpha = 0.05 = the 90% CI of the paired difference within
+        # +-margin). Margin: `margin` of the analysis, else `rel_margin` (default 0.5) x |source estimate|.
+        d90 = [x for x in bd if x is not None and not math.isnan(x)]
+        ci90 = ([round(float(np.percentile(d90, 5)), 4), round(float(np.percentile(d90, 95)), 4)]
+                if len(d90) >= 20 else None)
+        margin = an.get("margin")
+        if margin is None and est_t is not None:
+            margin = float(an.get("rel_margin", 0.5)) * abs(est_t)
         row = {"analysis": an.get("name") or f"{feat} {'by ' + col if kind == 'difference' else 'vs ' + col}",
                "feature": feat, "kind": kind, "items": n, "groups": list(groups) if groups else None,
                "source": {"estimate": _r(est_t), "ci95": ci_t}, "synthetic": {"estimate": _r(est_s), "ci95": ci_s},
@@ -169,7 +177,12 @@ def replicate_analyses(records: list[ItemRecord], analyses: list[dict]) -> list[
             row["sign_agrees"] = bool(np.sign(est_t) == np.sign(est_s))
             row["synthetic_within_source_ci"] = bool(ci_t and ci_t[0] <= est_s <= ci_t[1])
             row["ci_overlap"] = bool(ci_t and ci_s and ci_t[0] <= ci_s[1] and ci_s[0] <= ci_t[1])
-            row["replicates"] = row["sign_agrees"] and row["synthetic_within_source_ci"]
+            row["margin"] = _r(margin)
+            row["difference_ci90"] = ci90
+            row["equivalent"] = bool(ci90 and margin and -margin <= ci90[0] and ci90[1] <= margin)
+            # pre-registered rule: same sign, and the paired difference equivalent to zero within the margin
+            # (the older criterion, synthetic estimate inside the source CI, is lenient when n is small)
+            row["replicates"] = row["sign_agrees"] and row["equivalent"]
         results.append(row)
     return results
 

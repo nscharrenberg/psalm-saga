@@ -3,6 +3,7 @@ import shutil
 import time
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from typer.testing import CliRunner
 
@@ -100,3 +101,65 @@ judge: {{model: fake/judge, instruments: [spec_recovery, dimension_fidelity, qua
     assert report.startswith("# Experiment: t") and "## Cost and time per stage" in report
     assert "| draft |" in report
     assert summary["summary"]["full / fake"]["stages"]["draft"]["wall_seconds"] >= 0
+
+
+def test_web_preflight_settings_and_control(tmp_path):
+    book = (DATA / "en_harbour.txt").read_text(encoding="utf-8")
+    with TestClient(create_app(tmp_path)) as c:
+        meta = c.get("/api/meta").json()
+        assert meta["priorities"]["effects"] and meta["psalm_scale"]["scale"]["4"]
+        chk = c.post("/api/check", json={"preset": "full", "overrides": {"models.default.name": "nonexistent/x"}}).json()
+        assert not chk["ok"] and chk["problems"][0]["where"] == "models.default"
+        rid = c.post("/api/runs", data={"text": book, "preset": "full",
+                                        "overrides": json.dumps({"models.default.name": "nonexistent/x"})}).json()["id"]
+        st = _wait(c, rid)
+        assert st["status"] == "needs_attention"
+        assert c.post(f"/api/runs/{rid}/control", json={"action": "pause"}).status_code == 409   # not executing
+        r = c.put(f"/api/runs/{rid}/config", json={"overrides": {"models.default.name": "fake/w", "priorities": ["style"]}})
+        assert r.status_code == 200 and r.json()["config"]["priorities"] == ["style"]
+        assert c.post(f"/api/runs/{rid}/check").json()["ok"]
+        c.post(f"/api/runs/{rid}/run", json={})
+        assert _wait(c, rid)["status"] == "done"
+
+
+async def test_experiment_validity_checks_and_per_condition_repeats(tmp_path):
+    shutil.copytree(DATA, tmp_path / "data")
+    plan = tmp_path / "plan.yaml"
+    plan.write_text(f"""
+name: v
+output: {tmp_path / 'out'}
+inputs: [{{path: "data/en_harbour.txt", kind: source}}, {{path: "data/en_ledger.txt", kind: source}}]
+conditions: {{full: {{preset: full, repeats: 2}}, flat: {{preset: flat}}}}
+models: {{fake: {{models.default.name: fake/x}}}}
+overrides: {{judges.enabled: true, judges.model: fake/judge, judges.instruments: [psalm]}}
+judge: {{model: fake/judge, check_models: [fake/judge2, fake/judge3], instruments: [psalm_check, psalm_anchor, alignment_anchor]}}
+""")
+    res = await run_experiment(plan)
+    assert res["jobs"] == 2 * 2 + 2                                  # full twice per item, flat once
+    out = tmp_path / "out"
+    j = json.loads((out / "judgements.json").read_text(encoding="utf-8"))
+    full1 = j["en_harbour--full--fake--r1"]
+    assert set(full1["psalm_checks"]) == {"fake/judge2", "fake/judge3"} and "psalm_anchor" in full1 and full1["psalm_anchor"]["partner"] == "en_ledger"
+    v = json.loads((out / "summary.json").read_text(encoding="utf-8"))["corpus"]["validity"]
+    assert v["judge_agreement"]["judges"] == 3 and set(v["judge_agreement"]["pairwise"]) == {"fake/judge2", "fake/judge3"}
+    assert v["judge_agreement"]["aspects"] > 0 and v["psalm_lower_anchor"]["pairs"] >= 1
+
+
+def test_krippendorff_alpha():
+    from psalm_saga.eval.validity import krippendorff_alpha_interval
+
+    assert krippendorff_alpha_interval([(1, 1), (3, 3), (5, 5)]) == 1.0
+    assert krippendorff_alpha_interval([(1, 5), (5, 1), (3, 3)]) < 0
+    from psalm_saga.eval.validity import krippendorff_alpha_units
+
+    # three coders with a missing value, checked against the `krippendorff` package (interval)
+    units = [[1, 2, 1], [3, 3, None], [4, 5, 4], [2, 2, 3], [5, 4, 5]]
+    assert krippendorff_alpha_units(units) == pytest.approx(0.8556, abs=1e-4)
+
+
+def test_period_split_by_rule():
+    from psalm_saga.experiments.runner import derive_period
+
+    meta = {"a": {"year": "1850"}, "b": {"year": "1880"}, "c": {"year": "1900"}, "d": {"year": "1925"}, "e": {}}
+    assert derive_period(meta) == 1890
+    assert [meta[k].get("period") for k in "abcde"] == ["early", "early", "late", "late", None]

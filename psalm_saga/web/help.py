@@ -20,6 +20,15 @@ PRESETS: dict[str, dict] = {
     "no_review": {"title": "Without review (ablation)", "kind": "ablation",
                   "summary": "The full pipeline without the review-and-repair step.",
                   "when": "Experiments: what does the review step contribute?"},
+    "no_graph": {"title": "Without knowledge graph (ablation)", "kind": "ablation",
+                 "summary": "The full pipeline, but planning, writing and review do not see the story graph (characters, "
+                            "places, relations, events and causes): only the specification, a synopsis per chapter and "
+                            "the measured scene shapes. The graph is still built so the evaluation can measure it.",
+                 "when": "Experiments: what does the knowledge graph contribute?"},
+    "no_feedback": {"title": "Without the review loop (ablation)", "kind": "ablation",
+                    "summary": "The full pipeline without measuring and correcting the draft: no style matching and no "
+                               "review. The writer is still told the source's measured targets once.",
+                    "when": "Experiments: what does steering by the data properties contribute?"},
     "no_spec": {"title": "Without specification (ablation)", "kind": "ablation",
                 "summary": "No dimension specification: the story is planned from the chapter outline only.",
                 "when": "Experiments: what does the specification contribute?"},
@@ -35,6 +44,10 @@ PRESETS: dict[str, dict] = {
              "summary": "The model gets the source and is asked for a synthetic counterpart in one call. No analysis, "
                         "specification, plan or review; no copy guard.",
              "when": "Experiments: the naive approach every method should beat."},
+    "flat_refine": {"title": "One call + self-revision (compute-matched baseline)", "kind": "baseline",
+                    "summary": "The one-call rewrite of the source, then rounds of self-critique and revision against "
+                               "the source, so that it uses about as much inference as the full pipeline.",
+                    "when": "Experiments: separates what the pipeline's design adds from what more compute adds."},
     "paraphrase": {"title": "Rename and paraphrase (baseline)", "kind": "baseline",
                    "summary": "Rename the characters and places, then paraphrase the source passage by passage. Keeps the "
                               "structure trivially; the question is how much wording leaks.",
@@ -72,9 +85,11 @@ STAGES: dict[str, dict] = {
                       "show and the source's measured rhythm. Checks language, form and variety, and retries if needed.",
               "produces": "chapter texts", "calls": "one per chapter or scene, plus retries"},
     "conform": {"title": "Match the source's style",
-                "what": "Measures each chapter's rhythm (sentence lengths and their spread, paragraphs, dialogue, "
-                        "punctuation; lines, stanzas and rhyme for verse) and asks for a revision towards the source's "
-                        "numbers. A revision is kept only if it gets closer without changing length, language or content.",
+                "what": "Measures each chapter's rhythm (sentence lengths and their spread, the sentence- and "
+                        "paragraph-length distributions, dialogue, punctuation; lines, stanzas and rhyme for verse) and "
+                        "asks for a revision towards the source's numbers. A revision is kept only if it gets closer "
+                        "without changing length, language or content, and without making a prioritised measure worse. "
+                        "A chapter that review later redrafts is matched again before it is accepted.",
                 "produces": "revised chapters, style log per chapter", "calls": "up to two revisions per chapter"},
     "review": {"title": "Check and repair",
                "what": "An editor checks each chapter against its plan, the specification and the design checklist "
@@ -108,10 +123,15 @@ POLICIES: dict[str, dict] = {
                          "only with new names."},
     "abstract": {"title": "Re-invent", "short": "same function, new particulars",
                  "what": "What the dimension does is kept, but its concrete particulars are re-invented: the same kind "
-                         "of character, scene or world playing the same role, with different specifics."},
-    "regenerate": {"title": "Replace", "short": "freely replaced",
-                   "what": "The dimension is written anew, without following the source. Measures for it are then "
-                           "not expected to match."},
+                         "of character, scene or world playing the same role, with different specifics (a rigged contest "
+                         "stays a rigged contest, but with another contest and another trick). Measures that compare "
+                         "the source's own values for this dimension are then not graded; the PSALM judge should find "
+                         "the same function (4–5) and different particulars (expression 1–2)."},
+    "regenerate": {"title": "Replace", "short": "invented anew",
+                   "what": "The dimension is invented anew, as for a different story: the writer's design is made "
+                           "without seeing the source's values for it (a replaced plot gets a new skeleton of events and "
+                           "scenes; a replaced cast gets new roles and relationships). Source-side measures for it are "
+                           "not graded; the PSALM judge should find neither the function nor the particulars (1–2)."},
 }
 
 DIMENSION_EXAMPLES: dict[str, dict[str, str]] = {
@@ -139,8 +159,9 @@ TABS: dict[str, str] = {
     "story": "The synthetic text as it stands.",
     "spec": "The specification: the six dimensions described in words, for the source and for the synthetic story. "
             "You can edit it; everything after it is then redone.",
-    "bible": "The story bible as a knowledge graph — characters, places, scenes, events and how they connect — for the "
-             "source, the design the writer worked from, and comparisons between them.",
+    "bible": "The story as knowledge graphs — characters, places, scenes, events and how they connect — for the source, "
+             "the design the writer worked from and the synthetic text as written; any two side by side with every "
+             "difference listed; and a trace of where each difference arose (in the design or in the writing).",
     "plan": "The plan the writer followed: outline, chapters, scenes and beats.",
     "chapters": "Each chapter with how it was made: style matching, review issues and how they were fixed, design facts shown.",
     "evaluation": "How far the synthetic text keeps the source's properties, and how far it is from the source's wording.",
@@ -180,10 +201,38 @@ GLOSSARY: dict[str, str] = {
     "PSALM judge": "A judge that compares the two texts on the six dimensions and their 36 aspects. For each aspect it "
                    "describes both texts, quotes short evidence, argues its verdict and rates function (does it do the "
                    "same thing?) and expression (are the concrete particulars the same?) separately.",
-    "core measure": "One of the compact set of measures used to compare conditions in experiments.",
+    "judge panel": "Further judge models next to the primary one (judges.panel). Each runs the same judges; the primary "
+                   "judge still decides the grades, and the evaluation shows every judge's results side by side with "
+                   "their agreement (Krippendorff's α on the 36 PSALM ratings: ≥ 0.8 reliable, below 0.667 the judges "
+                   "disagree). A self-hosted judge is given as `model-id @ endpoint`.",
+    "time limit": "limits.max_minutes: the run stops after this many minutes of work, keeps everything done so far, and "
+                  "Continue picks up where it stopped. The pre-flight check warns when a configuration can rewrite each "
+                  "chapter many times (strict style priorities, re-planning, going back to planning).",
+    "core measure": "A primary measure of the experiments: a property the method keeps (some it steers on purpose: "
+                    "the sentence- and paragraph-length distributions, the design's events, causes, characters and "
+                    "relations), a measure no stage steers that checks them (frequent-word profile, salience, the "
+                    "judges), or a guardrail (length, form, names). The rest is diagnostic detail.",
     "fix": "A targeted redo suggested by the evaluation. It makes a new version of the run (the original stays as it "
            "was) and redoes everything from the stage it names, so the two versions can be compared and the better "
            "one kept. Versions are marked, because their measurements are no longer independent.",
+    "priorities": "Evaluation measures you mark as most important for your study (default: none — all count equally). "
+                  "The generation works harder on them (more style rounds, stricter checks, more guard rounds), weighs "
+                  "them 3× when choosing between revisions, and the evaluation shows a priority score.",
+    "pre-flight check": "Before a run starts or continues, its settings are checked: stage names, policies, priorities, "
+                        "API keys, and one tiny test call per model. A run with a problem waits (settings need "
+                        "attention) instead of failing halfway; change the settings and continue.",
+    "pause / stop": "Pause holds every new model call until you resume (calls in flight finish); 'pause after this "
+                    "stage' stops at the next stage boundary. Stop ends the run cleanly — finished work is kept and "
+                    "Continue carries on, also with changed settings. Abort drops the calls in flight.",
+    "trace": "Every source item followed through the design to the synthetic text: kept throughout, changed or left out "
+             "by the design (the policy — intended), or changed, lost or added in the writing (the generation).",
+    "real-world names": "Names of the real, shared world — countries, seas, historical events, public legends — are not "
+                        "the author's invention. When world building is kept, they stay as they are; only invented names "
+                        "are replaced.",
+    "function / expression (1–5)": "The PSALM judge's two ratings per aspect: 1 unrelated · 2 loosely related · 3 clearly "
+                                   "related with substantial differences · 4 largely the same · 5 the same. Targets: Keep "
+                                   "— function 4–5, expression 3–4 (the same particulars in new words); Re-invent — function "
+                                   "4–5, expression 1–2; Replace — function 1–2, expression 1–2.",
     "version": "A copy of a run with one or more fixes applied. Versions are listed under the run they come from; "
                "the evaluation of a version shows each measure's change against the version it was made from.",
 }

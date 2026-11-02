@@ -7,6 +7,7 @@ re-run from any stage (`rerun_from="plan"` invalidates plan and everything after
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import traceback
@@ -24,6 +25,11 @@ from psalm_saga.stages.base import Backtrack, RunContext, Stage
 from psalm_saga.store import RunStore
 from psalm_saga.taxonomy import load_taxonomy
 from psalm_saga.text.language import detect_language
+
+
+class RunStopped(RuntimeError):
+    """A stop was requested (run control): the run ends cleanly; finished work is kept and the run
+    can be resumed later."""
 
 STAGE_ORDER = ["extract", "spec", "transform", "plan", "draft", "conform", "review", "guard", "assemble", "recover", "evaluate"]
 DEFAULT_IMPL = {"draft": "chapter"}
@@ -48,6 +54,12 @@ class Pipeline:
         cache = cache_dir if cache_dir is not None else store.root.parent / ".llm_cache"
         self.llm = LLM(config, cache_dir=cache, on_event=store.emit,
                        call_log=(lambda cid, rec: store.write_json(f"calls/{cid}.json", rec)) if config.log_calls else None)
+        self.llm.gate = self._gate
+        if config.cache_scope != "shared":
+            # a version of a run (<run>-vN) keeps its parent's answers for the stages it does not redo
+            # (those are files already) and samples afresh for the ones it redoes
+            self.llm.cache_salt = store.id + (f"#{store.meta().get('redo')}" if store.meta().get("redo") else "")
+        self._paused_total = 0.0
         self.taxonomy = load_taxonomy(config.taxonomy)
         self.prompts = Prompts(config.prompts_dir)
 
@@ -154,7 +166,7 @@ class Pipeline:
             if not sc.enabled:
                 continue
             cls = get_stage(name, sc.impl or DEFAULT_IMPL.get(name))
-            out.append(cls(sc))
+            out.append(cls(_steered(self.config, name, sc)))
         return out
 
     def context(self) -> RunContext:
@@ -190,14 +202,23 @@ class Pipeline:
         """
         if rerun_from:
             self.invalidate_from(rerun_from)
+            if self.config.cache_scope != "shared":
+                # a redo asks for new samples; a later plain resume of this redo replays them again
+                redo = int(self.store.meta().get("redo") or 0) + 1
+                self.store.update_meta(redo=redo)
+                self.llm.cache_salt = f"{self.store.id}#{redo}"
         ctx = self.context()
         was_done = self.store.meta().get("status") == "done"
+        self.store.set_control(None)  # a new invocation starts unpaused
+        if self.config.preflight:
+            await self.check(only=only, until=until, raise_on_error=True)
         meta = self.store.update_meta(status="running", started=_now(), error=None, language=ctx.language, mode=ctx.mode)
         self._base_usage = dict(meta.get("usage") or {})
         timing = meta.get("timing") or {"wall_seconds": float(meta.get("seconds") or 0.0), "invocations": 0, "stages": {}}
         timing["invocations"] = timing.get("invocations", 0) + 1
         self._timing, self._t0, self._wall0 = timing, time.monotonic(), float(timing.get("wall_seconds", 0.0))
         self._stage, self._s0 = None, None
+        self._paused_total = 0.0
         ctx.emit("run_started", mode=ctx.mode, language=ctx.language, preset=self.config.name)
         try:
             backtrack = True
@@ -206,6 +227,12 @@ class Pipeline:
         except BudgetExceeded as exc:
             self._fail("budget_exceeded", exc)
             raise
+        except RunStopped as exc:
+            self._close_stage(completed=False)
+            self.store.set_control(None)
+            self._checkpoint(status="stopped", current_stage=None, error=None, stopped=_now())
+            ctx.emit("run_stopped", reason=str(exc))
+            return self.status()
         except BaseException as exc:
             self._fail("failed", exc)
             raise
@@ -226,6 +253,7 @@ class Pipeline:
             if stage.done(ctx) and stage.name != "evaluate":
                 ctx.emit("stage_skipped", stage=stage.name, reason="already done")
                 continue
+            await self._between_stages(stage.name)
             self._stage, self._s0 = stage.name, time.monotonic()
             self.llm.usage.current_stage = stage.name
             self._checkpoint(current_stage=stage.name)
@@ -245,6 +273,90 @@ class Pipeline:
                 break
         return False
 
+    # ------------------------------------------------------------------ pre-flight and run control
+
+    def pending_stages(self, *, only: list[str] | None = None, until: str | None = None) -> list[str]:
+        """Stages a run invocation would execute now (enabled, applicable, not done)."""
+        ctx = self.context()
+        out = []
+        for s in self.stages():
+            if only and s.name not in only:
+                continue
+            if s.applies(ctx) and (not s.done(ctx) or s.name == "evaluate"):
+                out.append(s.name)
+            if until and s.name == until:
+                break
+        return out
+
+    async def check(self, *, only: list[str] | None = None, until: str | None = None, live: bool | None = None,
+                    raise_on_error: bool = False) -> dict:
+        """Pre-flight check of the settings for the stages still to run (psalm_saga/preflight.py)."""
+        from psalm_saga.preflight import PreflightFailed, preflight
+
+        stages = self.pending_stages(only=only, until=until)
+        has_input = any(self.store.exists(f) for f in ("input/source.txt", "input/premise.md", "input/spec.json"))
+        rep = await preflight(self.config, stages=stages, has_input=has_input,
+                              live=self.config.preflight_live if live is None else live)
+        rep["stages"] = stages
+        self.store.write_json("preflight.json", rep)
+        self.store.emit({"type": "preflight", "ok": rep["ok"], "problems": rep["problems"],
+                         "models": [{k: m.get(k) for k in ("model", "ok", "seconds")} for m in rep["models"]]})
+        if raise_on_error and not rep["ok"]:
+            self.store.update_meta(status="needs_attention", current_stage=None,
+                                   error="settings need attention: " + "; ".join(
+                                       p["message"] for p in rep["problems"] if p["severity"] == "error")[:900])
+            raise PreflightFailed(rep)
+        return rep
+
+    async def _between_stages(self, next_stage: str) -> None:
+        c = self.store.control()
+        if c.get("action") == "pause_after_stage":
+            self.store.set_control("pause", reason=f"paused before {next_stage}", requested=c.get("requested"))
+        elif c.get("action") == "stop_after_stage":
+            raise RunStopped(f"stopped before {next_stage}")
+        await self._gate()
+
+    async def _gate(self) -> None:
+        """Called before every model call and between stages: honours pause and stop requests. A
+        pause lets the calls already in flight finish and holds every new one until resumed."""
+        lim = self.config.limits.max_minutes
+        t0 = getattr(self, "_t0", None)
+        if lim and t0 is not None and (time.monotonic() - t0 - self._paused_total) / 60 > lim:
+            raise RunStopped(f"time limit of {lim:g} minutes reached (limits.max_minutes); everything done so far is "
+                             "kept, and continuing the run picks up where it stopped")
+        c = self.store.control()
+        act = c.get("action")
+        if act in (None, "pause_after_stage", "stop_after_stage"):
+            return
+        if act == "stop":
+            raise RunStopped(c.get("reason") or "stopped by the user")
+        if act != "pause":
+            return
+        lock = self.__dict__.setdefault("_pause_lock", asyncio.Lock())
+        async with lock:  # one waiter does the bookkeeping; the others wait for it
+            c = self.store.control()
+            if c.get("action") != "pause":
+                if c.get("action") == "stop":
+                    raise RunStopped(c.get("reason") or "stopped by the user")
+                return
+            t0 = time.monotonic()
+            self.store.update_meta(status="paused", paused_at=_now())
+            self.store.emit({"type": "run_paused", "stage": self._stage, "reason": c.get("reason") or "paused by the user"})
+            while True:
+                await asyncio.sleep(0.5)
+                c = self.store.control()
+                if c.get("action") == "stop":
+                    self._paused_total += time.monotonic() - t0
+                    raise RunStopped(c.get("reason") or "stopped by the user")
+                if c.get("action") != "pause":
+                    break
+            waited = time.monotonic() - t0
+            self._paused_total += waited
+            if self._stage is not None and self._s0 is not None:
+                self._s0 += waited  # paused time is not stage time
+            self.store.update_meta(status="running", paused_at=None)
+            self.store.emit({"type": "run_resumed", "stage": self._stage, "paused_s": round(waited, 1)})
+
     def _close_stage(self, *, completed: bool) -> float:
         if self._stage is None:
             return 0.0
@@ -261,7 +373,7 @@ class Pipeline:
         return secs
 
     def _checkpoint(self, **kw) -> None:
-        self._timing["wall_seconds"] = round(self._wall0 + time.monotonic() - self._t0, 3)
+        self._timing["wall_seconds"] = round(self._wall0 + time.monotonic() - self._t0 - self._paused_total, 3)
         self.store.update_meta(usage=_sum_usage(self._base_usage, self.llm.usage.to_dict()), timing=self._timing,
                                seconds=round(self._timing["wall_seconds"], 1), **kw)
 
@@ -270,6 +382,16 @@ class Pipeline:
         self._checkpoint(status=status, error=f"{type(exc).__name__}: {exc}")
         self.store.emit({"type": "run_failed", "status": status, "error": f"{type(exc).__name__}: {exc}",
                          "trace": traceback.format_exc()[-2000:]})
+
+
+def _steered(config: PipelineConfig, name: str, sc: StageConfig) -> StageConfig:
+    """The stage's settings with the effort raised for the run's measure priorities (not saved:
+    run.json keeps the settings as chosen; priorities.describe() lists what they change)."""
+    from psalm_saga.priorities import steered_params
+
+    if not config.priorities:
+        return sc
+    return sc.model_copy(update={"params": steered_params(config.priorities, name, dict(sc.params))})
 
 
 def _stage_delta(before: dict, after: dict, stage: str) -> dict:

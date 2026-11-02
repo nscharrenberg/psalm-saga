@@ -102,17 +102,25 @@ async def dimension_fidelity(llm: LLM, taxonomy: Taxonomy, source: str, syntheti
 
 
 async def quality_pairwise(llm: LLM, a_text: str, b_text: str, *, seed: str, words: int = 3000) -> dict:
-    """Returns {'winner': 'condition'|'baseline'|'tie'} with presentation order randomised by seed."""
+    """Blind pairwise preference between a condition's text (a) and the baseline's (b), on excerpts of
+    equal length. Asked in both orders (the first order randomised by seed); a verdict that changes
+    with the order counts as a tie (position bias, Wang et al. 2024).
+    Returns {'winner': 'condition'|'baseline'|'tie', 'consistent': bool, 'reason': ...}."""
     flip = random.Random(seed).random() < 0.5
-    first, second = (b_text, a_text) if flip else (a_text, b_text)
-    prompt = ("Which story is better written as literary fiction — prose quality, coherence, characterisation, and how "
-              "engaging it is to read? Ignore length differences.\n\n"
-              f"# Story A\n{_excerpt(first, words)}\n\n# Story B\n{_excerpt(second, words)}")
-    res = await llm.json("judge", SYSTEM, [Part(prompt)], Preference, temperature=0.0, tag="judge:quality")
-    if res.winner == "tie":
-        return {"winner": "tie", "reason": res.reason}
-    cond_won = (res.winner == "A") != flip
-    return {"winner": "condition" if cond_won else "baseline", "reason": res.reason}
+    prompt_for = lambda x, y: ("Which story is better written as literary fiction — prose quality, coherence, characterisation, "  # noqa: E731
+                               "and how engaging it is to read? Ignore length differences.\n\n"
+                               f"# Story A\n{_excerpt(x, words)}\n\n# Story B\n{_excerpt(y, words)}")
+    verdicts = []
+    for order in (flip, not flip):
+        first, second = (b_text, a_text) if order else (a_text, b_text)
+        res = await llm.json("judge", SYSTEM, [Part(prompt_for(first, second))], Preference, temperature=0.0,
+                             tag=f"judge:quality:{'ba' if order else 'ab'}")
+        verdicts.append(("tie" if res.winner == "tie" else "condition" if (res.winner == "A") != order else "baseline",
+                         res.reason))
+    (w1, r1), (w2, _r2) = verdicts
+    if w1 == w2:
+        return {"winner": w1, "consistent": True, "reason": r1}
+    return {"winner": "tie", "consistent": False, "reason": f"order-dependent verdict ({w1} / {w2})"}
 
 
 # ------------------------------------------------------------------ added instruments

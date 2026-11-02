@@ -37,6 +37,8 @@ class SourceProfile(BaseModel):
     stylometrics: dict[str, float]
     shape: dict = Field(default_factory=dict, description="Rhythm distribution (quantiles); numbers only.")
     form: dict = Field(default_factory=dict, description="Text form (prose / verse / drama) and its measures.")
+    function_words: dict[str, float] = Field(default_factory=dict, description="Rates per 1,000 words of the most "
+                                             "frequent words that are not names (mostly function words).")
 
 
 class VarietyMarker(BaseModel):
@@ -80,6 +82,15 @@ class SceneNote(BaseModel):
     purpose: str = Field("", description="Narrative function of the scene.")
     pov: str = Field("", description="Whose perspective, if identifiable.")
     location: str = Field("", description="Name of the place entity where the scene happens, if it is named.")
+    mode: str = Field("", description="What dominates how the scene is told: action, dialogue, description, "
+                      "reflection or summary.")
+    opening: str = Field("", description="The first six words of the scene, copied exactly from the passage (used "
+                         "only to measure the scene's length, then discarded).")
+    # Measured on the text (not by the model): the scene's length in words, share of words in direct
+    # speech, mean sentence length. Numbers only, so they cross the clean-room boundary.
+    words: int = 0
+    dialogue: float | None = None
+    sentence_words: float | None = None
 
 
 Gender = Literal["female", "male", "nonbinary", "unknown"]
@@ -170,6 +181,15 @@ class Bible(BaseModel):
     def characters(self) -> list[Entity]:
         return [e for e in self.entities if e.kind == "character"]
 
+    def synopsis_only(self) -> Bible:
+        """The design without its graph: per chapter the synopsis and the measured scene shapes (lengths,
+        speech share, sentence length, mode), but no entities, relations, events or scene contents."""
+        chapters = [ChapterSummary(index=c.index, title=c.title, summary=c.summary, word_count=c.word_count,
+                                   scenes=[SceneNote(summary="", mode=s.mode, words=s.words, dialogue=s.dialogue,
+                                                     sentence_words=s.sentence_words) for s in c.scenes])
+                    for c in self.chapters]
+        return Bible(chapters=chapters, style_notes=self.style_notes)
+
     def render(self, *, chapter: int | None = None, names: list[str] | None = None, max_entities: int = 40) -> str:
         """Prompt rendering, optionally scoped to one chapter's cast."""
         ents = self.entities
@@ -247,12 +267,16 @@ class Rename(BaseModel):
     new: str
     kind: str = "character"
     note: str = Field("", description="Why the new name fits (gender, class, culture, period, connotation).")
+    real: bool = Field(False, description="True if the original names something of the real, shared world — a real "
+                       "country, region, city, sea, nationality, historical person or event, or a widely known legend "
+                       "or myth — rather than an invention of the author.")
 
 
 class TransformMap(BaseModel):
     renames: list[Rename] = Field(default_factory=list)
     setting_shift: str = Field("", description="How the concrete setting is re-invented (if at all).")
     notes: str = ""
+    kept: list[str] = Field(default_factory=list, description="Names of the real, shared world kept unchanged.")
 
     def as_dict(self) -> dict[str, str]:
         return {r.original: r.new for r in self.renames if r.original and r.new}
@@ -268,6 +292,10 @@ class ScenePlan(BaseModel):
     beats: list[str] = Field(default_factory=list, description="3-7 concrete beats in order.")
     purpose: str = ""
     target_words: int = 0
+    # From the source's measured scene (set by the planner, not the model): how the scene is told.
+    dialogue: float | None = None
+    sentence_words: float | None = None
+    mode: str = ""
 
 
 class ChapterPlan(BaseModel):

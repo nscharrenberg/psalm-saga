@@ -45,6 +45,7 @@ class ModelConfig(_Base):
     rpm: int | None = None  # requests per minute; None = unlimited
     tpm: int | None = None  # tokens per minute (input+output estimate); None = unlimited
     max_retries: int = 8
+    timeout_retries: int = 2  # a call that ran into timeout_s is retried at most this often (the same request tends to time out again)
     stream: bool = True  # stream long generations to avoid idle-connection timeouts
     prompt_cache: bool = True  # mark the stable context prefix cacheable (Anthropic); others cache automatically
     extra: dict[str, Any] = Field(default_factory=dict)  # passed through to litellm (api_base, reasoning_effort, ...)
@@ -85,6 +86,10 @@ class TransformConfig(_Base):
     )
     rename_entities: bool = True  # consistent fresh names for every named entity
     keep_cultural_setting: bool = True  # new names/places fit the source's culture and period
+    # Real places, nations, seas, historical events and public legends (the Pacific, Finland, the
+    # Flying Dutchman) are part of the shared world, not the author's expression. None = keep them
+    # when world building is preserved; True / False forces it.
+    keep_real_names: bool | None = None
     notes: str = ""  # free-text instruction appended to the transform prompt
 
 
@@ -109,6 +114,7 @@ class LanguageConfig(_Base):
 
 class LimitsConfig(_Base):
     max_cost_usd: float | None = None  # abort the run when exceeded
+    max_minutes: float | None = None  # stop the run (resumable, nothing lost) after this much working time
     max_parallel_chapters: int = 3  # chapters drafted concurrently (uses rolling summaries of the plan, not prior prose)
 
 
@@ -118,6 +124,10 @@ class JudgesConfig(_Base):
 
     enabled: bool = False
     model: str | None = None  # LiteLLM model id; None = models.judge if set, else the default model (not advised)
+    # Further judges (a panel): each runs the same instruments; the primary judge (`model`) still decides the
+    # grades, the panel adds per-judge results and their agreement. Entries: a model id, or
+    # {name: <id>, api_base: <url>, ...} for a self-hosted model (keys other than name go to litellm).
+    panel: list[str | dict] = Field(default_factory=list)
     instruments: list[str] = Field(default_factory=lambda: ["psalm", "content", "style"])
     full_text_words: int = 6000  # PSALM reads both texts in full up to this many words each, else aligned excerpts
     excerpt_words: int = 700
@@ -137,7 +147,23 @@ class PipelineConfig(_Base):
     language: LanguageConfig = Field(default_factory=LanguageConfig)
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
     judges: JudgesConfig = Field(default_factory=JudgesConfig)
+    # Evaluation measures (keys) or measure groups (form, style, structure, characters, content,
+    # distance) the generation should favour; empty = all equally. See psalm_saga/priorities.py.
+    priorities: list[str] = Field(default_factory=list)
+    # The writing stages (plan, draft, review) see the story graph of the design: characters, places and
+    # objects with their relations, events and causal links per chapter. False (ablation `no_graph`): they
+    # see only the specification, one synopsis per chapter and the measured scene shapes; the graph is still
+    # built, so the evaluation can measure what of it the text realises.
+    use_graph: bool = True
+    # Check the settings before running (psalm_saga/preflight.py); `preflight_live` adds one tiny
+    # test call per model.
+    preflight: bool = True
+    preflight_live: bool = True
     cache: bool = True
+    # Which answers a run may replay from the on-disk response cache. "run" (default): only its own
+    # (resuming or redoing a stage is free, but a new run of the same text gets fresh samples);
+    # "shared": any run's answer to an identical request (cheap deterministic reruns, e.g. tests).
+    cache_scope: str = "run"
     seed: int | None = None
     # Keep every model call in full (messages in, answer and any reasoning out) under calls/, so a
     # run can be traced step by step in the activity view. Left out of release bundles.

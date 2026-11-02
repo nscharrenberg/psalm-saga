@@ -46,3 +46,17 @@ def test_bundle_endpoint_and_chapter_paths(tmp_path, nl_text):
         r = c.get("/api/runs/b2/bundle?kind=release")
         assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
         assert "story.md" in zipfile.ZipFile(io.BytesIO(r.content)).namelist()
+
+
+def test_bundle_of_a_fixed_version(tmp_path):
+    from psalm_saga.bundle import build_bundle
+    from psalm_saga.store import RunStore
+
+    st = RunStore(tmp_path / "r-v2")
+    st.update_meta(id="r-v2", status="done", config={}, evaluation_guided_fixes=[
+        {"version": 2, "fixes": ["style", "structure"], "rerun_from": "plan", "overrides": {}}])
+    import io
+    import zipfile
+
+    z = zipfile.ZipFile(io.BytesIO(build_bundle(st.root)))
+    assert "style, structure" in z.read("README.md").decode()

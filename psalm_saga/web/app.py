@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import yaml
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -44,6 +45,33 @@ class KeyRequest(BaseModel):
 class JudgeRequest(BaseModel):
     model: str = ""
     instruments: list[str] = ["psalm", "content", "style"]
+    panel: list[str | dict] | None = None  # further judges; None = keep the run's setting
+
+
+class ControlRequest(BaseModel):
+    action: str  # pause | pause_after_stage | resume | stop | stop_after_stage
+
+
+class ConfigRequest(BaseModel):
+    overrides: dict[str, Any] = {}
+
+
+class CheckRequest(BaseModel):
+    preset: str = "full"
+    overrides: dict[str, Any] = {}
+    live: bool = True
+
+
+class PlanRequest(BaseModel):
+    name: str
+    plan: dict[str, Any] | None = None  # the plan as a structure (the builder) ...
+    yaml: str | None = None  # ... or as YAML text (edited by hand)
+
+
+class DefaultTestsRequest(BaseModel):
+    conditions: dict[str, str]  # name -> preset
+    policies: dict[str, dict[str, str]] = {}
+    margins: dict[str, float] = {}
 
 
 class EditRequest(BaseModel):
@@ -51,7 +79,21 @@ class EditRequest(BaseModel):
     instruction: str
 
 
-def create_app(runs_dir: str | Path = "runs") -> FastAPI:
+def _priority_meta() -> dict:
+    from dataclasses import asdict
+
+    from psalm_saga.priorities import EFFECTS, PRIORITY_WEIGHT
+
+    return {"weight": PRIORITY_WEIGHT, "effects": [asdict(e) for e in EFFECTS]}
+
+
+def _psalm_scale() -> dict:
+    from psalm_saga.eval.run_judges import EXPECTED, SCALE
+
+    return {"scale": SCALE, "expected": EXPECTED}
+
+
+def create_app(runs_dir: str | Path = "runs", experiments_dir: str | Path = "experiments") -> FastAPI:
     from psalm_saga import keys
 
     keys.load()  # the user's saved API keys and endpoints (see psalm_saga/keys.py)
@@ -60,6 +102,9 @@ def create_app(runs_dir: str | Path = "runs") -> FastAPI:
     app = FastAPI(title="PSALM-SAGA", version="2")
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
     tasks: dict[str, asyncio.Task] = {}
+    experiments_dir = Path(experiments_dir)
+    exp_tasks: dict[str, asyncio.Task] = {}
+    exp_logs: dict[str, list[str]] = {}
 
     def _run_dir(run_id: str) -> Path:
         p = (runs_dir / run_id).resolve()
@@ -102,6 +147,9 @@ def create_app(runs_dir: str | Path = "runs") -> FastAPI:
             "editable": list(EDITABLE),
             "evaluation": __import__("psalm_saga.eval.grading", fromlist=["catalogue"]).catalogue(),
             "help": __import__("psalm_saga.web.help", fromlist=["help_bundle"]).help_bundle(),
+            "priorities": _priority_meta(),
+            "psalm_scale": _psalm_scale(),
+            "settings": __import__("psalm_saga.settings_catalog", fromlist=["catalogue"]).catalogue(),
         }
 
     # ---------------------------------------------------------------- runs
@@ -168,6 +216,61 @@ def create_app(runs_dir: str | Path = "runs") -> FastAPI:
         run = _open(run_id, req.overrides)
         _start(run, rerun_from=req.rerun_from, until=req.until)
         return {"ok": True}
+
+    @app.post("/api/runs/{run_id}/control")
+    async def control(run_id: str, req: ControlRequest):
+        """Pause (now: calls in flight finish, new ones wait; or after the current stage), resume, or
+        stop cleanly (now or after the current stage). A stopped run keeps its finished work and can be
+        continued with /run."""
+        run = _open(run_id)
+        executing = run_id in tasks and not tasks[run_id].done()
+        if req.action == "resume":
+            run.resume()
+            return {"ok": True}
+        if req.action not in ("pause", "pause_after_stage", "stop", "stop_after_stage"):
+            raise HTTPException(400, f"unknown action {req.action!r}")
+        if not executing:
+            raise HTTPException(409, "the run is not executing")
+        if req.action.startswith("pause"):
+            run.pause(after_stage=req.action.endswith("after_stage"))
+        else:
+            run.stop(after_stage=req.action.endswith("after_stage"))
+        return {"ok": True}
+
+    @app.post("/api/runs/{run_id}/check")
+    async def check_run(run_id: str, live: bool = True):
+        """Pre-flight check of the run's settings for the stages it still has to do."""
+        return await _open(run_id).acheck(live=live)
+
+    @app.post("/api/check")
+    async def check_new(req: CheckRequest):
+        """Pre-flight check of settings for a new run (before it is created)."""
+        from psalm_saga.preflight import preflight
+
+        try:
+            cfg = load_config(req.preset, req.overrides or None)
+        except Exception as exc:
+            return {"ok": False, "problems": [{"severity": "error", "where": "settings", "message": str(exc)[:600], "hint": ""}],
+                    "models": []}
+        stages = [n for n, sc in cfg.stages.items() if sc.enabled]
+        return await preflight(cfg, stages=stages, live=req.live)
+
+    @app.put("/api/runs/{run_id}/config")
+    async def put_config(run_id: str, req: ConfigRequest):
+        """Change a run's settings (dotted keys, e.g. {"models.default.name": "openai/gpt-5.5"}) while it is
+        not executing — for example after a failed pre-flight check or a crash — so it can be continued
+        instead of started over. Finished stages are kept; what the changes affect is redone when they
+        are rerun from the stage concerned."""
+        if run_id in tasks and not tasks[run_id].done():
+            raise HTTPException(409, "pause and stop the run before changing its settings")
+        try:
+            run = _open(run_id, req.overrides)
+        except Exception as exc:
+            raise HTTPException(400, f"invalid settings: {exc}") from exc
+        meta = run.store.meta()
+        if meta.get("status") in ("needs_attention",):
+            run.store.update_meta(status="stopped", error=None)
+        return {"ok": True, "config": run.store.meta().get("config")}
 
     @app.post("/api/runs/{run_id}/cancel")
     async def cancel(run_id: str):
@@ -311,6 +414,8 @@ def create_app(runs_dir: str | Path = "runs") -> FastAPI:
         ov = {"judges.enabled": True, "judges.instruments": req.instruments}
         if req.model.strip():
             ov["judges.model"] = req.model.strip()
+        if req.panel is not None:
+            ov["judges.panel"] = req.panel
         run = _open(run_id, ov)
         _start(run, only=["evaluate"])
         return {"ok": True}
@@ -385,6 +490,135 @@ def create_app(runs_dir: str | Path = "runs") -> FastAPI:
             out.append({"path": str(p.parent), "name": data.get("name"), "jobs": data.get("jobs"),
                         "failed": data.get("failed"), "has_report": (p.parent / "report.html").exists()})
         return out
+
+    # ---------------------------------------------------------------- experiment builder
+
+    def _plan_path(name: str) -> Path:
+        import re as _re
+
+        if not _re.fullmatch(r"[\w.-]{1,80}", name or ""):
+            raise HTTPException(400, "an experiment name uses letters, digits, '-', '_' and '.' only")
+        return experiments_dir / f"{name}.yaml"
+
+    def _describe(path: Path) -> dict:
+        from psalm_saga.experiments.runner import expand, load_plan
+
+        plan, out = load_plan(path)
+        jobs = expand(plan, path.parent)
+        done = 0
+        if (out / "runs").exists():
+            for j in jobs:
+                rj = out / "runs" / j.run_id / "run.json"
+                if rj.exists():
+                    try:
+                        done += json.loads(rj.read_text(encoding="utf-8")).get("status") == "done"
+                    except (OSError, json.JSONDecodeError):
+                        pass
+        items = sorted({j.item for j in jobs})
+        return {"name": path.stem, "path": str(path), "output": str(out), "jobs": len(jobs), "done": done,
+                "items": items, "conditions": list(plan.conditions), "models": list(plan.models),
+                "tests": len(plan.hypotheses) if isinstance(plan.hypotheses, list) else 0,
+                "running": path.stem in exp_tasks and not exp_tasks[path.stem].done(),
+                "has_report": (out / "report.html").exists(), "log": exp_logs.get(path.stem, [])[-30:]}
+
+    @app.get("/api/experiment-plans")
+    def list_plans():
+        out = []
+        for p in sorted(experiments_dir.glob("*.yaml")):
+            try:
+                out.append(_describe(p))
+            except Exception as exc:  # a broken plan is listed with its error, not hidden
+                out.append({"name": p.stem, "path": str(p), "error": str(exc)[:300]})
+        return out
+
+    @app.get("/api/experiment-plans/{name}")
+    def get_plan(name: str):
+        p = _plan_path(name)
+        if not p.exists():
+            raise HTTPException(404, f"no experiment plan {name}")
+        text = p.read_text(encoding="utf-8")
+        try:
+            info = _describe(p)
+        except Exception as exc:
+            info = {"error": str(exc)[:500]}
+        return {"yaml": text, "plan": yaml.safe_load(text), **info}
+
+    @app.post("/api/experiment-plans")
+    def save_plan(req: PlanRequest):
+        """Save a plan (from the builder or as YAML) after validating it; returns what it would run."""
+        from psalm_saga.experiments.runner import ExperimentPlan
+
+        p = _plan_path(req.name)
+        text = req.yaml if req.yaml is not None else yaml.safe_dump({"name": req.name, **(req.plan or {})},
+                                                                       sort_keys=False, allow_unicode=True, width=120)
+        try:
+            data = yaml.safe_load(text)
+            data["name"] = req.name
+            ExperimentPlan.model_validate(data)
+        except Exception as exc:
+            raise HTTPException(400, f"invalid plan: {exc}"[:1500]) from exc
+        experiments_dir.mkdir(parents=True, exist_ok=True)
+        if req.yaml is None:
+            text = yaml.safe_dump(data, sort_keys=False, allow_unicode=True, width=120)
+        p.write_text(text, encoding="utf-8")
+        try:
+            return {"ok": True, **_describe(p)}
+        except Exception as exc:
+            raise HTTPException(400, f"saved, but the plan cannot be expanded: {exc}"[:1500]) from exc
+
+    @app.post("/api/experiment-plans/{name}/inputs")
+    async def upload_inputs(name: str, files: list[UploadFile] = File(...)):
+        """Texts for an experiment, saved to experiments/inputs/<name>/; the plan reads them with a glob."""
+        _plan_path(name)
+        folder = experiments_dir / "inputs" / name
+        folder.mkdir(parents=True, exist_ok=True)
+        saved = []
+        for f in files:
+            fn = Path(f.filename or "text.txt").name
+            data = await f.read()
+            try:
+                text = data.decode("utf-8")
+            except UnicodeDecodeError:
+                text = data.decode("latin-1")
+            (folder / (Path(fn).stem + ".txt")).write_text(text, encoding="utf-8")
+            saved.append(Path(fn).stem + ".txt")
+        return {"folder": str(folder), "glob": f"inputs/{name}/*.txt", "saved": saved}
+
+    @app.post("/api/experiment-plans/default-tests")
+    def default_tests(req: DefaultTestsRequest):
+        from psalm_saga.experiments.hypotheses import default_hypotheses
+
+        return {"hypotheses": default_hypotheses(req.conditions, req.policies, req.margins)}
+
+    @app.post("/api/experiment-plans/{name}/start")
+    async def start_plan(name: str, judge: bool = True):
+        from psalm_saga.experiments.runner import run_experiment
+
+        p = _plan_path(name)
+        if not p.exists():
+            raise HTTPException(404, f"no experiment plan {name}")
+        if name in exp_tasks and not exp_tasks[name].done():
+            raise HTTPException(409, "this experiment is already running")
+        log = exp_logs.setdefault(name, [])
+
+        async def go():
+            try:
+                await run_experiment(p, judge=judge, console=type("C", (), {"print": staticmethod(lambda *a: log.append(" ".join(map(str, a))))})())
+                log.append("finished")
+            except Exception as exc:
+                log.append(f"failed: {exc}")
+
+        exp_tasks[name] = asyncio.create_task(go())
+        return {"ok": True}
+
+    @app.post("/api/experiment-plans/{name}/stop")
+    async def stop_plan(name: str):
+        t = exp_tasks.get(name)
+        if not t or t.done():
+            raise HTTPException(409, "this experiment is not running")
+        t.cancel()
+        exp_logs.setdefault(name, []).append("stopped; starting it again continues where it stopped")
+        return {"ok": True}
 
     def _experiment_summaries() -> list[Path]:
         return sorted(Path(".").glob("experiments_out/*/summary.json")) + sorted(runs_dir.glob("../experiments_out/*/summary.json"))

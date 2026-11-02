@@ -22,7 +22,7 @@ class Evaluate(Stage):
             report["judges"] = await self._judges(ctx)
             fresh = missing_reasons(report, ctx.language)
             nm = report.setdefault("not_measurable", {})
-            for k in ("judge_content", "judge_style", "psalm_fidelity", "psalm_expression"):
+            for k in ("judge_content", "judge_style", "psalm_fidelity", "psalm_expression", "psalm_residual"):
                 if k in fresh and not str(nm.get(k, "")).startswith("not applicable: the source is"):
                     nm[k] = fresh[k]
                 elif k not in fresh:
@@ -33,8 +33,18 @@ class Evaluate(Stage):
             report["fix_context"] = fix_context(ctx.store)
         except Exception as exc:  # context for fixes is a convenience; never sink the evaluation
             report["fix_context"] = {"error": str(exc)[:300]}
+        from psalm_saga.eval.grading import policy_exclusions
+        from psalm_saga.priorities import describe, priority_score
+
+        if ctx.mode == "source":
+            report["policy"] = dict(ctx.config.transform.policy)
+            report.setdefault("not_measurable", {}).update(policy_exclusions(report["policy"]))
+
+        report["priorities"] = list(ctx.config.priorities)
+        report["steering"] = describe(ctx.config.priorities)
         report["grades"] = grades(report)
         report["summary_scores"] = summary_scores(report)
+        report["priority"] = priority_score(report["grades"], ctx.config.priorities)
         report["fixes"] = suggest_fixes(report)
         from psalm_saga.pipeline import _diff_usage, _sum_usage
 
@@ -92,4 +102,72 @@ class Evaluate(Stage):
             jobs.append(safe("psalm", psalm_judge(ctx, load_taxonomy(ctx.config.taxonomy), source, story, src_bible, rec,
                                                   policy, jcfg)))
         await asyncio.gather(*jobs)
+        if jcfg.panel:
+            await self._panel(ctx, out, source, story, names, policy, renames, src_bible, rec, inst)
         return out
+
+    async def _panel(self, ctx: RunContext, out: dict, source, story, names, policy, renames, src_bible, rec, inst) -> None:
+        """Run the same judges on each further model of `judges.panel`, and report every judge's results
+        and their agreement. The primary judge's results (above) stay the ones the grades use."""
+        import asyncio
+
+        from psalm_saga.config import ModelConfig
+        from psalm_saga.eval.run_judges import content_judge, psalm_judge, style_judge
+        from psalm_saga.eval.validity import judge_summary, panel_agreement
+        from psalm_saga.taxonomy import load_taxonomy
+
+        jcfg = ctx.config.judges
+        base = ctx.config.model_for("judge")
+        members = []
+        for i, entry in enumerate(jcfg.panel, 2):
+            spec = {"name": entry} if isinstance(entry, str) else dict(entry)
+            name = spec.pop("name")
+            role = f"judge_{i}"
+            ctx.config.models[role] = ModelConfig(**{**base.model_dump(), "name": name, "temperature": 0.0,
+                                                     "extra": {**{k: v for k, v in base.extra.items()
+                                                                  if not k.startswith("fake_") and k != "api_base"}, **spec}})
+            members.append((name, _RoleContext(ctx, role)))
+
+        async def one(name, jctx):
+            res: dict = {"model": name}
+
+            async def safe(key, coro):
+                try:
+                    res[key] = await coro
+                except Exception as exc:  # one judge failing must not sink the others
+                    res[key] = {"score": None, "reason_missing": f"the judge failed: {exc}"[:300]}
+
+            jobs = []
+            if "content" in inst and src_bible and rec:
+                jobs.append(safe("content", content_judge(jctx, src_bible, rec, renames, policy)))
+            if "style" in inst:
+                jobs.append(safe("style", style_judge(jctx, source, story, names, policy)))
+            if "psalm" in inst:
+                jobs.append(safe("psalm", psalm_judge(jctx, load_taxonomy(ctx.config.taxonomy), source, story, src_bible,
+                                                      rec, policy, jcfg)))
+            await asyncio.gather(*jobs)
+            return res
+
+        panel = await asyncio.gather(*(one(n, j) for n, j in members))
+        out["panel"] = panel
+        primary = {"model": out["model"], **{k: out.get(k) for k in ("psalm", "content", "style")}}
+        out["agreement"] = panel_agreement([primary, *panel])
+        out["per_judge"] = [judge_summary(j) for j in (primary, *panel)]
+
+
+class _RoleContext:
+    """The run context with every judge call sent to another model role (one panel judge)."""
+
+    def __init__(self, ctx: RunContext, role: str):
+        self._ctx, self._role = ctx, role
+
+    def __getattr__(self, item):
+        return getattr(self._ctx, item)
+
+    async def json(self, model_role, role_text, parts, schema, **kw):
+        kw["tag"] = f"{kw.get('tag') or 'judge'}@{self._role}"
+        return await self._ctx.json(self._role, role_text, parts, schema, **kw)
+
+    async def text(self, model_role, role_text, parts, **kw):
+        kw["tag"] = f"{kw.get('tag') or 'judge'}@{self._role}"
+        return await self._ctx.text(self._role, role_text, parts, **kw)

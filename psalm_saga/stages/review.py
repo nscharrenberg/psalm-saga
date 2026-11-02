@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field
 from psalm_saga.artifacts import Bible, ChapterDraft, ChapterPlan, ChapterReview, Issue, Plan, Spec
 from psalm_saga.llm import Part
 from psalm_saga.stages.base import Backtrack, RunContext, Stage, gather_limited, get_stage, register
-from psalm_saga.stages.conform import style_distance
+from psalm_saga.stages.conform import Conform, conform_text, style_distance
 from psalm_saga.stages.draft import clean_prose, draft_chapter_text, story_context
 from psalm_saga.stages.plan import render_chapter_plan
 from psalm_saga.text.chunking import word_count
@@ -77,8 +77,10 @@ def design_checklist(bible: Bible, c: ChapterPlan, max_items: int = 30) -> list[
     return items[:max_items]
 
 
-def coverage_issues(items: list[dict], rev: ChapterReview) -> list[Issue]:
-    """Missing or contradicted checklist items, as issues routed like any other."""
+def coverage_issues(items: list[dict], rev: ChapterReview, strict: bool = False) -> list[Issue]:
+    """Missing or contradicted checklist items, as issues routed like any other. `strict` (set
+    when the run prioritises the story measures): a missing place, object or relation is a major
+    issue, repaired like a missing event, rather than a minor one."""
     by_id = {it["id"]: it for it in items}
     out = []
     for cv in rev.coverage:
@@ -86,7 +88,7 @@ def coverage_issues(items: list[dict], rev: ChapterReview) -> list[Issue]:
         if not it or cv.status == "realised":
             continue
         core = it["kind"] in ("event", "cause")
-        sev = "blocker" if (core and cv.status == "contradicted") else "major" if (core or cv.status == "contradicted") else "minor"
+        sev = "blocker" if (core and cv.status == "contradicted") else "major" if (core or strict or cv.status == "contradicted") else "minor"
         fix = (f"Correct the chapter so that it agrees with: {it['text']}" if cv.status == "contradicted"
                else f"Show this in the chapter: {it['text']}")
         out.append(Issue(severity=sev, origin="prose" if cv.in_plan else "plan", dimension="bible",
@@ -172,7 +174,7 @@ class Review(Stage):
         rev = await ctx.json(self.model_role, ROLE_REVIEW, [Part(spec_txt, cache=True), Part(prompt)], ChapterReview,
                              temperature=0.0, hints=ctx.hints(issues=0, coverage=0), tag=f"review:ch{index}r{r}")
         rev.index = index
-        rev.issues = rev.issues[:max_issues] + coverage_issues(checklist or [], rev)
+        rev.issues = rev.issues[:max_issues] + coverage_issues(checklist or [], rev, bool(self.params.get("strict_coverage")))
         return rev
 
     async def replan(self, ctx: RunContext, c: ChapterPlan, issues: list[Issue], spec_txt: str) -> ChapterPlan:
@@ -183,12 +185,15 @@ class Review(Stage):
         new.title = new.title or c.title
         if not new.scenes:
             new.scenes = c.scenes
+        elif len(new.scenes) == len(c.scenes):  # same scenes: keep the measured budgets and telling
+            for a, b in zip(new.scenes, c.scenes, strict=True):
+                a.target_words, a.dialogue, a.sentence_words, a.mode = b.target_words, b.dialogue, b.sentence_words, b.mode
         return new
 
     async def run(self, ctx: RunContext) -> Backtrack | None:
         spec = ctx.store.read_json("spec.json", Spec)
         plan = ctx.store.read_json("plan.json", Plan)
-        bible = ctx.store.maybe("bible.json", Bible) or Bible()
+        bible = ctx.design() or Bible()
         rounds = int(self.params.get("rounds", 1))
         threshold = self.params.get("threshold", "major")
         allow_replan = bool(self.params.get("replan", True))
@@ -197,6 +202,12 @@ class Review(Stage):
             if "draft" in ctx.config.stages else None
         plan_lock = asyncio.Lock()
         upstream: list[dict] = []
+        conformer = self._conformer(ctx)
+        n_ch = len(plan.chapters)
+        slack = float(self.params.get("style_slack", 0.05))
+        done = [sum(ctx.store.exists(f"reviews/ch_{c.index:03d}.json") for c in plan.chapters)]
+        passes = len(ctx.store.read_json("backtracks.json")) if ctx.store.exists("backtracks.json") else 0
+        pass_note = "; second pass, after going back to planning" if passes else ""
 
         async def one(c: ChapterPlan):
             name = f"reviews/ch_{c.index:03d}.json"
@@ -225,15 +236,22 @@ class Review(Stage):
                     new_plan = await self.replan(ctx, cur_plan, plan_issues, spec_txt)
                     cand_text, _ = await draft_chapter_text(ctx, draft_stage, new_plan, plan, story_context(spec, plan),
                                                             bible, tag_suffix=f"r{r}")
+                    if conformer is not None:
+                        # A fresh draft has the writer's own rhythm again: conform it before it can
+                        # replace the conformed chapter (otherwise the style work is lost).
+                        cand_text, _clog = await conform_text(ctx, conformer, cand_text, c.index, n_ch,
+                                                              tag=f"review:conform:r{r}")
                     new_plan_txt = render_chapter_plan(new_plan)
                     new_rev = await self.check(ctx, spec_txt, new_plan_txt, cast, cand_text, c.index, r, checklist)
                     kept = self._kept(new_rev, blocking, threshold)
                     self._report(ctx, c.index, r, "replan", new_rev, checklist, threshold, kept=kept)
+                    d_new = style_distance(ctx, cand_text)
                     history.append({"round": r, "action": "replan", "fixes": [i.model_dump() for i in plan_issues],
-                                    "kept": kept, **new_rev.model_dump()})
+                                    "kept": kept, "style_distance": d_new, **new_rev.model_dump()})
                     replanned = True
                     if kept:
                         text, cur_plan, plan_txt, rev = cand_text, new_plan, new_plan_txt, new_rev
+                        d_style = d_new if d_new is not None else d_style
                         async with plan_lock:  # the revised chapter plan replaces the old one
                             p = ctx.store.read_json("plan.json", Plan)
                             p.chapters = [new_plan if x.index == c.index else x for x in p.chapters]
@@ -248,7 +266,7 @@ class Review(Stage):
                 kept = self._kept(new_rev, blocking, threshold)
                 # A content repair must not undo the style work of conform (the data properties).
                 d_new = style_distance(ctx, candidate)
-                style_ok = d_style is None or d_new is None or d_new <= d_style + float(self.params.get("style_slack", 0.05))
+                style_ok = d_style is None or d_new is None or d_new <= d_style + slack
                 kept = kept and style_ok
                 history.append({"round": r, "action": "repair", "fixes": [i.model_dump() for i in prose_issues],
                                 "kept": kept, "style_distance": d_new, "style_ok": style_ok, **new_rev.model_dump()})
@@ -258,6 +276,20 @@ class Review(Stage):
                     break
                 text, rev = candidate, new_rev
                 d_style = d_new if d_new is not None else d_style
+            d_start = style_distance(ctx, draft.text)
+            if conformer is not None and text != draft.text and d_start is not None:
+                d_end = style_distance(ctx, text)
+                if d_end is not None and d_end > d_start + slack:
+                    # The repairs loosened the style more than allowed: a short conform pass (a touch-up,
+                    # not a full conform: at most `restyle_rounds` rewrites, default 2).
+                    touch = Conform(conformer.cfg.model_copy(update={"params": {
+                        **conformer.params, "rounds": min(int(conformer.params.get("rounds", 2)),
+                                                          int(self.params.get("restyle_rounds", 2)))}}))
+                    text2, clog = await conform_text(ctx, touch, text, c.index, n_ch, tag="review:conform:final",
+                                                     reference_words=word_count(text))
+                    history.append({"round": r + 1, "action": "restyle", "style_distance": clog.get("distance_after"),
+                                    "style_before": d_end, "kept": text2 != text})
+                    text = text2
             if text != draft.text:
                 draft.text, draft.word_count = text, word_count(text)
                 draft.attempts += 1
@@ -268,9 +300,24 @@ class Review(Stage):
                                         "replanned": replanned and cur_plan is not c, "upstream": ups,
                                         "checklist": checklist, "coverage": coverage_summary(checklist, rev),
                                         "rounds": history})
+            done[0] += 1
+            ctx.emit("stage_progress", stage="review", done=done[0], total=n_ch, chapter=c.index,
+                     message=f"chapter {c.index} checked ({done[0]} of {n_ch}){pass_note}")
 
         await gather_limited(plan.chapters, one, int(self.params.get("parallel", 4)))
         return await self._backtrack(ctx, spec, bible, upstream)
+
+    @staticmethod
+    def _conformer(ctx: RunContext) -> Conform | None:
+        """The run's conform stage (with its priority-steered settings), when it applies."""
+        from psalm_saga.priorities import steered_params
+
+        sc = ctx.config.stages.get("conform")
+        if sc is None or not sc.enabled or ctx.mode != "source" or ctx.style_targets is None:
+            return None
+        if ((ctx.style_targets or {}).get("form") or {}).get("form") == "drama":
+            return None
+        return Conform(sc.model_copy(update={"params": steered_params(ctx.config.priorities, "conform", dict(sc.params))}))
 
     @staticmethod
     def _report(ctx: RunContext, index: int, r: int, action: str, rev: ChapterReview, checklist: list[dict],
@@ -309,4 +356,8 @@ class Review(Stage):
             return None
         log.append({"attempt": len(log) + 1, "amended": amended, "issues": due})
         ctx.store.write_json("backtracks.json", log)
+        ctx.emit("warning", stage="review", message=(
+            f"{len(due)} issue(s) trace back to the {' and '.join(amended)}: amended it and going back to planning. "
+            f"Every chapter is planned, drafted, conformed and checked once more (backtrack {len(log)} of "
+            f"{int(self.params.get('max_backtracks', 1))}; set stages.review.params.max_backtracks=0 to skip this)."))
         return Backtrack("plan", f"{len(due)} issue(s) trace back to the {' and '.join(amended)}; amended, re-planning")

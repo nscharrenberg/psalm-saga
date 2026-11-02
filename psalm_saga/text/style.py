@@ -19,10 +19,11 @@ import statistics
 
 from psalm_saga.text.metrics import has_speech, paragraphs, sentences, stylometrics, words
 
-# Features the conform stage steers. Function-word profile, character n-grams and the full
-# distributions are deliberately NOT steered, so they remain independent evidence of style.
+# Features the conform stage steers, besides the sentence- and paragraph-length distributions
+# (see `length_distributions`). The function-word profile and character n-grams are deliberately
+# NOT steered, so they remain independent evidence of style.
 TARGET_KEYS = ("mean_sentence_words", "sd_sentence_words", "mean_paragraph_words", "dialogue_word_share",
-               "commas_per_1k", "question_sentence_share", "exclamation_sentence_share")
+               "dialogue_paragraph_share", "commas_per_1k", "question_sentence_share", "exclamation_sentence_share")
 
 
 def layout_reliable(stylo: dict) -> bool:
@@ -33,10 +34,59 @@ def layout_reliable(stylo: dict) -> bool:
 
 
 def target_keys(stylo: dict) -> tuple[str, ...]:
-    keys = TARGET_KEYS if layout_reliable(stylo) else tuple(k for k in TARGET_KEYS if k != "mean_paragraph_words")
+    layout = ("mean_paragraph_words", "dialogue_paragraph_share")
+    keys = TARGET_KEYS if layout_reliable(stylo) else tuple(k for k in TARGET_KEYS if k not in layout)
     if "dialogue_word_share" not in stylo:  # profiles written before this measure existed
-        keys = tuple("dialogue_paragraph_share" if k == "dialogue_word_share" else k for k in keys)
-    return keys
+        keys = tuple(k for k in keys if k != "dialogue_word_share")
+    return tuple(dict.fromkeys(keys))
+
+
+def length_distributions(shp: dict | None) -> tuple[list[float], list[float]]:
+    """Sentence lengths and paragraph lengths (words), from a shape's paragraph rhythm: numbers
+    only, so the source's distributions can cross the clean-room boundary."""
+    rows = [r for r in (shp or {}).get("paragraph_rhythm") or [] if r.get("s")]
+    return [float(x) for r in rows for x in r["s"]], [float(sum(r["s"])) for r in rows]
+
+
+def ks(a: list[float], b: list[float]) -> float | None:
+    """Two-sample Kolmogorov–Smirnov D (the evaluation's distribution measure)."""
+    if not a or not b:
+        return None
+    a, b = sorted(a), sorted(b)
+    i = j = 0
+    d = 0.0
+    while i < len(a) and j < len(b):
+        x = min(a[i], b[j])
+        while i < len(a) and a[i] <= x:
+            i += 1
+        while j < len(b) and b[j] <= x:
+            j += 1
+        d = max(d, abs(i / len(a) - j / len(b)))
+    return round(d, 4)
+
+
+def paragraph_gap(src_par: list[float], syn_par: list[float], d: float) -> str:
+    """An editing instruction when the paragraph-length distribution is off."""
+    qs, qy = _q(src_par), _q(syn_par)
+    if len(qs) != 5 or len(qy) != 5:
+        return ""
+    short_s = sum(x < 15 for x in src_par) / len(src_par)
+    short_y = sum(x < 15 for x in syn_par) / len(syn_par)
+    msg = (f"Paragraph lengths are distributed differently from the source (gap {d:.2f}). In the source a quarter of "
+           f"the paragraphs are shorter than {qs[1]:.0f} words, half shorter than {qs[2]:.0f}, and one in ten longer "
+           f"than {qs[4]:.0f}; here a quarter are shorter than {qy[1]:.0f}, half shorter than {qy[2]:.0f}, and one in "
+           f"ten longer than {qy[4]:.0f}.")
+    if short_s > short_y + 0.1:
+        msg += (f" {round(100 * short_s)}% of the source's paragraphs are under 15 words (here {round(100 * short_y)}%): "
+                "give short lines of speech, replies and single striking sentences paragraphs of their own.")
+    elif short_y > short_s + 0.1:
+        msg += (f" Only {round(100 * short_s)}% of the source's paragraphs are under 15 words (here {round(100 * short_y)}%): "
+                "join one-line paragraphs to the narration around them.")
+    if qs[4] > 1.3 * qy[4]:
+        msg += " Let some narrative and reflective passages run on as long paragraphs, as the source does."
+    elif qy[4] > 1.3 * qs[4]:
+        msg += " Break the longest paragraphs where the moment changes."
+    return msg
 
 
 def _q(values: list[float], qs=(0.1, 0.25, 0.5, 0.75, 0.9)) -> list[float]:
@@ -190,6 +240,16 @@ def style_gaps(measured: dict, target: dict, shp_target: dict | None = None, tol
         else:
             out.append(f"{round(100 * a)}% {unit} direct speech; the target is {round(100 * b)}%. Render some reported "
                        "speech as direct speech.")
+    if dk == "dialogue_word_share" and "dialogue_paragraph_share" in t and layout_reliable(t) \
+            and off("dialogue_paragraph_share") and (t.get("dialogue_paragraph_share") or 0) >= 0.05:
+        a, b = m.get("dialogue_paragraph_share") or 0, t.get("dialogue_paragraph_share") or 0
+        if a < b:
+            out.append(f"{round(100 * a)}% of the paragraphs contain direct speech; in the source {round(100 * b)}% do. "
+                       "Spread the speech over more, shorter paragraphs — a line or a reply each, as the source does — "
+                       "rather than gathering it in a few long ones.")
+        else:
+            out.append(f"{round(100 * a)}% of the paragraphs contain direct speech; in the source {round(100 * b)}% do. "
+                       "Keep more paragraphs in narration only.")
     if off("commas_per_1k"):
         out.append(f"There are {m.get('commas_per_1k', 0):.0f} commas per 1,000 words; the target is {t.get('commas_per_1k', 0):.0f}. "
                    + ("Use more clauses and enumerations." if (m.get("commas_per_1k") or 0) < (t.get("commas_per_1k") or 0)
@@ -269,3 +329,37 @@ def rhythm_scaffold(shp: dict, target_words: int, position: float = 0.0, max_lin
             "speech. Follow it closely: about this many paragraphs, sentences of about these lengths in this "
             "order, speech where it is marked. The content comes from the plan, the rhythm from the scaffold.\n"
             + "\n".join(lines))
+
+
+def frequent_words(text: str, top: int = 60) -> dict[str, float]:
+    """Rates per 1,000 words of the `top` most frequent words that are not names (a word that is
+    capitalised in most of its occurrences is taken for a name). These are mostly function words —
+    the profile stylometry recognises a style by — and carry no protected expression."""
+    from collections import Counter
+
+    toks = words(text)
+    n = max(len(toks), 1)
+    low, cap = Counter(), Counter()
+    for t in toks:
+        (cap if t[:1].isupper() else low)[t.lower()] += 1
+    total = low + cap
+    keep = [w for w, k in total.most_common(top * 3) if low[w] >= 0.5 * k][:top]
+    return {w: round(1000 * total[w] / n, 2) for w in keep}
+
+
+def word_rate_gaps(src: dict[str, float], text: str, k: int = 8) -> tuple[float, list[tuple[str, float, float]]]:
+    """(1 − cosine of the rate vectors, the k words most out of line) for a text against a source's
+    `frequent_words`; out of line = |a − b| / sqrt(a + b), so a frequent word off by half counts more
+    than a rare one missing."""
+    import math
+    from collections import Counter
+
+    toks = [t.lower() for t in words(text)]
+    n = max(len(toks), 1)
+    c = Counter(toks)
+    rows = [(w, a, 1000 * c[w] / n) for w, a in src.items()]
+    num = sum(a * b for _, a, b in rows)
+    den = math.sqrt(sum(a * a for _, a, _ in rows)) * math.sqrt(sum(b * b for _, _, b in rows))
+    gap = 1 - num / den if den else 1.0
+    worst = sorted(rows, key=lambda r: -abs(r[1] - r[2]) / math.sqrt(r[1] + r[2] + 0.5))[:k]
+    return round(gap, 4), [(w, round(a, 1), round(b, 1)) for w, a, b in worst]

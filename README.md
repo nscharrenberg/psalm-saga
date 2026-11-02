@@ -125,12 +125,36 @@ characters, content, protected expression); a **core** subset is what experiment
 **Judges (optional).** Language-model judges are off by default and have their own settings, so
 they can run on a model of a different family from the writer: `--set judges.enabled=true --set
 judges.model=anthropic/claude-sonnet-5-5` (or the *Judges* section of the web form, or *Run the
-judges* on a finished run's evaluation, which redoes only the evaluation). Instruments
+judges* on a finished run's evaluation, which redoes only the evaluation). **Several judges:**
+`judges.panel` lists further judge models (`["openai/…", {name: "hosted_vllm/…", api_base: "http://…"}]`);
+each runs the same instruments, the primary judge (`judges.model`) still decides the grades, and the
+evaluation adds every judge's results (`judges.per_judge`, `judges.panel`) and their agreement
+(`judges.agreement`: Krippendorff's α on the 36 PSALM ratings, mean and range of each result). Instruments
 (`judges.instruments`): `psalm` — an improved PSALM judge that compares the texts on the six
 dimensions and 36 aspects, describing both, citing short evidence from each and arguing every
 verdict, with *function* (does it do the same thing?) and *expression* (are the concrete
 particulars the same?) rated separately; `content` — same story, from both texts' chapter
 summaries; `style` — same writing, from name-masked excerpts.
+
+**Priorities.** By default every measure counts equally. List the measures (or whole groups:
+`form`, `style`, `structure`, `characters`, `content`, `distance`) your study depends on —
+`--set 'priorities=["style"]'`, or *Priorities* in the web form or a run's *Edit settings* — and
+the generation works harder on them inside the pipeline, not afterwards: more style-revision
+rounds and a tighter tolerance, a second content-repair round with stricter design coverage,
+more copy-guard rounds; where a stage chooses between revisions, prioritised quantities weigh 3×
+and a revision that makes one worse is rejected (`psalm_saga/priorities.py`). Priorities only raise
+effort. The evaluation shows a priority score and lists the prioritised measures' fixes first.
+
+**Run controls and the pre-flight check.** A running run can be **paused** (calls in flight
+finish, new ones wait), **paused after the current stage**, **stopped** cleanly (finished work kept;
+*Continue* carries on later) or **aborted**. Before a run starts or continues, its settings are
+checked — stage names, policies, priorities, the provider and API key of every model, and one
+tiny test call per model (`preflight`, `preflight_live`). A run that would fail waits with status
+*settings need attention* and the problems listed; *Edit settings* (models, judges, priorities,
+budget or any key) and *Continue*. The same works for a run that failed halfway: change the
+setting that caused it and continue from the failed stage. SDK: `run.pause()`, `run.resume()`,
+`run.stop(after_stage=True)`, `run.check()`; API: `POST /api/runs/<id>/control`, `/check`,
+`PUT /api/runs/<id>/config`.
 
 **Fixes make versions.** A suggested fix copies the run to a new version (`<run>-v2`, …), applies
 the fix there and redoes everything from the stage it names; the original is never changed, and
@@ -183,14 +207,16 @@ node or link for details, including each entity's counterpart in the other text.
 with `saga graph runs/<id> [--source] [--format graphml|json]` (GraphML opens in Gephi, yEd,
 Cytoscape or networkx) or `run.graph()` in the SDK.
 
-**Comparing source and synthetic graphs.** *compare: source vs design* aligns the source graph
-with the design the story was written from; *compare: source vs synthetic text* first
-re-extracts a graph from the synthetic story with the same extractor (one extraction pass) and
-shows what the text actually realises. Nodes and links are marked kept (faded), changed
-(orange), only in the source (red, dashed) or only in the synthetic text (green); *Changes
-only* hides everything kept, and the side panel gives recall per node and link type. CLI:
-`saga graph runs/<id> --compare design|text`; SDK: `run.recover()`, `run.graph("compare",
-against="text")`.
+**Three graphs, any pair, and a trace.** The *bible* tab shows three graphs — the **source**, the
+**design** (the source after renaming and the policy) and the **synthetic text** as written (analysed
+once and aligned with the design) — and compares any two: source ↔ design (what the policy
+changed), source ↔ synthetic text (end to end), design ↔ synthetic text (what the writing realised).
+Nodes and links are marked kept, changed, missing or added; below each comparison every difference
+is listed item by item, filterable and downloadable as CSV. **Trace** follows each source item
+through both steps and says where it changed: in the design (the policy — intended) or in the
+writing (the generation — what can still be improved). CLI: `saga graph runs/<id> --compare
+design|text`; SDK: `run.graph("compare", against="design"|"text"|"design_text")`,
+`run.graph("recovered")`, `run.graph("trace")`.
 
 **Length.** `length.target_words` (default: match the source) and `length.chapters`
 (`match` the source, `auto`, or a number). Chapter budgets follow the source's chapter
@@ -206,17 +232,21 @@ token/cost usage per stage tag). Edit any of them by hand and `saga resume --fro
 
 | Preset | What it is |
 |---|---|
-| `full` | C1: extract → spec → transform → plan → draft → review → guard |
+| `full` | C1: extract → spec → transform → plan → draft → conform → review → guard |
+| `no_graph` | ablation (paper): planning, drafting and review without the story graph (`use_graph: false`); the graph is still built and measured |
+| `no_feedback` | ablation (paper): without the measure-and-correct loop (no conform, no review); targets stated once in the drafting prompt |
 | `no_review` | C2: without review/repair |
 | `flat_spec` | C3: one call from the transformed spec + skeleton |
 | `no_spec` | C4: no dimension spec; planned from the renamed/re-skinned skeleton only |
-| `flat` | C5: one call, given the source (or premise), asked for a counterpart |
+| `flat` | C5: one call, given the source (or premise) and the policy per dimension, asked for a counterpart |
 | `paraphrase` | naive synthetic-corpus baseline: rename + passage-by-passage paraphrase |
 | `agents_room` | C6: Agents' Room (Huot et al., 2024) with the same inputs as C1 |
 | `fast` | cheap iteration: small model for extraction/transform, no review |
 
 Presets are YAML with `extends:`; any field can be overridden with `--set key=value` (CLI),
-`overrides={...}` (SDK) or the web form. Swap one stage implementation:
+`overrides={...}` (SDK) or the web form, whose **All settings** section lists every setting of a
+run, including every stage parameter, with its default and an explanation
+(`psalm_saga/settings_catalog.py`; a test keeps it in step with the code). Swap one stage implementation:
 `--set stages.draft.impl=agents_room`. Use different models per stage:
 `--set models.review.name=openai/gpt-5.5` (roles are stage names; unspecified fields inherit
 from `models.default`). Override prompts for a model family with `prompts_dir: my_prompts/`
@@ -248,10 +278,24 @@ then `--set stages.draft.impl=my_writer`.
 - Generations are streamed (no idle-connection timeouts) and continued automatically when
   they hit the output cap.
 - Structured outputs are validated; invalid JSON gets a targeted repair round-trip.
-- On-disk response cache (`runs/.llm_cache`): resuming or re-running is free for finished calls.
+- On-disk response cache (`runs/.llm_cache`): resuming a run is free for finished calls. By default a
+  run only replays its *own* answers (`cache_scope: run`), so a new run of the same text — and a *Redo
+  from…* — is a fresh sample; `cache_scope: shared` replays any earlier identical request instead
+  (free, deterministic, but not an independent sample).
 - Prompt caching: the stable prefix (spec, bible) is marked cacheable for Anthropic and
   ordered first for providers that cache automatically.
-- `limits.max_cost_usd` stops a run when its budget is spent.
+- `limits.max_cost_usd` stops a run when its budget is spent; `limits.max_minutes` stops it after
+  that much working time. Either way the run is *stopped*, not failed: everything done is kept and
+  continuing picks up where it stopped.
+- **Long runs.** Each chapter can be rewritten several times: drafting, up to `conform.rounds`
+  style revisions, and in review a redraft from a revised plan (conformed again), a repair and a
+  style touch-up (`review.restyle_rounds`, default 2); when review traces problems to the design it
+  goes back to planning once (`review.max_backtracks`) and all of it happens again. Style
+  priorities raise the conform rounds to 4 and tighten the tolerance to 0.06. Conform stops early
+  when rounds stop paying off (`patience`, default 2 rejected attempts in a row; `min_gain`,
+  default 0.005), and a call that times out is retried only `timeout_retries` times (default 2).
+  The pre-flight check warns with the worst-case number of rewrites per chapter, and review shows
+  its progress (chapter k of n; second pass after going back to planning).
 - **Reasoning models.** Their hidden reasoning counts against the output allowance, so a call
   sized for a 125-word poem could come back empty or cut off. For a reasoning model every call
   gets `models.<role>.reasoning_headroom` (default 8,000) tokens on top of what the visible
@@ -301,9 +345,24 @@ have cost is kept as `replayed_cost_usd` (`usage.cost_usd_first_run` in experime
 ## Experiments
 
 ```bash
-saga experiment experiments/pilot.yaml --dry-run    # list jobs
-saga experiment experiments/pilot.yaml              # run (resumable), judge, report
+saga experiment experiments/kb_main.yaml --dry-run  # list jobs (the paper's design: 13 conditions x 2 writers)
+saga experiment experiments/kb_main.yaml            # run (resumable), judge, test the hypotheses, report
 ```
+
+Or in the web app: **Experiment plans → + New experiment** sets up a whole plan without YAML:
+texts (upload or file patterns), policy settings (each condition runs under each setting, as
+`<condition>@<setting>`), setups (presets), writer models (API or self-hosted), judges (primary
+plus a panel), limits, every run setting, and the pre-registered tests (the paper's, generated
+from the setups, or a fixed list). It saves `experiments/<name>.yaml`, shows how many runs it
+means, starts and stops it, and opens the report. *Start from the paper's design* and *Start from
+a small demo* fill it in.
+
+**Pre-registered tests.** A plan's `hypotheses:` lists tests (`superiority`, `non_inferiority`,
+`equivalence`, `above`/`below`, `share_below`) on any measure; `hypotheses: default` generates the
+paper's five families (H1 review loop, H2 knowledge graph, H3 PSALM policy control, H4
+paraphrase, H5 single call). They run after the experiment: paired bootstrap over items, Holm
+within each family and writer (`psalm_saga/experiments/hypotheses.py`), reported in
+`summary.json → hypotheses` and `report.md`.
 
 Outputs `results.csv` (one row per run), `summary.json`, `report.md` (per-condition
 means, per-stage cost, and the corpus-level instruments: rank agreement, dispersion,

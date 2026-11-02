@@ -77,9 +77,10 @@ async def test_accounting_accumulates_across_resume_and_failure(runs, nl_text, m
 
 
 async def test_cache_hits_record_what_they_would_have_cost(runs, nl_text):
-    a = Pipeline.create("no_review", runs_dir=runs, source=nl_text, overrides=PRICED, run_id="a")
+    shared = [*PRICED, "cache_scope=shared"]
+    a = Pipeline.create("no_review", runs_dir=runs, source=nl_text, overrides=shared, run_id="a")
     await a.run()
-    b = Pipeline.create("no_review", runs_dir=runs, source=nl_text, overrides=PRICED, run_id="b")
+    b = Pipeline.create("no_review", runs_dir=runs, source=nl_text, overrides=shared, run_id="b")
     await b.run()
     ua, ub = a.store.meta()["usage"], b.store.meta()["usage"]
     assert ub["cost_usd"] == 0 and ub["cached_calls"] == ub["calls"]
@@ -94,3 +95,17 @@ def test_cost_resolution():
     # unknown, unpriced model -> None (reported as unpriced, not silently $0)
     assert LLM._cost(ModelConfig(name="hosted_vllm/some-local-model"), 1000, 1000) is None
     assert LLM._cost(ModelConfig(name="fake/x"), 1000, 1000) == 0.0
+
+
+async def test_a_new_run_of_the_same_text_is_sampled_afresh(runs, nl_text):
+    a = Pipeline.create("no_review", runs_dir=runs, source=nl_text, overrides=PRICED, run_id="fresh-a")
+    await a.run()
+    b = Pipeline.create("no_review", runs_dir=runs, source=nl_text, overrides=PRICED, run_id="fresh-b")
+    await b.run()
+    assert b.store.meta()["usage"]["cached_calls"] == 0          # nothing replayed from run a
+    calls_a = a.store.meta()["usage"]["cached_calls"]
+    again = Pipeline.open(a.store.root)
+    await again.run(rerun_from="plan")                            # "redo from" asks for new samples
+    assert again.store.meta()["usage"]["cached_calls"] == calls_a
+    resumed = Pipeline.open(a.store.root)                        # a crash-resume replays what it already has
+    assert resumed.llm.cache_salt == again.llm.cache_salt == f"{a.store.id}#1"

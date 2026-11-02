@@ -1,0 +1,8 @@
+name: no_graph
+extends: full
+description: >
+  Ablation. The full pipeline without the story graph in the writing stages: planning, drafting and
+  review see the specification, one synopsis per chapter and the measured scene shapes, but no
+  characters, places, relations, events or causal links. The graph is still built, so the evaluation
+  measures what of it the text realises anyway. Isolates what the knowledge graph contributes.
+use_graph: false

@@ -85,9 +85,20 @@ class RunContext:
                 prof = self.store.read_json("profile.json")
                 if prof.get("stylometrics"):
                     out = {"stylometrics": prof["stylometrics"], "shape": prof.get("shape") or {},
-                           "form": prof.get("form") or {"form": "prose"}}
+                           "form": prof.get("form") or {"form": "prose"},
+                           "function_words": prof.get("function_words") or {}}
             self.state["style_targets"] = out
         return self.state["style_targets"]
+
+    def design(self):
+        """The story design the writing stages work from (bible.json): with its graph, or only the
+        chapter synopses and scene shapes when `use_graph` is off (psalm_saga/config.py)."""
+        from psalm_saga.artifacts import Bible
+
+        b = self.store.maybe("bible.json", Bible)
+        if b is None:
+            return None
+        return b if self.config.use_graph else b.synopsis_only()
 
     def system(self, role: str) -> str:
         return self.prompts.render("system", role=role, mode=self.mode,

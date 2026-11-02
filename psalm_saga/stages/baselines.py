@@ -32,6 +32,22 @@ def _save(ctx: RunContext, pieces: list[tuple[str, str]], attempts: int = 1) -> 
                                                                        attempts=attempts))
 
 
+_DIM = {"writing_style": "writing style", "narrative_voice": "narrative voice", "character": "characters",
+        "plot_structure": "plot structure", "scene_sequence": "sequence of scenes", "world_building": "world and setting"}
+_DO = {"preserve": "keep it as in the source, with the same particulars (new names only)",
+       "abstract": "keep what it does in the story (its role, function and structure) but invent new concrete "
+                   "particulars for it",
+       "regenerate": "replace it with something new of your own; do not follow the source here"}
+
+
+def policy_brief(policy: dict[str, str]) -> str:
+    """The per-dimension policy as instructions for a single-call baseline; empty when everything is
+    kept (the prompt's default wording then applies)."""
+    if all(v == "preserve" for v in policy.values()):
+        return ""
+    return "\n".join(f"- {_DIM.get(k, k)}: {_DO.get(v, v)}" for k, v in policy.items())
+
+
 def _premise(ctx: RunContext) -> str:
     if ctx.store.exists("input/premise.md"):
         return ctx.store.read_text("input/premise.md")
@@ -63,6 +79,7 @@ class OneShot(Stage):
         if spec_txt and "skeleton" in inputs and bible:
             spec_txt += "\n\n# Chapter skeleton\n" + "\n\n".join(render_skeleton(c) for c in bible.chapters)
         prompt = ctx.prompts.render("oneshot", target_words=words, chapters=chapters, source=source, spec=spec_txt,
+                                    policy=policy_brief(dict(ctx.config.transform.policy)) if source else "",
                                     premise=_premise(ctx) if "premise" in inputs or not (source or spec_txt) else "")
         mc = ctx.config.model_for(self.model_role)
         text = await ctx.text(self.model_role, ROLE, [Part(prompt)], max_tokens=mc.max_output_tokens,
@@ -77,7 +94,35 @@ class OneShot(Stage):
                 pieces[0] = (pieces[0][0], pre + "\n\n" + pieces[0][1])
         else:
             pieces = [("", text)]
-        _save(ctx, pieces)
+        # Compute-matched variant: spend more inference on the same single-step approach by letting the
+        # model critique and revise its own text against the source (self-refinement, Madaan et al. 2023).
+        rounds = int(self.params.get("refine_rounds", 0))
+        for r in range(1, rounds + 1):
+            pieces = await self._refine(ctx, pieces, source, spec_txt, words, r)
+        _save(ctx, pieces, attempts=1 + rounds)
+
+    async def _refine(self, ctx: RunContext, pieces: list[tuple[str, str]], source: str, spec_txt: str, words: int,
+                      r: int) -> list[tuple[str, str]]:
+        text = "\n\n".join((f"[[CHAPTER: {t}]]\n" if t or len(pieces) > 1 else "") + b for t, b in pieces)
+        brief = (f"# Source\n{source}" if source else "") + (f"\n\n# Specification\n{spec_txt}" if spec_txt else "")
+        critique = await ctx.text(self.model_role, ROLE, [Part(
+            "Review this synthetic counterpart against what it must achieve: the same structure, characters and their "
+            "relations, narrative voice and style as the source, in the source's language and length (about "
+            f"{words} words), but with new names and none of the source's wording or distinctive particulars where they "
+            "should change. List the most important problems, concretely, each with where it occurs.\n\n"
+            f"{brief}\n\n# Synthetic text\n{text}")], max_tokens=2000, hints=ctx.hints(round=r), tag=f"draft:critique:r{r}")
+        mc = ctx.config.model_for(self.model_role)
+        revised = await ctx.text(self.model_role, ROLE, [Part(
+            "Revise the synthetic text to fix these problems, keeping everything else. Output the full revised text, "
+            "with the same [[CHAPTER: title]] markers if it has them.\n\n"
+            f"# Problems\n{critique}\n\n{brief}\n\n# Synthetic text\n{text}")], max_tokens=mc.max_output_tokens,
+            hints=ctx.hints(target_words=words, round=r), tag=f"draft:refine:r{r}",
+            continuations=int(self.params.get("continuations", 3)))
+        marks = list(_MARK.finditer(revised))
+        if not marks:
+            return [("", revised)]
+        return [(m.group(1).strip(), revised[m.end(): marks[i + 1].start() if i + 1 < len(marks) else len(revised)])
+                for i, m in enumerate(marks)]
 
 
 @register("draft", "paraphrase")

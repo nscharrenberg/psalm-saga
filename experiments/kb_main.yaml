@@ -1,35 +1,143 @@
-# Main design from docs/EXPERIMENTS.md. Point `inputs` at the corpus; adjust models to what is available.
+# Main design of the paper (Section 4). Values in <angle brackets> and the margins are fixed after the
+# pilot on the development items and recorded in the pre-registration before the main run.
 name: kb_main
 output: experiments_out/kb_main
 inputs:
   - {glob: "../corpus/en/*.txt", kind: source}
   - {glob: "../corpus/nl/*.txt", kind: source}
+metadata: ../corpus/metadata.csv
+period_split: {from: year, at: median}       # `period` (early / late) by rule: split at the median year
+
+# Three policy settings (paper, Table 2). Style and voice are kept in all three: they carry the data
+# properties under study. The story dimensions are kept, re-invented or replaced.
+policies:
+  preserve: {all: preserve}
+  reinvent: {all: abstract, writing_style: preserve, narrative_voice: preserve}
+  replace:  {all: regenerate, writing_style: preserve, narrative_voice: preserve}
+
+# Five setups (paper, Table 3), each run under every policy setting unless it lists its own. The full
+# procedure gets k = 3 samples per item (run-to-run variation); the others one. The full procedure's
+# runs are also rated by the two further judges (agreement, Section 4.5).
 conditions:
-  full:        {preset: full}
-  no_review:   {preset: no_review}
-  no_spec:     {preset: no_spec}
-  paraphrase:  {preset: paraphrase}
-  flat:        {preset: flat}
-  # policy trade-off (section 5)
-  conservative: {preset: full, overrides: {transform.policy.character: preserve, transform.policy.scene_sequence: preserve, transform.policy.world_building: preserve}}
-  aggressive:   {preset: full, overrides: {transform.policy.plot_structure: abstract, transform.policy.character: regenerate, transform.policy.scene_sequence: regenerate, transform.policy.world_building: regenerate}}
+  full:        {preset: full, repeats: 3, overrides: {judges.panel: ["openai/<MODEL-D>", {name: "hosted_vllm/Qwen/Qwen3.5-397B-A17B", api_base: "<url>"}]}}
+  no_graph:    {preset: no_graph}        # ablation: without the knowledge graph in the writing stages
+  no_feedback: {preset: no_feedback}     # ablation: without the review loop (no conform, no review)
+  paraphrase:  {preset: paraphrase, policies: [preserve]}   # baseline: rename + paraphrase (keeps everything by design)
+  single_call: {preset: flat}            # baseline: one call, told the policy
+
+# Writers (paper, Table 4): Mistral Large 4 through the API, and a small open model that runs on a laptop.
 models:
-  frontier: {models.default.name: anthropic/claude-sonnet-5-5}
-  open:     {models.default.name: mistral/mistral-large-latest}   # or hosted_vllm/<model> + models.default.extra.api_base
+  mistral_large:
+    models.default.name: "mistral/mistral-large-4-0"          # pin the dated snapshot, e.g. mistral-large-4-0-<date>
+  gemma_small:
+    models.default.name: "ollama_chat/gemma4:e4b"             # Gemma 4 E4B via Ollama; check the tag with `ollama list`
+    models.default.extra.api_base: "http://localhost:11434"
+    models.default.context_window: 131072
+    models.default.max_output_tokens: 8192
+    models.default.max_concurrency: 1
+
 repeats: 1
 concurrency: 3
 overrides:
-  limits.max_cost_usd: 10
+  limits.max_cost_usd: 10                       # <per-run budget>
+  limits.max_minutes: 240                       # a run that hangs stops here and can be continued
+  judges.enabled: true
+  judges.model: "anthropic/claude-sonnet-5-5"   # primary judge: P4/P6 and the grades
+  judges.instruments: [psalm, content, style]
 judge:
-  model: openai/gpt-5.5
-  instruments: [spec_recovery, emotional_arc, surface_reuse, reconstruction, quality_pairwise]
-  quality_baseline: flat
-# Book metadata for the corpus-level instruments: item (file stem), title, author, year, period,
-# author_gender, genre, ... Analyses are fixed here BEFORE the main run (pre-registration).
-metadata: ../corpus/metadata.csv
+  model: "anthropic/claude-sonnet-5-5"
+  check_models: ["openai/<MODEL-D>", "hosted_vllm/Qwen/Qwen3.5-397B-A17B"]  # reused from the runs' judge panel
+  instruments: [psalm_check, psalm_anchor, alignment_anchor, quality_pairwise]
+  quality_baseline: single_call                 # G2: blind pairwise quality against the single call, same policy
+  anchor_condition: full
+
+# Secondary (reported, not decided): corpus analyses replicated on the synthetic corpus of the full
+# procedure. A replication needs the same sign and the paired difference equivalent to zero (TOST).
 analyses:
-  - {name: sentence length by period, feature: mean_sentence_words, by: period, groups: [1880-1914, 1945-1980]}
-  - {name: dialogue over time, feature: dialogue_paragraph_share, vs: year}
-  - {name: women's share of character mentions over time, feature: female_mention_share, vs: year}
-  - {name: women's share by author gender, feature: female_mention_share, by: author_gender, groups: [male, female]}
+  - {name: sentence length over time, feature: mean_sentence_words, vs: year, rel_margin: 0.5}
+  - {name: dialogue over time, feature: dialogue_paragraph_share, vs: year, rel_margin: 0.5}
+  - {name: women's share of character mentions over time, feature: female_mention_share, vs: year, rel_margin: 0.5}
+  - {name: women's share by author gender, feature: female_mention_share, by: author_gender, groups: [male, female], rel_margin: 0.5}
 tstr_label: period
+
+# Pre-registered tests (psalm_saga/experiments/hypotheses.py): paired bootstrap over items, one-sided,
+# Holm within each family and writer; alpha 0.05. Margins in the measure's own unit:
+# KS distance 0.05, recall 0.05, Spearman 0.1, PSALM rating 0.5, function-word cosine 0.02, span 2 words.
+alpha: 0.05
+bootstrap: 10000
+hypotheses:
+# H1 Steering by the data properties: the full procedure retains them better than the same procedure
+#    without the measure-and-correct loop (style conformance + review), under every policy setting.
+#    fw_cosine is not steered: it must not get worse (independent check of style).
+  - {id: H1.preserve.sentence_overlap, family: H1, measure: sentence_overlap, a: full@preserve, b: no_feedback@preserve, test: superiority}
+  - {id: H1.preserve.paragraph_overlap, family: H1, measure: paragraph_overlap, a: full@preserve, b: no_feedback@preserve, test: superiority}
+  - {id: H1.preserve.kg_events, family: H1, measure: kg_events, a: full@preserve, b: no_feedback@preserve, test: superiority}
+  - {id: H1.preserve.kg_causes, family: H1, measure: kg_causes, a: full@preserve, b: no_feedback@preserve, test: superiority}
+  - {id: H1.preserve.salience, family: H1, measure: salience, a: full@preserve, b: no_feedback@preserve, test: superiority}
+  - {id: H1.preserve.fw_cosine, family: H1, measure: fw_cosine, a: full@preserve, b: no_feedback@preserve, test: non_inferiority, margin: 0.02}
+  - {id: H1.reinvent.sentence_overlap, family: H1, measure: sentence_overlap, a: full@reinvent, b: no_feedback@reinvent, test: superiority}
+  - {id: H1.reinvent.paragraph_overlap, family: H1, measure: paragraph_overlap, a: full@reinvent, b: no_feedback@reinvent, test: superiority}
+  - {id: H1.reinvent.kg_events, family: H1, measure: kg_events, a: full@reinvent, b: no_feedback@reinvent, test: superiority}
+  - {id: H1.reinvent.kg_causes, family: H1, measure: kg_causes, a: full@reinvent, b: no_feedback@reinvent, test: superiority}
+  - {id: H1.reinvent.salience, family: H1, measure: salience, a: full@reinvent, b: no_feedback@reinvent, test: superiority}
+  - {id: H1.reinvent.fw_cosine, family: H1, measure: fw_cosine, a: full@reinvent, b: no_feedback@reinvent, test: non_inferiority, margin: 0.02}
+  - {id: H1.replace.sentence_overlap, family: H1, measure: sentence_overlap, a: full@replace, b: no_feedback@replace, test: superiority}
+  - {id: H1.replace.paragraph_overlap, family: H1, measure: paragraph_overlap, a: full@replace, b: no_feedback@replace, test: superiority}
+  - {id: H1.replace.kg_events, family: H1, measure: kg_events, a: full@replace, b: no_feedback@replace, test: superiority}
+  - {id: H1.replace.kg_causes, family: H1, measure: kg_causes, a: full@replace, b: no_feedback@replace, test: superiority}
+  - {id: H1.replace.fw_cosine, family: H1, measure: fw_cosine, a: full@replace, b: no_feedback@replace, test: non_inferiority, margin: 0.02}
+# H2 The knowledge graph: with the graph in planning, drafting and review, more of the design's events,
+#    causal links, characters and relations are realised than without it.
+  - {id: H2.preserve.kg_events, family: H2, measure: kg_events, a: full@preserve, b: no_graph@preserve, test: superiority}
+  - {id: H2.preserve.kg_causes, family: H2, measure: kg_causes, a: full@preserve, b: no_graph@preserve, test: superiority}
+  - {id: H2.preserve.kg_characters, family: H2, measure: kg_characters, a: full@preserve, b: no_graph@preserve, test: superiority}
+  - {id: H2.preserve.kg_social, family: H2, measure: kg_social, a: full@preserve, b: no_graph@preserve, test: superiority}
+  - {id: H2.preserve.salience, family: H2, measure: salience, a: full@preserve, b: no_graph@preserve, test: superiority}
+  - {id: H2.reinvent.kg_events, family: H2, measure: kg_events, a: full@reinvent, b: no_graph@reinvent, test: superiority}
+  - {id: H2.reinvent.kg_causes, family: H2, measure: kg_causes, a: full@reinvent, b: no_graph@reinvent, test: superiority}
+  - {id: H2.reinvent.kg_characters, family: H2, measure: kg_characters, a: full@reinvent, b: no_graph@reinvent, test: superiority}
+  - {id: H2.reinvent.kg_social, family: H2, measure: kg_social, a: full@reinvent, b: no_graph@reinvent, test: superiority}
+  - {id: H2.reinvent.salience, family: H2, measure: salience, a: full@reinvent, b: no_graph@reinvent, test: superiority}
+  - {id: H2.replace.kg_events, family: H2, measure: kg_events, a: full@replace, b: no_graph@replace, test: superiority}
+  - {id: H2.replace.kg_causes, family: H2, measure: kg_causes, a: full@replace, b: no_graph@replace, test: superiority}
+  - {id: H2.replace.kg_characters, family: H2, measure: kg_characters, a: full@replace, b: no_graph@replace, test: superiority}
+  - {id: H2.replace.kg_social, family: H2, measure: kg_social, a: full@replace, b: no_graph@replace, test: superiority}
+# H3 Policy control (PSALM, full procedure): preserve keeps function and expression; re-invent keeps the
+#    function and lowers the expression; replace lowers both, on the story dimensions; style stays kept.
+  - {id: H3a, family: H3, measure: psalm.function.story, a: full@reinvent, b: full@preserve, test: non_inferiority, margin: 0.5, better: higher, label: re-invent keeps the function of the story dimensions}
+  - {id: H3b, family: H3, measure: psalm.expression.story, a: full@reinvent, b: full@preserve, test: superiority, better: lower, label: re-invent lowers their expression}
+  - {id: H3c, family: H3, measure: psalm.function.story, a: full@replace, b: full@reinvent, test: superiority, better: lower, label: replace lowers their function}
+  - {id: H3d, family: H3, measure: psalm.expression.story, a: full@replace, b: full@reinvent, test: non_inferiority, margin: 0.5, better: lower, label: replace keeps their expression as low as re-invent}
+  - {id: H3e, family: H3, measure: psalm.function.style, a: full@replace, b: full@preserve, test: non_inferiority, margin: 0.5, better: higher, label: the kept style dimensions keep their function under every setting}
+# H4 Against renaming + paraphrase (preserve): retention not worse beyond the margin, and less of the
+#    source's protected expression (copied 8-grams, longest copied span, concrete particulars).
+  - {id: H4.sentence_overlap, family: H4, measure: sentence_overlap, a: full@preserve, b: paraphrase@preserve, test: non_inferiority, margin: 0.05}
+  - {id: H4.paragraph_overlap, family: H4, measure: paragraph_overlap, a: full@preserve, b: paraphrase@preserve, test: non_inferiority, margin: 0.05}
+  - {id: H4.kg_events, family: H4, measure: kg_events, a: full@preserve, b: paraphrase@preserve, test: non_inferiority, margin: 0.05}
+  - {id: H4.kg_causes, family: H4, measure: kg_causes, a: full@preserve, b: paraphrase@preserve, test: non_inferiority, margin: 0.05}
+  - {id: H4.salience, family: H4, measure: salience, a: full@preserve, b: paraphrase@preserve, test: non_inferiority, margin: 0.1}
+  - {id: H4.psalm.function.story, family: H4, measure: psalm.function.story, a: full@preserve, b: paraphrase@preserve, test: non_inferiority, margin: 0.5, better: higher}
+  - {id: H4.ngram8, family: H4, measure: ngram8, a: full@preserve, b: paraphrase@preserve, test: superiority}
+  - {id: H4.span, family: H4, measure: span, a: full@preserve, b: paraphrase@preserve, test: superiority}
+  - {id: H4.psalm.expression.story, family: H4, measure: psalm.expression.story, a: full@preserve, b: paraphrase@preserve, test: superiority, better: lower}
+  - {id: H4.span12, family: H4, measure: span, a: full@preserve, test: share_below, value: 12, share: 0.95}
+# H5 Against a single call: better retention and closer adherence to the policy (share of PSALM ratings
+#    in the expected range), with copying not worse beyond 2 words of longest span.
+  - {id: H5.preserve.sentence_overlap, family: H5, measure: sentence_overlap, a: full@preserve, b: single_call@preserve, test: superiority}
+  - {id: H5.preserve.paragraph_overlap, family: H5, measure: paragraph_overlap, a: full@preserve, b: single_call@preserve, test: superiority}
+  - {id: H5.preserve.kg_events, family: H5, measure: kg_events, a: full@preserve, b: single_call@preserve, test: superiority}
+  - {id: H5.preserve.kg_causes, family: H5, measure: kg_causes, a: full@preserve, b: single_call@preserve, test: superiority}
+  - {id: H5.preserve.in_range, family: H5, measure: psalm.in_range, a: full@preserve, b: single_call@preserve, test: superiority, better: higher}
+  - {id: H5.preserve.span, family: H5, measure: span, a: full@preserve, b: single_call@preserve, test: non_inferiority, margin: 2}
+  - {id: H5.reinvent.sentence_overlap, family: H5, measure: sentence_overlap, a: full@reinvent, b: single_call@reinvent, test: superiority}
+  - {id: H5.reinvent.paragraph_overlap, family: H5, measure: paragraph_overlap, a: full@reinvent, b: single_call@reinvent, test: superiority}
+  - {id: H5.reinvent.kg_events, family: H5, measure: kg_events, a: full@reinvent, b: single_call@reinvent, test: superiority}
+  - {id: H5.reinvent.kg_causes, family: H5, measure: kg_causes, a: full@reinvent, b: single_call@reinvent, test: superiority}
+  - {id: H5.reinvent.in_range, family: H5, measure: psalm.in_range, a: full@reinvent, b: single_call@reinvent, test: superiority, better: higher}
+  - {id: H5.reinvent.span, family: H5, measure: span, a: full@reinvent, b: single_call@reinvent, test: non_inferiority, margin: 2}
+  - {id: H5.replace.sentence_overlap, family: H5, measure: sentence_overlap, a: full@replace, b: single_call@replace, test: superiority}
+  - {id: H5.replace.paragraph_overlap, family: H5, measure: paragraph_overlap, a: full@replace, b: single_call@replace, test: superiority}
+  - {id: H5.replace.kg_events, family: H5, measure: kg_events, a: full@replace, b: single_call@replace, test: superiority}
+  - {id: H5.replace.kg_causes, family: H5, measure: kg_causes, a: full@replace, b: single_call@replace, test: superiority}
+  - {id: H5.replace.in_range, family: H5, measure: psalm.in_range, a: full@replace, b: single_call@replace, test: superiority, better: higher}
+  - {id: H5.replace.span, family: H5, measure: span, a: full@replace, b: single_call@replace, test: non_inferiority, margin: 2}

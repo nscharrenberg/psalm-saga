@@ -1,0 +1,10 @@
+name: no_feedback
+extends: full
+description: >
+  Ablation. The full pipeline without the measurement-driven revision loop: no style conformance
+  (measured rhythm fed back) and no review (design checklist checked and repaired). The drafting
+  prompt still states the source's measured targets once, so the comparison isolates being measured
+  and corrected from merely being told.
+stages:
+  conform: {enabled: false}
+  review: {enabled: false}

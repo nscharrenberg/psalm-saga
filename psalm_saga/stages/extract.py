@@ -54,7 +54,7 @@ def _norm(s: str) -> str:
 
 def profile_source(text: str) -> SourceProfile:
     from psalm_saga.text.form import form_profile
-    from psalm_saga.text.style import shape
+    from psalm_saga.text.style import frequent_words, shape
 
     chapters = split_chapters(text)
     det = detect_language(text)
@@ -66,6 +66,7 @@ def profile_source(text: str) -> SourceProfile:
         stylometrics=stylometrics(text, det.code),
         shape=shape(text),
         form=form_profile(text),
+        function_words=frequent_words(text),
     )
 
 
@@ -80,6 +81,68 @@ def variety_excerpts(text: str, words: int = 450) -> str:
     dense = max(range(len(paras)), key=lambda i: sum(paras[i].count(q) for q in quotes) / (len(paras[i]) + 50))
     dialogue = " ".join(" ".join(paras[dense : dense + 6]).split()[:words])
     return "\n...\n".join([*(" ".join(toks[p : p + words]) for p in picks), dialogue])
+
+
+_WORD = re.compile(r"\w+", re.UNICODE)
+
+
+def measure_scenes(text: str, scenes: list[SceneNote], language: str) -> int:
+    """Find each scene's opening words in the passage and measure the scene on the text: length,
+    share of direct speech, mean sentence length. The openings are then discarded, so no source
+    wording leaves the analysis. Returns how many scenes were located."""
+    if not scenes:
+        return 0
+    toks = [(m.group().lower(), m.start()) for m in _WORD.finditer(text)]
+    words_ = [t for t, _ in toks]
+    starts: list[int | None] = []
+    pos = 0
+    for s in scenes:
+        want = [w.lower() for w in _WORD.findall(s.opening or "")]
+        found = None
+        for n in (min(6, len(want)), 4, 3):
+            if n < 3 or len(want) < n:
+                continue
+            probe = want[:n]
+            for i in range(pos, len(words_) - n + 1):
+                if words_[i:i + n] == probe:
+                    found = i
+                    break
+            if found is not None:
+                break
+        starts.append(found)
+        if found is not None:
+            pos = found + 1
+        s.opening = ""
+    located = sum(x is not None for x in starts)
+    if located < max(1, (len(scenes) + 1) // 2):
+        return 0
+    if starts[0] is None or starts[0] < 40:
+        starts[0] = 0
+    # Unlocated scenes share the stretch between their located neighbours evenly.
+    i = 0
+    while i < len(starts):
+        if starts[i] is None:
+            j = i
+            while j < len(starts) and starts[j] is None:
+                j += 1
+            lo = starts[i - 1]
+            hi = starts[j] if j < len(starts) else len(words_)
+            step = (hi - lo) / (j - i + 1)
+            for k in range(i, j):
+                starts[k] = int(lo + step * (k - i + 1))
+            i = j
+        i += 1
+    bounds = [*starts, len(words_)]
+    for k, s in enumerate(scenes):
+        a, b = bounds[k], max(bounds[k], bounds[k + 1])
+        if b <= a:
+            continue
+        piece = text[toks[a][1]: toks[b][1] if b < len(toks) else len(text)]
+        st = stylometrics(piece, language)
+        s.words = b - a
+        s.dialogue = round(float(st.get("dialogue_word_share") or 0.0), 3)
+        s.sentence_words = round(float(st.get("mean_sentence_words") or 0.0), 1) or None
+    return located
 
 
 def count_mentions(text: str, names: list[str]) -> int:
@@ -129,6 +192,8 @@ class Extract(Stage):
             return chunk, notes
 
         results = await gather_limited(chunks, analyse, int(self.params.get("parallel", 8)))
+        for chunk, notes in results:
+            measure_scenes(chunk.text, notes.scenes, ctx.language)
         bible = self._merge(results, chapters)
         if self.params.get("consolidate", True) and len(bible.entities) > 1:
             bible = await self._consolidate(ctx, bible)

@@ -153,6 +153,15 @@ case-sensitive matching of the name and aliases per chapter. Entities are then s
 These counts — not the model's — decide graph node weight, which characters count as "main" in
 the evaluation, and which places and objects belong to a chapter.
 
+**Scene measurements.** For each scene the analysis also gives its first six words (`opening`) and
+how it is mainly told (`mode`: action, dialogue, description, reflection, summary). The openings are
+located in the passage (`extract.measure_scenes`, from the longest matching prefix, in order;
+unlocated scenes share the stretch between located neighbours), each scene is measured on the text
+— `words`, `dialogue` (share of words in direct speech), `sentence_words` (mean sentence length) — and
+the openings are then **discarded**, so no source wording enters the bible. The numbers travel with
+the design (transform copies them by scene position) and set the plan's scene budgets and the
+"telling" line of each scene (§9), which keeps the source's pacing.
+
 ## 6. Graph projection (`graph.build_graph`)
 
 Deterministic and stateless: the same bible always gives the same graph.
@@ -203,9 +212,23 @@ tokens of two letters or fewer.
 1. **Renames.** A rename table (`transform.json`) maps every proper name to a new one. It is applied
    to the whole bible, including inside descriptions, summaries and compound names
    ("George's chest" → "Nathaniel's chest"). Ids stay the same, so design and source align by id.
-2. **Policies.** Under `abstract` or `regenerate`, character and world descriptions are rewritten,
-   and each chapter skeleton is re-told under the transformed spec (the scene count must stay the
-   same, otherwise the renamed skeleton is kept). Under `preserve` the design is the renamed source.
+   Names of the real, shared world — countries, seas, nationalities, historical events, public
+   legends — are marked `real` by the model and kept unchanged when world building is preserved
+   (`transform.keep_real_names`, default: follows the world-building policy); they are listed under
+   `kept`. Token-wise forms ("George", "Ballmer" for "George Ballmer") are derived for personal names
+   only, never for places or things ("Flying Dutchman" must not turn every "Flying" into something else).
+2. **Policies.** Under `abstract`, character and world descriptions get new particulars for the same
+   roles, and — when plot structure, scene sequence, character or world is re-invented — each chapter
+   skeleton is re-told: same number of scenes and events, each with the same function, new concrete
+   actions, objects and places. Re-told items whose content words (names aside) still overlap the
+   original's by more than 40% are re-told once more (`stages.transform.params.reskin_retries`); the
+   overlap is logged in `transform_log.json`. Under `regenerate`, a replaced entity is described anew
+   without its original description, relationships owned by a replaced dimension are invented anew,
+   and when plot structure or scene sequence is replaced the skeleton itself is a new story (outline
+   of the same number of chapters and lengths, then scenes and events per chapter). Under `preserve`
+   the design is the renamed source. In source-side comparisons and the trace, items of a re-invented
+   or replaced dimension count as changed by the design; a new story's scenes and events are not
+   related to the source's.
 3. Style notes are removed (the spec carries style).
 
 The result, `bible.json`, is what the writer works from. With everything preserved, "source vs
@@ -218,14 +241,17 @@ source's ids. Instead, the synthetic text's graph is **aligned with the design**
 names the writer was given — in four steps (`eval/kg_align.py`, stored in `recovered/alignment.json`):
 
 1. **Rules.** `compare_graphs(design, text)` in the shared name space (§8): names, aliases,
-   inflection-aware content words, ties to already paired neighbours; scenes and events by content.
+   inflection-aware content words, ties to already paired neighbours. For scenes and events the
+   rules' pairs are only a fallback when a model is used: word overlap in story order can pair a
+   whole chapter one step out of line when the two analyses cut the story differently.
 2. **Model: entities.** The design's characters, places, objects and organisations the rules left
    unpaired, and the text's, are listed with kind, names, chapters and description; one call pairs
    those that denote the same entity (a role for a name, a nickname, another classification),
    one-to-one, with a confidence and a reason. Low-confidence pairs are dropped.
-3. **Model: story.** Per chapter, the unpaired design scenes (then events) and the text's, each in
-   story order, are paired by what happens and who takes part; one design item may take two
-   consecutive text items (told in two parts).
+3. **Model: story.** Per chapter, all design scenes (then events) and the text's, each in story
+   order, are paired by what happens and who takes part; one design item may take two consecutive
+   text items (told in two parts). The rules' story pairs fill in only for chapters the model gave
+   no answer for.
 4. **Check the text.** Design items still unmatched — events, scenes, characters, places, objects,
    relations, causes — are checked against the synthetic chapter itself: per chapter, one call
    receives the chapter and the list (at most 40 items) and answers *yes / partly / no* per item,
@@ -302,15 +328,22 @@ For characters, places, events, causal links and social relations:
 against the source. The relative value is graded. A measure whose ceiling is 0 (the source analysed
 twice does not find those items again) is reported as not measurable on that text.
 
+### 8.5 Trace (`eval/kg_align.trace`)
+Source ↔ design and design ↔ synthetic text compose: every source item is followed through both and
+classified by **where** it changed — *kept throughout*; *changed* or *left out by the design* (the
+policy: intended); *changed*, *lost* or *added in the writing* (the generation). One row per entity,
+scene, event, relation and causal link, with the item as it reads in the source, the design and the
+synthetic text. This separates what the policy asked for from what the generation still loses.
+
 ## 9. Consumers
 
 | Consumer | Uses |
 |---|---|
-| `plan` | Whole design bible (entities and relations, top 40 by mentions) as context; each chapter's skeleton (scenes, events, causes); skeleton word counts as chapter budgets |
+| `plan` | Whole design bible (entities and relations, top 40 by mentions) as context; each chapter's skeleton (scenes, events, causes, measured scene shape); skeleton word counts as chapter budgets and measured scene lengths as scene budgets, with each scene's share of speech, sentence length and mode of telling |
 | `draft` | The chapter's cast: characters in its scenes plus up to 8 places/objects belonging to it, with the relations among them; the **design checklist** as "facts this chapter must show" |
 | `review` | The chapter's cast; the design checklist, each item marked realised / missing / contradicted. Missing or contradicted items become issues (event or cause missing → major, contradicted → blocker; relations and world items → minor unless contradicted); items the plan omitted are routed to re-planning |
 | `evaluate` | Instrument KG (§8.4); character measures use the bible's names and aliases |
-| Web app | Bible tab: graph views (source, design, synthetic text, comparisons, source vs its second analysis), filter by chapter, node and edge details |
+| Web app | Bible tab: three graphs (source, design, synthetic text), any pair compared with every difference listed (CSV), the trace (§8.5), source vs its second analysis; filter by chapter, node and edge details |
 | Export | `saga graph RUN [--compare design|text]`, `GET /api/runs/{id}/graph?which=…&against=…&format=graphml` |
 
 **Design checklist** (`review.design_checklist`, max 30 items per chapter): `E` events of the
@@ -326,14 +359,16 @@ chapter (max 10), `W` places and objects of the chapter by mentions (max 6).
 | `stages.extract.params.parallel` | 8 | Concurrent chunk analyses |
 | `stages.extract.params.temperature` | 0.2 | Analysis temperature |
 | `stages.extract.params.consolidate` | true | Alias consolidation call |
-| `stages.recover.params.calibrate` | true | Second analysis of the source (ceiling) |
+| `stages.recover.params.calibrate` | false | Second analysis of the source (ceiling) |
+| `stages.recover.params.align` | model | `rules` skips the model pairing steps |
+| `transform.keep_real_names` | follows world building | Keep names of the real world unchanged |
 | `stages.review.params.coverage` | true | Design checklist in review |
 | `stages.transform.params.max_entities` | 120 | Entities sent for renaming/rewriting |
 | `models.extract.*` | default model | Model used for analysis (and therefore for recover/calibration) |
 
 ## 11. Interfaces
 
-- **SDK:** `run.graph(which="source"|"synthetic"|"recovered"|"compare", against="design"|"text"|"calibration")`,
+- **SDK:** `run.graph(which="source"|"synthetic"|"recovered"|"compare"|"trace", against="design"|"text"|"design_text"|"calibration")`,
   `run.recovered_bible()`, `await run.arecover()`.
 - **CLI:** `saga graph RUN [-f graphml|json] [--compare design|text]`, `saga show RUN bible`,
   `saga edit RUN bible "…"`.

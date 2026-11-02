@@ -308,6 +308,7 @@
         .map((n) => `<a class="kg-link" data-go="${esc(n.id)}"><i style="background:var(--k-${n.type})"></i>${esc(n.label)}</a>`).join("") || `<div class="muted">none</div>`;
       const as = g.alignment_stats || null;
       side.innerHTML = `<h3>${opts.against === "design_text" ? "Design vs synthetic text" : "Source vs " + (opts.against === "text" ? "synthetic text" : opts.against === "calibration" ? "its own second analysis" : "synthetic design")}</h3>
+        <p class="muted" style="font-size:12px">Below the graph: every difference as a list, with a CSV download.</p>
         <p class="muted" style="font-size:12px">${opts.against === "calibration" ? "The same source analysed twice: every difference is analysis noise." : (opts.against === "text" || opts.against === "design_text") ? "The synthetic text, analysed once, aligned with the design (which keeps the source's identities)." : "The design the synthetic story was written from (story bible after transformation)."} Recall = share of ${opts.against === "design_text" ? "design" : "source"} items found in the synthetic text.</p>
         ${as ? `<p class="muted" style="font-size:12px">Matched by names: ${as.rules ?? 0} · by the model: ${(as.model_entities || 0) + (as.model_story || 0)} · found by checking the text: ${as.found_by_check || 0} of ${as.checked || 0} still unmatched.</p>` : ""}
         ${ceil ? `<p class="muted" style="font-size:12px"><b>Ceiling</b> = the same recall when the source is compared with a second analysis of itself. Two analyses never agree fully, so a recall near the ceiling means the synthetic text keeps that layer as well as can be measured.</p>` : ""}
@@ -379,6 +380,8 @@
 
     intro();
     apply(true);
+    cy.go = go;
+    if (opts.onData) { try { opts.onData(g); } catch (e) { console.error(e); } }
     return cy;
   };
 })();
