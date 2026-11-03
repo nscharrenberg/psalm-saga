@@ -3,7 +3,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: a sticky verdict strip, then results (summary before detail), then the editable assumptions as folding panels. */
+/* Layout: three layers. Decision (shortlist, ranges, reason), Explore (one option: sticky strip, charts, settings), Reference (sources, measured runs). */
 :root {
   --bg: #f5f6f4;
   --surface: #ffffff;
@@ -18,6 +18,7 @@
   --bad-soft: #f8e6df;
   --warn: #9a6a10;
   --c1: #2c6e63; --c2: #c9822b; --c3: #5868b8; --c4: #a14e7d; --c5: #7a8a3a; --c6: #3d93b8;
+  --t-measured: #2c6e63; --t-modelled: #8fb8b0; --t-guessed: #c9822b;
   --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
@@ -28,6 +29,7 @@
     --accent: #6cc0ae; --accent-soft: #1f3631; --good: #7fcb8d; --good-soft: #1d3324;
     --bad: #f08b6a; --bad-soft: #3a221a; --warn: #e2b456;
     --c1: #6cc0ae; --c2: #e3a65a; --c3: #8f9ce6; --c4: #d987b5; --c5: #b3c46a; --c6: #73bfe0;
+    --t-measured: #6cc0ae; --t-modelled: #3f6f66; --t-guessed: #e3a65a;
     color-scheme: dark;
   }
 }
@@ -36,6 +38,7 @@
   --accent: #6cc0ae; --accent-soft: #1f3631; --good: #7fcb8d; --good-soft: #1d3324;
   --bad: #f08b6a; --bad-soft: #3a221a; --warn: #e2b456;
   --c1: #6cc0ae; --c2: #e3a65a; --c3: #8f9ce6; --c4: #d987b5; --c5: #b3c46a; --c6: #73bfe0;
+  --t-measured: #6cc0ae; --t-modelled: #3f6f66; --t-guessed: #e3a65a;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -86,6 +89,7 @@ tr.total td { font-weight: 600; border-bottom: none; }
 tr.off td { color: var(--muted); }
 input[type=number] { font: 0.86rem var(--f-mono); width: 6.5em; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); text-align: right; }
 input[type=number].sm { width: 4.6em; }
+select { font: 0.86rem var(--f-body); padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); vertical-align: middle; }
 label.inline { display: inline-flex; gap: 8px; align-items: center; }
 
@@ -103,6 +107,7 @@ details.panel > summary::after { content: "Show"; font: 500 0.78rem var(--f-mono
 details.panel[open] > summary::after { content: "Hide"; }
 .tag { font: 500 0.7rem/1 var(--f-mono); padding: 3px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
 .tag.model { background: var(--bad-soft); color: var(--warn); }
+button.linkish { background: none; border: 0; padding: 2px 4px; font: 0.8rem var(--f-body); color: var(--accent); text-decoration: underline; cursor: pointer; }
 .note { font-size: 0.86rem; color: var(--muted); }
 ul.notes { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 80ch; }
 .row-flex { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; }
@@ -120,186 +125,277 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 .status { font-size: 0.86rem; min-height: 1.3em; }
 .status.err { color: var(--bad); }
 .status.ok { color: var(--good); }
-.loaded-banner { background: var(--accent-soft); border-radius: 8px; padding: 10px 14px; display: grid; gap: 2px; }
-.loaded-banner b { font-family: var(--f-display); }
+/* layers */
+.explore { display: grid; gap: 28px; min-width: 0; }
+.head-row { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; }
+.head-row h2 { margin-right: auto; }
+.banner { border-radius: 8px; padding: 10px 14px; background: var(--accent-soft); font-size: 0.9rem; max-width: 90ch; }
+.banner.warn { background: var(--bad-soft); border-left: 3px solid var(--warn); }
+.legend .sep { width: 1px; background: var(--line); align-self: stretch; }
+i.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 7px; vertical-align: -1px; }
+
+/* shortlist */
+table.short td { vertical-align: top; padding-block: 11px; }
+table.short tr.sel td { background: var(--accent-soft); }
+.letter { font: 700 1.05rem/1.2 var(--f-display); color: var(--muted); width: 1.6em; }
+button.opt-open { padding: 0; border: 0; background: none; font: 600 0.98rem/1.3 var(--f-body); color: var(--ink); text-align: left;
+  text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+button.opt-open:hover { text-decoration-color: var(--accent); }
+.strip { position: relative; height: 16px; min-width: 170px; background: var(--bg); border-radius: 4px; margin-top: 2px; }
+.strip .rng { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; opacity: 0.55; }
+.rng.fits { background: var(--good); } .rng.risk { background: var(--warn); } .rng.over { background: var(--bad); }
+.strip .dot { position: absolute; top: 1px; width: 4px; height: 14px; margin-left: -2px; border-radius: 2px; background: var(--ink); }
+.strip .bud { position: absolute; top: -3px; bottom: -3px; border-left: 2px dashed var(--ink); opacity: 0.55; }
+.strip .more { position: absolute; right: -10px; top: -2px; font: 600 0.9rem var(--f-mono); color: var(--muted); }
+.state { display: inline-block; padding: 4px 9px; border-radius: 999px; font: 600 0.8rem/1 var(--f-body); white-space: nowrap; }
+.state.fits { background: var(--good-soft); color: var(--good); }
+.state.risk { background: var(--bad-soft); color: var(--warn); }
+.state.over { background: var(--bad-soft); color: var(--bad); }
+.pill.risk { background: var(--bad-soft); color: var(--warn); }
+.tbar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: var(--bg); min-width: 100px; margin-top: 3px; }
+.tbar > span { height: 100%; }
+.edit-cell { display: grid; gap: 6px; min-width: 200px; }
+.reason { border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; display: grid; gap: 6px; }
+.reason p { max-width: 90ch; }
+[hidden] { display: none !important; }
+code { overflow-wrap: anywhere; }
+.wrap, .explore, .panel { grid-template-columns: minmax(0, 1fr); }
+/* phones: each option becomes a card */
+@media (max-width: 720px) {
+  table.short, table.short tbody { display: block; }
+  table.short tr:first-child { display: none; }
+  table.short tr { display: grid; grid-template-columns: 1.6em minmax(0, 1fr) auto; gap: 6px 10px; padding: 12px 6px; border-bottom: 1px solid var(--line); }
+  table.short td { display: block; border: 0; padding: 0; }
+  table.short td.letter { grid-row: 1; grid-column: 1; }
+  table.short td.opt { grid-row: 1; grid-column: 2; }
+  table.short td.likely { grid-row: 1; grid-column: 3; }
+  table.short td.wide { grid-column: 2 / -1; }
+  table.short td.inline-cells { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+  table.short td[data-label]::before { content: attr(data-label) " "; color: var(--muted); font: 500 0.72rem var(--f-mono); text-transform: uppercase; letter-spacing: 0.05em; }
+  table.short td.n { text-align: left; }
+  table.short tr.sel { background: var(--accent-soft); border-radius: 8px; }
+  table.short tr.sel td { background: none; }
+  .strip { min-width: 0; }
+}
 </style>
 <script type="application/json" id="embedded-estimate"></script>
 
-<div class="verdict">
-  <div class="wrap" style="padding-block: 0; gap: 0;">
-    <div class="verdict-inner">
-      <div class="kv"><span class="eyebrow">Estimated total</span><span class="big" id="v-total">$0</span></div>
-      <div class="kv"><span class="eyebrow">Budget</span>
-        <div class="row-flex" style="gap:10px"><span class="pill ok" id="v-pill">within budget</span><div class="budget-bar" id="v-bar"><span></span></div></div></div>
-      <div class="kv"><span class="eyebrow">Runs</span><span class="num" id="v-runs">0</span></div>
-      <div class="kv"><span class="eyebrow">Writer time</span><span class="num" id="v-time">0 h</span></div>
-    </div>
-  </div>
-</div>
-
 <main class="wrap">
   <header class="top">
-    <span class="eyebrow">kb_main · Section 4 design · priced from the four measured full runs</span>
-    <h1>Psalm-Saga Cost Estimator</h1>
-    <p class="muted">Tokens per stage are read from the four measured runs of the full procedure (shortest and longest corpus item, per writer), drawn as a line through those two points against source length, and priced at the rates below. Change any number and the totals follow. Settings are remembered in this browser; save them to a file to keep or share them.</p>
-    <div class="loaded-banner" id="loaded-banner" hidden><b id="lb-name"></b><span class="note" id="lb-meta"></span></div>
+    <span class="eyebrow">PSALM-SAGA · cost of the main experiment</span>
+    <h1 id="est-title">Cost estimate</h1>
+    <p class="muted num" id="est-meta"></p>
+    <div class="banner warn" id="dv-banner" role="status" hidden></div>
+    <p id="est-note" hidden></p>
   </header>
 
+  <!-- Layer 1: the decision -->
+  <section class="panel" aria-labelledby="h-options">
+    <div class="head-row">
+      <h2 id="h-options">Options</h2>
+      <span class="num">Budget <b id="budget-label"></b></span>
+      <label class="inline note"><input type="checkbox" id="edit-mode"> Edit shortlist</label>
+    </div>
+    <p class="note">Each option is a complete design over the selected corpus items. <b>Likely</b> includes the <span id="cont-label"></span> contingency. The bar runs from the low to the high estimate; the dashed line is the budget. <b>Basis</b> shows how much of the cost rests on measured runs, on modelled setups and on guesses. Select an option to explore it below.</p>
+    <div class="legend">
+      <span><i style="background:var(--good)"></i>fits, even at the high end</span>
+      <span><i style="background:var(--warn)"></i>at risk: likely fits, high end does not</span>
+      <span><i style="background:var(--bad)"></i>over budget</span>
+      <span class="sep"></span>
+      <span><i style="background:var(--t-measured)"></i>measured</span>
+      <span><i style="background:var(--t-modelled)"></i>modelled</span>
+      <span><i style="background:var(--t-guessed)"></i>guessed</span>
+    </div>
+    <div class="scroll"><table class="short" id="t-short"></table></div>
+    <div class="reason" id="reason-box">
+      <span class="eyebrow" id="reason-head"></span>
+      <p id="reason-text"></p>
+      <textarea id="reason-edit" hidden aria-label="Why the proposed option is proposed" style="min-height:96px"></textarea>
+    </div>
+    <div class="save-grid" id="edit-fields" hidden>
+      <label class="field" for="est-name">Estimate name
+        <input type="text" id="est-name" placeholder="e.g. Main experiment, November proposal"></label>
+      <label class="field" for="est-note-in">Note for readers
+        <textarea id="est-note-in" placeholder="Shown under the title"></textarea></label>
+    </div>
+  </section>
+
   <details class="panel" id="save-panel">
-    <summary><h3>Save, load and share estimates</h3><span></span></summary>
+    <summary><h3>Save, load and share</h3><span></span></summary>
     <div class="save-grid">
-      <div style="display:grid; gap:10px">
-        <label class="field" for="meta-name">Estimate name
-          <input type="text" id="meta-name" placeholder="e.g. Mistral only, ×1 sample, no G2"></label>
-        <label class="field" for="meta-note">Note for colleagues
-          <textarea id="meta-note" placeholder="What this estimate assumes and why"></textarea></label>
-      </div>
       <div style="display:grid; gap:10px">
         <div class="actions">
           <button class="primary" id="btn-save-json">Save estimate (.json)</button>
-          <button id="btn-save-html">Save as shareable HTML</button>
+          <button id="btn-save-html">Download as HTML</button>
         </div>
-        <p class="note">The <b>.json</b> file holds the settings and opens with <i>Load estimate</i> in this calculator. The <b>HTML</b> file is this calculator with the estimate built in: a colleague opens it in any browser and sees your numbers, and can change them from there.</p>
+        <p class="note">The <b>.json</b> file holds the shortlist, the reason, the range bands and each option's figures at the time of saving. Anyone can open it here with <i>Load estimate</i>. The <b>HTML</b> file is this page with the estimate built in, and opens in any browser without this site.</p>
+        <p class="note">To send a link that opens an estimate, put the .json file online and add <code>?estimate=</code> followed by its address to this page's address. The file's server must allow the page to fetch it.</p>
+      </div>
+      <div style="display:grid; gap:10px">
         <div class="drop" id="drop">
           <span>Drop a saved <b>.json</b> estimate here, or</span>
-          <div class="actions"><button id="btn-load">Load estimate</button><button id="btn-copy">Copy settings</button><button id="btn-reset">Reset to defaults</button></div>
+          <div class="actions"><button id="btn-load">Load estimate</button><button id="btn-copy">Copy JSON</button><button id="btn-reset">Reset to defaults</button></div>
           <input type="file" id="file-in" accept=".json,application/json" hidden>
-          <textarea id="copy-out" readonly hidden aria-label="Settings as JSON" style="min-height:120px; font-family: var(--f-mono); font-size: 0.78rem"></textarea>
+          <textarea id="copy-out" readonly hidden aria-label="Estimate as JSON" style="min-height:120px; font-family: var(--f-mono); font-size: 0.78rem"></textarea>
         </div>
         <p class="status" id="save-status" role="status"></p>
-        <p class="note">On claude.ai you are asked to confirm each save. Where saving isn't available, <i>Copy settings</i> puts the same JSON on the clipboard to paste into a <code>.json</code> file.</p>
       </div>
     </div>
   </details>
 
-  <section class="scenarios" aria-label="Scenarios">
-    <span class="eyebrow" style="margin-right:6px">Scenario</span>
-    <button data-scn="full">Full design</button>
-    <button data-scn="full1">Full procedure ×1 sample</button>
-    <button data-scn="mistral">Mistral only</button>
-    <button data-scn="gemma">Gemma only</button>
-    <button data-scn="nog2">Without G2</button>
-    <button data-scn="lean">Mistral only, ×1, without G2</button>
-  </section>
-
-  <div class="grid2">
-    <section class="panel">
-      <h2>Where the money goes</h2>
-      <p class="note">By model billed, before contingency.</p>
-      <div class="bars" id="by-model"></div>
-    </section>
-    <section class="panel">
-      <h2>Cost by part of the experiment</h2>
-      <p class="note">Main runs split into writer and judge cost, plus the evaluation extras, before contingency.</p>
-      <div class="bars" id="by-part"></div>
-    </section>
-  </div>
-
-  <section class="panel">
-    <h2>Runs by writer and setup</h2>
-    <div class="scroll"><table id="t-setups"></table></div>
-    <p class="note" id="setup-note"></p>
-  </section>
-
-  <section class="panel">
-    <h2>Writer cost by pipeline stage</h2>
-    <p class="note">All main runs, per writer. Stage multipliers of each setup are applied.</p>
-    <div class="legend" id="stage-legend"></div>
-    <div class="bars" id="by-stage"></div>
-  </section>
-
-  <h2 style="margin-top:8px">Assumptions</h2>
-
-  <details class="panel" open>
-    <summary><h3>Prices and models</h3><span></span></summary>
-    <p class="note">USD per million tokens on OpenRouter. These values reproduce every recorded <code>cost_usd</code> of the measured runs exactly. Untick a writer or judge to leave it out.</p>
-    <div class="scroll"><table id="t-prices"></table></div>
-  </details>
-
-  <details class="panel" open>
-    <summary><h3>Design</h3><span></span></summary>
-    <div class="row-flex">
-      <label class="inline">Budget $ <input type="number" id="budget" min="0" step="10"></label>
-      <label class="inline">Contingency % <input type="number" id="contingency" class="sm" min="0" step="5"></label>
-      <label class="inline">Concurrent runs <input type="number" id="concurrency" class="sm" min="1" step="1"></label>
+  <!-- Layer 2: explore one option -->
+  <section class="explore" aria-labelledby="h-explore">
+    <div class="verdict">
+      <div class="verdict-inner">
+        <div class="kv"><span class="eyebrow">Exploring</span><span id="v-opt"></span></div>
+        <div class="kv"><span class="eyebrow">Likely</span><span class="big" id="v-total">$0</span></div>
+        <div class="kv"><span class="eyebrow">Range</span><span class="num" id="v-range"></span></div>
+        <div class="kv"><span class="eyebrow">Budget</span>
+          <div class="row-flex" style="gap:10px"><span class="pill ok" id="v-pill"></span><div class="budget-bar" id="v-bar"><span></span></div></div></div>
+        <div class="kv"><span class="eyebrow">Runs</span><span class="num" id="v-runs">0</span></div>
+        <div class="kv"><span class="eyebrow">Reasoning</span><span class="num" id="v-rsn">$0</span></div>
+        <div class="kv"><span class="eyebrow">Writer time</span><span class="num" id="v-time">0 h</span></div>
+        <div class="actions">
+          <button id="btn-add-opt">Add to shortlist</button>
+          <button id="btn-update-opt" hidden></button>
+          <button id="btn-revert" hidden>Undo changes</button>
+        </div>
+      </div>
     </div>
-    <div class="scroll"><table id="t-design"></table></div>
-    <p class="note">Samples per item and policy setting. In the paper's design the full procedure runs 3 times, every other setup once, and paraphrase only under <em>preserve</em>, which gives 19 runs per item and writer.</p>
-  </details>
 
-  <details class="panel" open>
-    <summary><h3>Evaluation extras</h3><span></span></summary>
-    <p class="note">Instruments of the <code>judge:</code> block that run once per experiment, not per run. None of the four measured runs included them, so their size is derived from the measured judge calls.</p>
-    <div class="scroll"><table id="t-extras"></table></div>
-  </details>
+    <div class="head-row"><h2 id="h-explore">Explore</h2></div>
+    <p class="note" style="margin-top:-18px">Change any setting below to try a variation. The shortlist only changes when you add the variation as an option or update the option you started from.</p>
 
-  <details class="panel">
-    <summary><h3>How the setups differ from the full procedure</h3><span class="tag model">modelled, not measured</span></summary>
-    <p class="note">Only the full procedure was measured. Each other setup uses the full procedure's tokens per stage times these factors (input / output). 0 removes a stage. Judges run on every setup.</p>
-    <div class="scroll"><table id="t-mult"></table></div>
-  </details>
+    <div class="grid2">
+      <section class="panel">
+        <h2>Where the money goes</h2>
+        <p class="note">By model billed, before contingency, split into input, visible answer and reasoning.</p>
+        <div class="legend" id="model-legend"></div>
+        <div class="bars" id="by-model"></div>
+      </section>
+      <section class="panel">
+        <h2>Cost by part of the experiment</h2>
+        <p class="note">Writer and judge cost of the main runs, the evaluation extras, and the contingency.</p>
+        <div class="bars" id="by-part"></div>
+      </section>
+    </div>
 
-  <details class="panel">
-    <summary><h3>Corpus</h3><span id="corpus-count" class="tag"></span></summary>
-    <p class="note">The 29 items of <code>experiments/data/stories/corpus.csv</code>. Untick an item to leave it out. Cost per item is one full-procedure run per writer, before contingency.</p>
-    <div class="scroll"><table id="t-corpus"></table></div>
-  </details>
+    <section class="panel">
+      <h2>Runs by writer and setup</h2>
+      <div class="scroll"><table id="t-setups"></table></div>
+      <p class="note" id="setup-note"></p>
+    </section>
 
-  <details class="panel">
-    <summary><h3>Measured runs</h3><span></span></summary>
-    <p class="note">Tokens per stage in the four runs the estimate is built on. Source: <code>final_psalm_saga_data/&lt;writer&gt;/&lt;language&gt;/&lt;run&gt;/calls/*.json</code>.</p>
-    <div class="scroll"><table id="t-measured"></table></div>
-  </details>
+    <section class="panel">
+      <h2>Writer cost by pipeline stage</h2>
+      <p class="note">All main runs, per writer, with each setup's stage factors applied.</p>
+      <div class="legend" id="stage-legend"></div>
+      <div class="bars" id="by-stage"></div>
+    </section>
 
-  <section class="panel">
-    <h2>Method and limits</h2>
-    <ul class="notes">
-      <li><b>Scaling.</b> For each writer and stage, tokens = a + b × source words, a straight line through the 300-word run and the 8,521-word run. Every corpus item lies between them, so nothing is extrapolated. Writer time scales the same way.</li>
-      <li><b>Language and length are confounded.</b> The short runs are Dutch and the long runs English, so a language effect cannot be told from a length effect. Each point is a single draw; Mistral's output is mostly reasoning and varies between runs. The contingency covers this, along with retries and failed runs.</li>
-      <li><b>Gemma's short run</b> recorded $0 because no price was set; its tokens are priced at the rates the other Gemma run recorded.</li>
-      <li><b>Judges.</b> Claude Sonnet 5.5, GPT-6.1 Sol and Qwen 3.8 Flash rate every run of every setup, so no measure rests on one judge. The judges read the writer's text, so their tokens are taken from the same writer's run.</li>
-      <li><b>PSALM lower anchor:</b> one pair per item (the source against the next source of its language) × each judge. One pair costs the share of a run's judge tokens that the six PSALM calls take (85% measured).</li>
-      <li><b>Alignment lower anchor:</b> one alignment of an item's design with another item's text, per item and writer, priced as that writer's <code>recover</code> stage.</li>
-      <li><b>G2 pairwise quality:</b> every text of full (each sample), no_graph, no_feedback and paraphrase against the single call for the same item, policy and writer, in both orders, by each judge. One comparison is priced as one PSALM call (14% of a run's judge tokens).</li>
-      <li><b>Unmeasured setups.</b> no_graph, no_feedback, paraphrase and single_call are modelled from the full procedure's stages; see the factor table. Running one item of each setup per writer would replace these guesses with measurements.</li>
-    </ul>
+    <h2 style="margin-top:8px">Settings</h2>
+
+    <details class="panel" open>
+      <summary><h3>Prices and models</h3><span></span></summary>
+      <p class="note">USD per million tokens on OpenRouter. These prices reproduce every recorded <code>cost_usd</code> of the measured runs. Untick a writer or judge to leave it out.</p>
+      <div class="scroll"><table id="t-prices"></table></div>
+      <p class="note">All four runs used reasoning effort <i>medium</i>, so only medium is measured. <i>None</i> drops the reasoning tokens and keeps the visible answer; that gives the cost, not the effect on quality. <i>Low</i> and <i>high</i> scale the measured reasoning by the factors below. The reasoning share is editable per model, for example to give Claude reasoning: a custom share keeps the measured answer tokens and adds reasoning until it makes up that share of the output. Clear the field or press <i>reset</i> to return to the measured tokens.</p>
+      <div class="scroll"><table id="t-effort"></table></div>
+    </details>
+
+    <details class="panel" open>
+      <summary><h3>Design</h3><span></span></summary>
+      <div class="row-flex">
+        <label class="inline">Budget $ <input type="number" id="budget" min="0" step="10"></label>
+        <label class="inline">Contingency % <input type="number" id="contingency" class="sm" min="0" step="5"></label>
+        <label class="inline">Concurrent runs <input type="number" id="concurrency" class="sm" min="1" step="1"></label>
+      </div>
+      <div class="scroll"><table id="t-design"></table></div>
+      <p class="note">Samples per item and policy setting. The paper's design runs the full procedure 3 times, every other setup once, and paraphrase only under <em>preserve</em>: 19 runs per item and writer.</p>
+    </details>
+
+    <details class="panel" open>
+      <summary><h3>Evaluation extras</h3><span class="tag model">modelled</span></summary>
+      <p class="note">Instruments of the <code>judge:</code> block that run once per experiment, not once per run. None of the measured runs included them; their size is derived from the measured judge calls.</p>
+      <div class="scroll"><table id="t-extras"></table></div>
+    </details>
+
+    <details class="panel">
+      <summary><h3>How the setups differ from the full procedure</h3><span class="tag model">modelled</span></summary>
+      <p class="note">Only the full procedure was measured. Every other setup uses the full procedure's tokens per stage times these factors (input / output); 0 removes a stage. Judges rate every setup.</p>
+      <div class="scroll"><table id="t-mult"></table></div>
+    </details>
+
+    <details class="panel">
+      <summary><h3>Range bands</h3><span class="tag model">judgement</span></summary>
+      <p class="note">How far each kind of cost may fall below or rise above its estimate. The high end adds the contingency on top, for retries and failed calls the page cannot price. Changing a band changes every option's range.</p>
+      <div class="scroll"><table id="t-bands"></table></div>
+    </details>
+
+    <details class="panel">
+      <summary><h3>Corpus</h3><span id="corpus-count" class="tag"></span></summary>
+      <p class="note">The 29 items of <code>experiments/data/stories/corpus.csv</code>. Cost scales with the source's length in characters. Untick an item to leave it out. Cost per item is one full-procedure run per writer, before contingency.</p>
+      <div class="scroll"><table id="t-corpus"></table></div>
+    </details>
+  </section>
+
+  <!-- Layer 3: reference -->
+  <section class="explore" aria-labelledby="h-ref">
+    <h2 id="h-ref">Reference</h2>
+    <details class="panel">
+      <summary><h3>Where the numbers come from</h3><span></span></summary>
+      <ul class="notes">
+        <li><b>Measured.</b> Tokens per stage from four runs of the full procedure at reasoning effort medium: the shortest item (De vliegende Robert, 1,720 characters, Dutch) and the longest (A Scandal in Bohemia, 46,377 characters, English), once per writer. Gemma's short run recorded $0 because no price was set; its tokens are priced at the rates of the other Gemma run.</li>
+        <li><b>Scaling.</b> For each writer and stage, a straight line through the two runs, by source characters. Every corpus item lies between them. Length and language are confounded: the short runs are Dutch and the long runs English. Each point is a single run.</li>
+        <li><b>Modelled.</b> The four other setups (factors under <i>How the setups differ</i>), the PSALM anchor (85% of a run's judge tokens per pair), the alignment anchor (priced as the writer's <code>recover</code> stage) and G2 (14% of a run's judge tokens per comparison).</li>
+        <li><b>Guessed.</b> Output at an effort other than medium, custom reasoning shares, and items outside the measured length range.</li>
+        <li><b>Not priced.</b> Failed calls and retries. The Mistral Dutch run had 12 failed draft retries in which reasoning used up the output allowance; they carry no usage. The contingency covers these.</li>
+        <li><b>Data version</b> <span class="num" id="dv-label"></span>. Saved estimates record it; when it changes, they show their saved figures next to the current ones.</li>
+      </ul>
+    </details>
+    <details class="panel">
+      <summary><h3>Measured runs</h3><span></span></summary>
+      <p class="note">Tokens per stage in the four runs. Source: <code>final_psalm_saga_data/&lt;writer&gt;/&lt;language&gt;/&lt;run&gt;/calls/*.json</code>.</p>
+      <div class="scroll"><table id="t-measured"></table></div>
+    </details>
   </section>
 </main>
 
 <script id="app">
 /* ---------- measured data (final_psalm_saga_data, Nov 2026) ---------- */
-const PROFILE = {"gemma":{"short":{"run":"full-20261102-164927-110d92-full","language":"dutch","words":300,"story_words":353,"stages":{"gpt":{"calls":8,"in":15267,"out":10912,"sec":226},"recover":{"calls":10,"in":7393,"out":2145,"sec":37},"extract":{"calls":16,"in":24252,"out":135347,"sec":2147},"claude":{"calls":8,"in":25680,"out":11386,"sec":89},"qwen":{"calls":10,"in":22773,"out":90907,"sec":1108},"spec":{"calls":6,"in":10777,"out":4318,"sec":68},"plan":{"calls":4,"in":19948,"out":4253,"sec":80},"draft":{"calls":3,"in":13357,"out":568,"sec":13},"transform":{"calls":2,"in":3808,"out":817,"sec":19},"conform":{"calls":6,"in":5146,"out":1060,"sec":33},"review":{"calls":9,"in":34576,"out":5383,"sec":85}}},"long":{"run":"full-20261103-081949-ec21fa-full","language":"english","words":8521,"story_words":7903,"stages":{"conform":{"calls":13,"in":70734,"out":45706,"sec":777},"gpt":{"calls":8,"in":55539,"out":9494,"sec":227},"qwen":{"calls":8,"in":55977,"out":67850,"sec":1220},"extract":{"calls":17,"in":53146,"out":63301,"sec":846},"recover":{"calls":13,"in":20445,"out":1991,"sec":33},"spec":{"calls":6,"in":15872,"out":3560,"sec":80},"plan":{"calls":5,"in":27972,"out":9901,"sec":109},"draft":{"calls":9,"in":65314,"out":29550,"sec":436},"review":{"calls":10,"in":69855,"out":11426,"sec":186},"claude":{"calls":8,"in":85070,"out":12182,"sec":96},"transform":{"calls":2,"in":3924,"out":1432,"sec":10}}}},"mistral":{"short":{"run":"full-20261103-090439-74f13c-full","language":"dutch","words":300,"story_words":371,"stages":{"extract":{"calls":11,"in":14885,"out":163639,"sec":1134},"draft":{"calls":30,"in":191606,"out":92567,"sec":664},"claude":{"calls":8,"in":27679,"out":11306,"sec":88},"transform":{"calls":2,"in":8532,"out":10624,"sec":85},"gpt":{"calls":8,"in":16447,"out":10505,"sec":269},"review":{"calls":8,"in":66362,"out":166449,"sec":1470},"guard":{"calls":1,"in":553,"out":2600,"sec":28},"plan":{"calls":5,"in":52791,"out":45061,"sec":307},"recover":{"calls":10,"in":9262,"out":89106,"sec":703},"spec":{"calls":6,"in":19747,"out":45793,"sec":387},"conform":{"calls":5,"in":10077,"out":120273,"sec":893},"qwen":{"calls":8,"in":18190,"out":67060,"sec":1148}}},"long":{"run":"full-20261103-105212-15fc38-full","language":"english","words":8521,"story_words":8371,"stages":{"extract":{"calls":27,"in":66976,"out":480565,"sec":3588},"conform":{"calls":11,"in":32167,"out":420487,"sec":3001},"qwen":{"calls":8,"in":97984,"out":90079,"sec":1355},"recover":{"calls":10,"in":20372,"out":83121,"sec":763},"plan":{"calls":5,"in":68896,"out":42093,"sec":413},"review":{"calls":8,"in":97987,"out":152898,"sec":1265},"spec":{"calls":6,"in":34317,"out":35794,"sec":278},"gpt":{"calls":8,"in":96670,"out":9639,"sec":246},"claude":{"calls":8,"in":148266,"out":11929,"sec":96},"guard":{"calls":1,"in":522,"out":3947,"sec":26},"transform":{"calls":2,"in":9980,"out":18174,"sec":124},"draft":{"calls":8,"in":116444,"out":373051,"sec":2706}}}}};
+const PROFILE = {"gemma":{"short":{"run":"full-20261102-164927-110d92-full","language":"dutch","words":300,"story_words":353,"stages":{"gpt":{"calls":8,"in":15267,"out":10912,"rsn":761,"sec":226},"recover":{"calls":10,"in":7393,"out":2145,"rsn":0,"sec":37},"extract":{"calls":16,"in":24252,"out":135347,"rsn":119819,"sec":2147},"claude":{"calls":8,"in":25680,"out":11386,"rsn":0,"sec":89},"qwen":{"calls":10,"in":22773,"out":90907,"rsn":81485,"sec":1108},"spec":{"calls":6,"in":10777,"out":4318,"rsn":0,"sec":68},"plan":{"calls":4,"in":19948,"out":4253,"rsn":0,"sec":80},"draft":{"calls":3,"in":13357,"out":568,"rsn":0,"sec":13},"transform":{"calls":2,"in":3808,"out":817,"rsn":0,"sec":19},"conform":{"calls":6,"in":5146,"out":1060,"rsn":0,"sec":33},"review":{"calls":9,"in":34576,"out":5383,"rsn":0,"sec":85}}},"long":{"run":"full-20261103-081949-ec21fa-full","language":"english","words":8521,"story_words":7903,"stages":{"conform":{"calls":13,"in":70734,"out":45706,"rsn":16080,"sec":777},"gpt":{"calls":8,"in":55539,"out":9494,"rsn":524,"sec":227},"qwen":{"calls":8,"in":55977,"out":67850,"rsn":60058,"sec":1220},"extract":{"calls":17,"in":53146,"out":63301,"rsn":39918,"sec":846},"recover":{"calls":13,"in":20445,"out":1991,"rsn":0,"sec":33},"spec":{"calls":6,"in":15872,"out":3560,"rsn":0,"sec":80},"plan":{"calls":5,"in":27972,"out":9901,"rsn":0,"sec":109},"draft":{"calls":9,"in":65314,"out":29550,"rsn":8249,"sec":436},"review":{"calls":10,"in":69855,"out":11426,"rsn":0,"sec":186},"claude":{"calls":8,"in":85070,"out":12182,"rsn":0,"sec":96},"transform":{"calls":2,"in":3924,"out":1432,"rsn":0,"sec":10}}}},"mistral":{"short":{"run":"full-20261103-090439-74f13c-full","language":"dutch","words":300,"story_words":371,"stages":{"extract":{"calls":11,"in":14885,"out":163639,"rsn":146263,"sec":1134},"draft":{"calls":18,"in":191606,"out":92567,"rsn":91745,"sec":664},"claude":{"calls":8,"in":27679,"out":11306,"rsn":0,"sec":88},"transform":{"calls":2,"in":8532,"out":10624,"rsn":8952,"sec":85},"gpt":{"calls":8,"in":16447,"out":10505,"rsn":875,"sec":269},"review":{"calls":8,"in":66362,"out":166449,"rsn":155677,"sec":1470},"guard":{"calls":1,"in":553,"out":2600,"rsn":2538,"sec":28},"plan":{"calls":5,"in":52791,"out":45061,"rsn":36732,"sec":307},"recover":{"calls":10,"in":9262,"out":89106,"rsn":85544,"sec":703},"spec":{"calls":6,"in":19747,"out":45793,"rsn":36724,"sec":387},"conform":{"calls":5,"in":10077,"out":120273,"rsn":119689,"sec":893},"qwen":{"calls":8,"in":18190,"out":67060,"rsn":58282,"sec":1148}}},"long":{"run":"full-20261103-105212-15fc38-full","language":"english","words":8521,"story_words":8371,"stages":{"extract":{"calls":27,"in":66976,"out":480565,"rsn":401937,"sec":3588},"conform":{"calls":11,"in":32167,"out":420487,"rsn":403748,"sec":3001},"qwen":{"calls":8,"in":97984,"out":90079,"rsn":82084,"sec":1355},"recover":{"calls":10,"in":20372,"out":83121,"rsn":79712,"sec":763},"plan":{"calls":5,"in":68896,"out":42093,"rsn":31740,"sec":413},"review":{"calls":8,"in":97987,"out":152898,"rsn":143564,"sec":1265},"spec":{"calls":6,"in":34317,"out":35794,"rsn":26480,"sec":278},"gpt":{"calls":8,"in":96670,"out":9639,"rsn":689,"sec":246},"claude":{"calls":8,"in":148266,"out":11929,"rsn":0,"sec":96},"guard":{"calls":1,"in":522,"out":3947,"rsn":3882,"sec":26},"transform":{"calls":2,"in":9980,"out":18174,"rsn":15386,"sec":124},"draft":{"calls":8,"in":116444,"out":373051,"rsn":362051,"sec":2706}}}}};
 
+// [id, language, title, characters, words] from experiments/data/stories/corpus.csv
 const CORPUS = [
-  ["satire_the_happy_prince","en","The Happy Prince",3471],
-  ["satire_a_modest_proposal","en","A Modest Proposal",3386],
-  ["satire_jumping_frog_of_calaveras_county","en","The Celebrated Jumping Frog of Calaveras County",2558],
-  ["gothic_the_fall_of_the_house_of_usher","en","The Fall of the House of Usher",7044],
-  ["gothic_the_yellow_wallpaper","en","The Yellow Wallpaper",6078],
-  ["gothic_oh_whistle_and_ill_come_to_you_my_lad","en","Oh, Whistle, and I'll Come to You, My Lad",7944],
-  ["detective_the_blue_cross","en","The Blue Cross",7470],
-  ["detective_a_scandal_in_bohemia","en","A Scandal in Bohemia",8521],
-  ["detective_the_moonstone_ch11","en","The Moonstone, ch. XI",8018],
-  ["domestic_cranford_ch1","en","Cranford, ch. I",3944],
-  ["domestic_silas_marner_ch1","en","Silas Marner, ch. I",4431],
-  ["domestic_pride_and_prejudice_ch18","en","Pride and Prejudice, ch. XVIII",5169],
-  ["adventure_treasure_island_ch1-3","en","Treasure Island, ch. I–III",6615],
-  ["adventure_typhoon_ch2","en","Typhoon, ch. II",5609],
-  ["adventure_two_years_before_the_mast_ch6","en","Two Years Before the Mast, ch. VI",2064],
-  ["gothic_een_aardig_prentenboek","nl","Een aardig prentenboek",1691],
-  ["gothic_de_vliegende_robert","nl","De vliegende Robert",300],
-  ["gothic_vrouw_holle","nl","Vrouw Holle",1159],
-  ["detective_de_pleegzoon_ch9","nl","De pleegzoon, ch. 9",5307],
-  ["detective_ferdinand_huyck_ch11","nl","Ferdinand Huyck, ch. 11",5523],
-  ["domestic_de_kinderen_van_t_woud","nl","De kinderen van 't woud",5316],
-  ["domestic_de_ooievaar_komt","nl","De ooievaar komt",2673],
-  ["domestic_majoor_frans_opening","nl","Majoor Frans, opening",6671],
-  ["adventure_reizen_en_avonturen_van_mijnheer_prikkebeen","nl","Reizen en avonturen van mijnheer Prikkebeen",5721],
-  ["adventure_de_hollandsche_robinson_crusoe","nl","De Hollandsche Robinson Crusoe, ch. 1",4932],
-  ["adventure_ferdinand_huyck_ch5","nl","Ferdinand Huyck, ch. 5",5479],
-  ["satire_fabelen_en_gedichtjes","nl","Fabelen en gedichtjes",602],
-  ["satire_piet_de_smeerpoets","nl","Piet de Smeerpoets",894],
-  ["satire_de_ondeugende_kinderen","nl","De ondeugende kinderen",2165]
+  ["satire_the_happy_prince","en","The Happy Prince",18316,3471],
+  ["satire_a_modest_proposal","en","A Modest Proposal",19293,3386],
+  ["satire_jumping_frog_of_calaveras_county","en","The Celebrated Jumping Frog of Calaveras County",13548,2558],
+  ["gothic_the_fall_of_the_house_of_usher","en","The Fall of the House of Usher",41389,7044],
+  ["gothic_the_yellow_wallpaper","en","The Yellow Wallpaper",31446,6078],
+  ["gothic_oh_whistle_and_ill_come_to_you_my_lad","en","Oh, Whistle, and I'll Come to You, My Lad",43005,7944],
+  ["detective_the_blue_cross","en","The Blue Cross",41853,7470],
+  ["detective_a_scandal_in_bohemia","en","A Scandal in Bohemia",46377,8521],
+  ["detective_the_moonstone_ch11","en","The Moonstone, ch. XI",44527,8018],
+  ["domestic_cranford_ch1","en","Cranford, ch. I",22117,3944],
+  ["domestic_silas_marner_ch1","en","Silas Marner, ch. I",24915,4431],
+  ["domestic_pride_and_prejudice_ch18","en","Pride and Prejudice, ch. XVIII",29207,5169],
+  ["adventure_treasure_island_ch1-3","en","Treasure Island, ch. I–III",34136,6615],
+  ["adventure_typhoon_ch2","en","Typhoon, ch. II",31475,5609],
+  ["adventure_two_years_before_the_mast_ch6","en","Two Years Before the Mast, ch. VI",10719,2064],
+  ["gothic_een_aardig_prentenboek","nl","Een aardig prentenboek",9453,1691],
+  ["gothic_de_vliegende_robert","nl","De vliegende Robert",1720,300],
+  ["gothic_vrouw_holle","nl","Vrouw Holle",6192,1159],
+  ["detective_de_pleegzoon_ch9","nl","De pleegzoon, ch. 9",31835,5307],
+  ["detective_ferdinand_huyck_ch11","nl","Ferdinand Huyck, ch. 11",33247,5523],
+  ["domestic_de_kinderen_van_t_woud","nl","De kinderen van 't woud",29745,5316],
+  ["domestic_de_ooievaar_komt","nl","De ooievaar komt",15162,2673],
+  ["domestic_majoor_frans_opening","nl","Majoor Frans, opening",38394,6671],
+  ["adventure_reizen_en_avonturen_van_mijnheer_prikkebeen","nl","Reizen en avonturen van mijnheer Prikkebeen",31576,5721],
+  ["adventure_de_hollandsche_robinson_crusoe_ch1","nl","De Hollandsche Robinson Crusoe, ch. 1",27361,4932],
+  ["adventure_ferdinand_huyck_ch5","nl","Ferdinand Huyck, ch. 5",31552,5479],
+  ["satire_fabelen_en_gedichtjes","nl","Fabelen en gedichtjes",3138,602],
+  ["satire_piet_de_smeerpoets","nl","Piet de Smeerpoets",4715,894],
+  ["satire_de_ondeugende_kinderen","nl","De ondeugende kinderen",11638,2165]
 ];
 
 const WRITERS = ["gemma", "mistral"];
@@ -314,7 +410,11 @@ const LABEL = {
   draft: "draft", conform: "conform", review: "review + repair", guard: "guard"
 };
 const STAGE_NOTE = { extract: "source analysis", recover: "analysis of the synthetic text", review: "review + repair", plan: "plan + replan" };
-const W0 = 300, W1 = 8521;
+// source characters of the measured items: De vliegende Robert (shortest) and A Scandal in Bohemia (longest), for both writers
+const C0 = 1720, C1 = 46377;
+// Bump DATA_VERSION whenever the measured data, default prices or the formulas change, so saved estimates show their old figures next to the new ones.
+const DATA_VERSION = "2026-11-03 · 4 runs · characters";
+const TRUST = ["measured", "modelled", "guessed"];
 
 function defaults() {
   const ones = () => Object.fromEntries([...STAGES, ...JUDGES].map(s => [s, [1, 1]]));
@@ -338,32 +438,74 @@ function defaults() {
     mult,
     extras: { psalmAnchor: true, alignAnchor: true, g2: true, anchorShare: 0.85, pairShare: 0.14, orders: 2 },
     budget: 400, contingency: 30, concurrency: 3,
-    corpusOff: []
+    corpusOff: [],
+    // reasoning effort per model; all four runs used medium. The factor scales the measured reasoning tokens.
+    effort: { gemma: "medium", mistral: "medium", claude: "medium", gpt: "medium", qwen: "medium" },
+    effortFactor: { none: 0, low: 0.4, medium: 1, high: 2 },
+    // reasoning share of output at medium, in %; null = use the measured tokens per stage.
+    // An override keeps the measured answer tokens and sets reasoning = answer × s / (100 − s).
+    rsnShare: { gemma: null, mistral: null, claude: null, gpt: null, qwen: null }
   };
 }
+const EFFORTS = ["none", "low", "medium", "high"];
 
 /* ---------- the model: pure function of the settings ---------- */
-function interp(writer, key, field, w) {
+// tokens of a stage for a source of `c` characters: a straight line through the short and the long run
+function interp(writer, key, field, c) {
   const a = PROFILE[writer].short.stages[key]?.[field] || 0;
   const b = PROFILE[writer].long.stages[key]?.[field] || 0;
-  return Math.max(0, a + (b - a) * (w - W0) / (W1 - W0));
+  return Math.max(0, a + (b - a) * (c - C0) / (C1 - C0));
 }
-function price(model, tin, tout, st) { return (tin * st.prices[model][0] + tout * st.prices[model][1]) / 1e6; }
+const inRange = c => c >= C0 && c <= C1;
+const zeroT = () => ({ measured: 0, modelled: 0, guessed: 0 });
+// Where a stage's cost comes from. base: "measured" for the full procedure as run, else "modelled".
+// Output priced at an effort other than medium is a guess; so is reasoning from a custom share; so is anything outside the measured length range.
+function addTrust(acc, st, model, c, base, chars, n = 1) {
+  if (!inRange(chars)) { acc.guessed += c.total * n; return; }
+  const effortGuess = st.effort[model] !== "medium";
+  const shareGuess = st.rsnShare[model] !== null;
+  acc[base] += c.in * n;
+  acc[effortGuess ? "guessed" : base] += c.ans * n;
+  acc[effortGuess || shareGuess ? "guessed" : base] += c.rsn * n;
+}
+// Cost of one stage, billed to `model`, with tokens read from `prof`'s runs; split into input, answer and reasoning.
+// Output tokens = answer + reasoning; reasoning is scaled by the model's effort factor (medium = 1, as measured).
+function cost3(st, model, prof, key, w, mi = 1, mo = 1) {
+  const tin = interp(prof, key, "in", w) * mi;
+  const out = interp(prof, key, "out", w);
+  const rsnMeasured = Math.min(out, interp(prof, key, "rsn", w));
+  const ans = out - rsnMeasured;
+  const s = st.rsnShare?.[model];
+  const rsn = (s === null || s === undefined) ? rsnMeasured : ans * Math.min(s, 99) / (100 - Math.min(s, 99));
+  const f = st.effortFactor[st.effort[model]] ?? 1;
+  const [pi, po] = st.prices[model];
+  const c = { in: tin * pi / 1e6, ans: ans * mo * po / 1e6, rsn: rsn * f * mo * po / 1e6 };
+  c.total = c.in + c.ans + c.rsn;
+  c.outScale = out > 0 ? (ans + rsn * f) / out : 1; // for time: generation time follows output tokens
+  return c;
+}
+const zero3 = () => ({ in: 0, ans: 0, rsn: 0, total: 0 });
+function add3(acc, c, n = 1) { acc.in += c.in * n; acc.ans += c.ans * n; acc.rsn += c.rsn * n; acc.total += c.total * n; }
 
 function oneRun(st, writer, setup, w) {
-  // cost of one run of `setup` by `writer` on an item of w words, split by stage
-  const r = { writer: 0, judge: 0, stages: {}, judges: {}, sec: 0 };
+  // cost of one run of `setup` by `writer` on an item of w characters, split by stage, by model and by trust
+  const r = { writer: 0, judge: 0, stages: {}, judges: {}, sec: 0, split: {}, trust: zeroT() };
+  const baseOf = ([mi, mo]) => (setup === "full" && mi === 1 && mo === 1) ? "measured" : "modelled";
+  r.split[writer] = zero3();
   for (const s of STAGES) {
     const [mi, mo] = st.mult[setup][s];
-    const c = price(writer, interp(writer, s, "in", w) * mi, interp(writer, s, "out", w) * mo, st);
-    r.stages[s] = c; r.writer += c;
-    r.sec += interp(writer, s, "sec", w) * Math.max(mi, mo);
+    const c = cost3(st, writer, writer, s, w, mi, mo);
+    r.stages[s] = c.total; r.writer += c.total; add3(r.split[writer], c);
+    addTrust(r.trust, st, writer, c, baseOf(st.mult[setup][s]), w);
+    r.sec += interp(writer, s, "sec", w) * mo * c.outScale;
   }
   for (const j of JUDGES) {
+    r.split[j] = zero3();
     if (!st.use[j]) { r.judges[j] = 0; continue; }
     const [mi, mo] = st.mult[setup][j];
-    const c = price(j, interp(writer, j, "in", w) * mi, interp(writer, j, "out", w) * mo, st);
-    r.judges[j] = c; r.judge += c;
+    const c = cost3(st, j, writer, j, w, mi, mo);
+    r.judges[j] = c.total; r.judge += c.total; add3(r.split[j], c);
+    addTrust(r.trust, st, j, c, baseOf(st.mult[setup][j]), w);
   }
   return r;
 }
@@ -375,9 +517,10 @@ function compute(st) {
   const out = {
     items: items.length, runs: 0, sec: 0,
     byModel: Object.fromEntries([...WRITERS, ...JUDGES].map(m => [m, 0])),
+    split: Object.fromEntries([...WRITERS, ...JUDGES].map(m => [m, zero3()])),
     byPart: { writer: 0, judge: 0, psalmAnchor: 0, alignAnchor: 0, g2: 0 },
     bySetup: {}, byStage: Object.fromEntries(WRITERS.map(w => [w, Object.fromEntries(STAGES.map(s => [s, 0]))])),
-    perItem: {}, g2Comparisons: 0
+    perItem: {}, g2Comparisons: 0, trust: zeroT()
   };
   for (const wr of writers) for (const su of SETUPS) {
     const cfg = st.setups[su];
@@ -389,8 +532,10 @@ function compute(st) {
       row.writer += r.writer * n; row.judge += r.judge * n;
       out.byModel[wr] += r.writer * n;
       for (const j of JUDGES) out.byModel[j] += r.judges[j] * n;
+      for (const m in r.split) add3(out.split[m], r.split[m], n);
       for (const s of STAGES) out.byStage[wr][s] += r.stages[s] * n;
       out.sec += r.sec * n;
+      for (const k of TRUST) out.trust[k] += r.trust[k] * n;
     }
     out.runs += row.runs; out.byPart.writer += row.writer; out.byPart.judge += row.judge;
   }
@@ -399,14 +544,14 @@ function compute(st) {
 
   const ex = st.extras;
   // PSALM lower anchor: one source-vs-source pair per item, judged by each judge; judge tokens averaged over the two writers' runs
-  if (ex.psalmAnchor) for (const it of items) for (const j of judges) {
-    let c = 0; for (const wr of WRITERS) c += price(j, interp(wr, j, "in", it[3]), interp(wr, j, "out", it[3]), st) / WRITERS.length;
-    c *= ex.anchorShare; out.byPart.psalmAnchor += c; out.byModel[j] += c;
+  if (ex.psalmAnchor) for (const it of items) for (const j of judges) for (const wr of WRITERS) {
+    const c = cost3(st, j, wr, j, it[3]); const n = ex.anchorShare / WRITERS.length;
+    out.byPart.psalmAnchor += c.total * n; out.byModel[j] += c.total * n; add3(out.split[j], c, n); addTrust(out.trust, st, j, c, "modelled", it[3], n);
   }
   // alignment lower anchor: one alignment per item and writer, priced as that writer's recover stage
   if (ex.alignAnchor) for (const it of items) for (const wr of writers) {
-    const c = price(wr, interp(wr, "recover", "in", it[3]), interp(wr, "recover", "out", it[3]), st);
-    out.byPart.alignAnchor += c; out.byModel[wr] += c;
+    const c = cost3(st, wr, wr, "recover", it[3]);
+    out.byPart.alignAnchor += c.total; out.byModel[wr] += c.total; add3(out.split[wr], c); addTrust(out.trust, st, wr, c, "modelled", it[3]);
   }
   // G2: each text of the other setups against the single call, same item, policy and writer, in both orders, by each judge
   if (ex.g2 && st.setups.single_call.on) {
@@ -415,23 +560,44 @@ function compute(st) {
     perItemWriter *= ex.orders;
     out.g2Comparisons = perItemWriter * items.length * writers.length;
     for (const it of items) for (const wr of writers) for (const j of judges) {
-      const c = price(j, interp(wr, j, "in", it[3]), interp(wr, j, "out", it[3]), st) * ex.pairShare * perItemWriter;
-      out.byPart.g2 += c; out.byModel[j] += c;
+      const c = cost3(st, j, wr, j, it[3]); const n = ex.pairShare * perItemWriter;
+      out.byPart.g2 += c.total * n; out.byModel[j] += c.total * n; add3(out.split[j], c, n); addTrust(out.trust, st, j, c, "modelled", it[3], n);
     }
   }
   out.base = Object.values(out.byPart).reduce((a, b) => a + b, 0);
+  out.parts3 = zero3(); for (const m in out.split) add3(out.parts3, out.split[m]);
   out.total = out.base * (1 + st.contingency / 100);
   out.hours = out.sec / 3600 / Math.max(1, st.concurrency);
   return out;
 }
+// Range of a computed estimate. Each trust class gets its own band; the contingency stays on top of the high end,
+// for what the page can't price (retries, failed calls). Likely = total with contingency.
+function rangeOf(o, contingency, bands) {
+  let low = 0, high = 0;
+  for (const k of TRUST) { low += o.trust[k] * (1 - bands[k][0] / 100); high += o.trust[k] * (1 + bands[k][1] / 100); }
+  return { low, likely: o.total, high: high + o.base * contingency / 100 };
+}
+const DEFAULT_BANDS = { measured: [25, 25], modelled: [30, 50], guessed: [50, 100] };
 
 /* ---------- UI ---------- */
-// captured before any rendering changes the DOM: the source of "Save as shareable HTML"
+// captured before any rendering changes the DOM: the source of "Download as HTML"
 const PAGE_SOURCE = "<!doctype html>\n" + document.documentElement.outerHTML;
-const FORMAT = "psalm-saga-cost-estimate", FORMAT_VERSION = 1;
+const FORMAT = "psalm-saga-cost-estimate", FORMAT_VERSION = 2;
+const LS_KEY = "psalm-cost-v2";
+const clone = x => JSON.parse(JSON.stringify(x));
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const usd = (x, d) => { const k = d ?? (x >= 100 ? 0 : x >= 1 ? 2 : 3); return "$" + x.toLocaleString("en-US", { minimumFractionDigits: k, maximumFractionDigits: k }); };
+const fmt = x => x.toLocaleString("en-US", { maximumFractionDigits: 0 });
+const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)", "var(--muted)", "var(--accent)", "var(--warn)"];
+const SHORT = { gemma: "Gemma", mistral: "Mistral", claude: "Claude", gpt: "GPT", qwen: "Qwen",
+  full: "full", no_graph: "no-graph", no_feedback: "no-review", paraphrase: "paraphrase", single_call: "single call" };
+const OFF = { full: "no full procedure", no_graph: "no graph ablation", no_feedback: "no review ablation", paraphrase: "no paraphrase", single_call: "no single call" };
+const letter = i => String.fromCharCode(65 + i);
 
 // fill the settings of an older or partial file from the current defaults, key by key
 function merge(base, inc) {
+  if (base === null) return (typeof inc === "number" && isFinite(inc)) ? inc : null; // optional numeric override
   if (Array.isArray(base)) return Array.isArray(inc) ? inc : base;
   if (base && typeof base === "object") {
     const out = {};
@@ -440,45 +606,142 @@ function merge(base, inc) {
   }
   return (typeof inc === typeof base) ? inc : base;
 }
+
+/* ---------- the shortlist ---------- */
+const DEFAULT_REASON = "It keeps what the research question needs: every setup, all three policy settings, three samples of the full procedure per item, all three judges and both lower anchors. The three samples show whether a story keeps its data properties when it is generated again, not only whether stories differ from each other. To fit the budget it drops Mistral and the G2 quality comparison, so it cannot show whether a second writer behaves the same. The two-writer options cover that, at the cost of policy settings or repeated samples.";
+
+function variant(f) { const s = defaults(); f(s); return s; }
+function defaultEstimate() {
+  const options = [
+    { id: "full", label: "Full design", settings: variant(() => {}) },
+    { id: "gemma", label: "Gemma, every setup", settings: variant(s => { s.use.mistral = false; s.extras.g2 = false; }) },
+    { id: "gemma-lean", label: "Gemma, one sample", settings: variant(s => { s.use.mistral = false; s.extras.g2 = false; s.setups.full.samples = 1; }) },
+    { id: "two-rsn-off", label: "Two writers, Mistral reasoning off", settings: variant(s => { s.effort.mistral = "none"; s.extras.g2 = false; s.setups.full.samples = 1; }) },
+    { id: "two-preserve", label: "Two writers, full and single call", settings: variant(s => {
+      for (const k of ["no_graph", "no_feedback", "paraphrase"]) s.setups[k].on = false;
+      s.setups.full.samples = 1; s.setups.full.policies = 1; s.setups.single_call.policies = 1; s.extras.g2 = false; }) }
+  ];
+  return { name: "Main experiment", note: "", version: 1, saved_at: "", budget: 400, bands: clone(DEFAULT_BANDS),
+    proposed: "gemma", reason: DEFAULT_REASON, options, data_version: DATA_VERSION };
+}
+
+// what an option keeps and cuts, relative to the full design
+function describe(s) {
+  const d = defaults(), bits = [];
+  const ws = WRITERS.filter(w => s.use[w]);
+  bits.push(ws.length === WRITERS.length ? "both writers" : ws.length ? ws.map(w => SHORT[w]).join(", ") + " only" : "no writer");
+  const jo = JUDGES.filter(j => !s.use[j]);
+  if (jo.length) bits.push("without " + jo.map(j => SHORT[j]).join(", ") + " as judge");
+  for (const m of [...WRITERS, ...JUDGES]) if (s.use[m]) {
+    if (s.effort[m] !== "medium") bits.push(`${SHORT[m]} reasoning ${s.effort[m] === "none" ? "off" : s.effort[m]}`);
+    if (s.rsnShare[m] !== null) bits.push(`${SHORT[m]} reasoning share ${s.rsnShare[m]}%`);
+  }
+  const on = SETUPS.filter(k => s.setups[k].on), off = SETUPS.filter(k => !s.setups[k].on);
+  if (off.length >= 3) bits.push("only " + on.map(k => SHORT[k]).join(" and "));
+  else for (const k of off) bits.push(OFF[k]);
+  for (const k of on) if (s.setups[k].samples !== d.setups[k].samples) bits.push(`${SHORT[k]} ×${s.setups[k].samples}`);
+  const pol = on.filter(k => s.setups[k].policies !== d.setups[k].policies);
+  if (pol.length) {
+    const vals = [...new Set(pol.map(k => s.setups[k].policies))];
+    bits.push(vals.length === 1 && pol.length === on.filter(k => d.setups[k].policies > 1).length
+      ? `${vals[0]} policy setting${vals[0] === 1 ? "" : "s"}` : pol.map(k => `${SHORT[k]} ${s.setups[k].policies} policies`).join(", "));
+  }
+  if (!s.extras.g2 && d.extras.g2) bits.push("no G2");
+  if (!s.extras.psalmAnchor) bits.push("no PSALM anchor");
+  if (!s.extras.alignAnchor) bits.push("no alignment anchor");
+  if (s.corpusOff.length) bits.push(`${CORPUS.length - s.corpusOff.filter(id => CORPUS.some(c => c[0] === id)).length} of ${CORPUS.length} items`);
+  if (JSON.stringify(s.prices) !== JSON.stringify(d.prices)) bits.push("custom prices");
+  if (JSON.stringify(s.mult) !== JSON.stringify(d.mult)) bits.push("custom setup factors");
+  if (JSON.stringify(s.effortFactor) !== JSON.stringify(d.effortFactor)) bits.push("custom effort factors");
+  if (s.contingency !== d.contingency) bits.push(`${s.contingency}% contingency`);
+  return bits.join(" · ");
+}
+
+/* ---------- state ---------- */
+let est, st, activeOpt = null, dirty = false, editMode = false;
+const opt = id => est.options.find(o => o.id === id);
+const withBudget = s => { const c = clone(s); c.budget = est.budget; return c; };
+const comparable = s => JSON.stringify(Object.assign(clone(s), { budget: 0 }));
+const isModified = () => !!activeOpt && !!opt(activeOpt) && comparable(st) !== comparable(opt(activeOpt).settings);
+function evalOption(op) { const s = withBudget(op.settings); const o = compute(s); return { o, r: rangeOf(o, s.contingency, est.bands) }; }
+const cleanSnap = s => (s && typeof s.likely === "number") ? { likely: s.likely, low: +s.low || 0, high: +s.high || 0, runs: +s.runs || 0 } : null;
+
 function parseEstimate(obj) {
-  if (!obj || obj.format !== FORMAT || !obj.settings) throw new Error("This is not a saved cost estimate (missing \"format\": \"" + FORMAT + "\").");
-  if (obj.version > FORMAT_VERSION) throw new Error(`This estimate was saved by a newer calculator (version ${obj.version}). Open it with the HTML it was shared with.`);
-  return { settings: merge(defaults(), obj.settings), meta: { name: obj.name || "", note: obj.note || "", saved_at: obj.saved_at || "" } };
+  if (!obj || obj.format !== FORMAT) throw new Error(`This is not a saved cost estimate (missing "format": "${FORMAT}").`);
+  if (obj.version > FORMAT_VERSION) throw new Error(`This estimate was saved by a newer version of the page (file format ${obj.version}). Open it with the page or HTML it came with.`);
+  const str = (x, d = "") => typeof x === "string" ? x : d;
+  if (obj.version >= 2 && Array.isArray(obj.options)) {
+    const options = obj.options.filter(o => o && o.settings).map((o, i) => ({
+      id: str(o.id, "opt-" + i) || "opt-" + i, label: str(o.label, "Option " + letter(i)) || "Option " + letter(i),
+      settings: merge(defaults(), o.settings), snapshot: cleanSnap(o.snapshot) }));
+    if (!options.length) throw new Error("This estimate has no options.");
+    return { est: {
+      name: str(obj.name), note: str(obj.note), version: Number.isInteger(obj.estimate_version) && obj.estimate_version > 0 ? obj.estimate_version : 1,
+      saved_at: str(obj.saved_at), budget: typeof obj.budget === "number" ? obj.budget : 400,
+      bands: merge(clone(DEFAULT_BANDS), obj.bands || {}),
+      proposed: options.some(o => o.id === obj.proposed) ? obj.proposed : options[0].id,
+      reason: str(obj.reason), options, data_version: str(obj.data_version, "unknown") } };
+  }
+  // file format 1: one set of settings and its total
+  if (!obj.settings) throw new Error("This estimate has no settings.");
+  const s = merge(defaults(), obj.settings);
+  const t = obj.totals && typeof obj.totals.total_usd === "number" ? { likely: obj.totals.total_usd, runs: obj.totals.runs } : null;
+  return { est: {
+    name: str(obj.name, "Loaded estimate") || "Loaded estimate", note: str(obj.note), version: 1, saved_at: str(obj.saved_at),
+    budget: typeof s.budget === "number" ? s.budget : 400, bands: clone(DEFAULT_BANDS), proposed: "loaded", reason: "",
+    options: [{ id: "loaded", label: str(obj.name, "Loaded estimate") || "Loaded estimate", settings: s, snapshot: cleanSnap(t) }],
+    data_version: "2026-11-03 · 4 runs · words (first version of the page)" } };
 }
 function readEmbedded() {
-  try { const t = document.getElementById("embedded-estimate").textContent.trim(); return t ? parseEstimate(JSON.parse(t)) : null; } catch (e) { return null; }
+  try { const t = $("embedded-estimate").textContent.trim(); return t ? parseEstimate(JSON.parse(t)) : null; } catch (e) { return null; }
+}
+function loadLocal() {
+  try {
+    const x = JSON.parse(localStorage.getItem(LS_KEY));
+    if (!x || !x.est || !x.st) return null;
+    const p = parseEstimate(Object.assign({}, x.est, { format: FORMAT, version: 2, estimate_version: x.est.version }));
+    return { est: p.est, st: merge(defaults(), x.st), activeOpt: x.activeOpt, dirty: !!x.dirty };
+  } catch (e) { return null; }
+}
+function persist() { try { localStorage.setItem(LS_KEY, JSON.stringify({ est, st, activeOpt, dirty })); } catch (e) {} }
+function touch() { dirty = true; }
+
+function openOption(id) {
+  const o = opt(id); if (!o) return;
+  activeOpt = id; st = withBudget(o.settings);
+  buildInputs(); render();
+}
+function adopt(parsed) {
+  est = parsed.est; dirty = false;
+  openOption(est.proposed);
 }
 
-let meta = { name: "", note: "", saved_at: "" };
-let st;
-const embedded = readEmbedded();
-if (embedded) { st = embedded.settings; meta = embedded.meta; }
-else { const l = load(); st = l ? merge(defaults(), l) : defaults(); try { meta = Object.assign(meta, JSON.parse(localStorage.getItem("psalm-cost-meta-v1")) || {}); } catch (e) {} }
-let activeScn = null;
-const $ = id => document.getElementById(id);
-const usd = (x, d) => { const k = d ?? (x >= 100 ? 0 : x >= 1 ? 2 : 3); return "$" + x.toLocaleString("en-US", { minimumFractionDigits: k, maximumFractionDigits: k }); };
-const fmt = x => x.toLocaleString("en-US", { maximumFractionDigits: 0 });
-const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)", "var(--muted)", "var(--accent)", "var(--warn)"];
-
-function load() { try { const s = JSON.parse(localStorage.getItem("psalm-cost-v1")); if (s && s.prices && s.mult) return s; } catch (e) {} return null; }
-function save() { try { localStorage.setItem("psalm-cost-v1", JSON.stringify(st)); localStorage.setItem("psalm-cost-meta-v1", JSON.stringify(meta)); } catch (e) {} }
-
+/* ---------- inputs ---------- */
 function numInput(id, val, step, onset, cls) {
   return `<input type="number" id="${id}" class="${cls || ""}" value="${val}" step="${step}" min="0" data-bind="${onset}">`;
 }
 
 function buildInputs() {
   // prices
-  let h = `<tr><th></th><th>Model</th><th>Role</th><th class="n">$ / M in</th><th class="n">$ / M out</th></tr>`;
+  let h = `<tr><th></th><th>Model</th><th>Role</th><th class="n">$ / M in</th><th class="n">$ / M out</th><th>Reasoning effort</th><th class="n">Reasoning share of output at medium</th></tr>`;
   for (const m of [...WRITERS, ...JUDGES]) {
     const role = WRITERS.includes(m) ? "writer" : (m === "claude" ? "primary judge" : "agreement judge");
+    const measured = 100 * measuredReasoningShare(m);
+    const custom = st.rsnShare[m] !== null;
+    const effortCell = `<select id="eff-${m}" data-effort="${m}" aria-label="Reasoning effort of ${LABEL[m]}">${EFFORTS.map(e => `<option value="${e}" ${st.effort[m] === e ? "selected" : ""}>${e}</option>`).join("")}</select>`;
+    const shareCell = `<input type="number" id="rs-${m}" class="sm" min="0" max="99" step="1" data-share="${m}" value="${custom ? st.rsnShare[m] : measured.toFixed(0)}" aria-label="Reasoning share of output for ${LABEL[m]}, percent"> %
+      <span class="tag ${custom ? "model" : ""}" id="rs-tag-${m}">${custom ? "guessed" : "measured"}</span>
+      <button type="button" class="linkish" data-share-reset="${m}" id="rs-reset-${m}" ${custom ? "" : "hidden"} title="Back to the measured ${measured.toFixed(0)}%">reset</button>`;
     h += `<tr><td><input type="checkbox" id="use-${m}" data-use="${m}" ${st.use[m] ? "checked" : ""} aria-label="Use ${LABEL[m]}"></td><td>${LABEL[m]}</td><td class="muted">${role}</td>
-      <td class="n">${numInput("pin-" + m, st.prices[m][0], 0.01, "price:" + m + ":0")}</td><td class="n">${numInput("pout-" + m, st.prices[m][1], 0.01, "price:" + m + ":1")}</td></tr>`;
+      <td class="n">${numInput("pin-" + m, st.prices[m][0], 0.01, "price:" + m + ":0")}</td><td class="n">${numInput("pout-" + m, st.prices[m][1], 0.01, "price:" + m + ":1")}</td>
+      <td>${effortCell}</td><td class="n" style="white-space:nowrap">${shareCell}</td></tr>`;
   }
   $("t-prices").innerHTML = h;
+  $("t-effort").innerHTML = `<tr><th>Effort</th>${EFFORTS.map(e => `<th class="n">${e}</th>`).join("")}</tr>
+    <tr><td>Reasoning tokens × </td>${EFFORTS.map(e => `<td class="n">${e === "medium" ? '1 <span class="tag">measured</span>' : numInput("ef-" + e, st.effortFactor[e], 0.1, "effortFactor:" + e, "sm") + (e === "none" ? "" : ' <span class="tag model">guessed</span>')}</td>`).join("")}</tr>`;
 
   // design
-  h = `<tr><th></th><th>Setup</th><th class="n">Samples</th><th class="n">Policy settings</th><th class="n">Runs per item and writer</th><th>Data</th></tr>`;
+  h = `<tr><th></th><th>Setup</th><th class="n">Samples</th><th class="n">Policy settings</th><th class="n">Runs per item and writer</th><th>Basis</th></tr>`;
   for (const s of SETUPS) {
     const c = st.setups[s];
     h += `<tr class="${c.on ? "" : "off"}"><td><input type="checkbox" id="on-${s}" data-setup="${s}" ${c.on ? "checked" : ""} aria-label="Run ${LABEL[s]}"></td><td>${LABEL[s]}</td>
@@ -488,14 +751,14 @@ function buildInputs() {
       <td>${s === "full" ? '<span class="tag">measured</span>' : '<span class="tag model">modelled</span>'}</td></tr>`;
   }
   $("t-design").innerHTML = h;
-  $("budget").value = st.budget; $("contingency").value = st.contingency; $("concurrency").value = st.concurrency;
+  $("budget").value = est.budget; $("contingency").value = st.contingency; $("concurrency").value = st.concurrency;
 
   // extras
   const e = st.extras;
   $("t-extras").innerHTML = `<tr><th></th><th>Instrument</th><th>Size</th><th class="n">Parameter</th></tr>
     <tr><td><input type="checkbox" id="ex-psalm" data-extra="psalmAnchor" ${e.psalmAnchor ? "checked" : ""} aria-label="PSALM lower anchor"></td><td>PSALM lower anchor</td><td class="muted">1 pair per item × each judge</td><td class="n"><label class="inline">PSALM share of judge tokens ${numInput("ex-share", e.anchorShare, 0.05, "extra:anchorShare", "sm")}</label></td></tr>
     <tr><td><input type="checkbox" id="ex-align" data-extra="alignAnchor" ${e.alignAnchor ? "checked" : ""} aria-label="Alignment lower anchor"></td><td>Alignment lower anchor</td><td class="muted">1 alignment per item × writer, as <code>recover</code></td><td class="n muted">—</td></tr>
-    <tr><td><input type="checkbox" id="ex-g2" data-extra="g2" ${e.g2 ? "checked" : ""} aria-label="G2 pairwise quality"></td><td>G2 pairwise quality</td><td class="muted" id="g2-size"></td><td class="n"><label class="inline">One comparison as share of run's judge tokens ${numInput("ex-pair", e.pairShare, 0.01, "extra:pairShare", "sm")}</label> <label class="inline">Orders ${numInput("ex-orders", e.orders, 1, "extra:orders", "sm")}</label></td></tr>`;
+    <tr><td><input type="checkbox" id="ex-g2" data-extra="g2" ${e.g2 ? "checked" : ""} aria-label="G2 pairwise quality"></td><td>G2 pairwise quality</td><td class="muted" id="g2-size"></td><td class="n"><label class="inline">One comparison as share of a run's judge tokens ${numInput("ex-pair", e.pairShare, 0.01, "extra:pairShare", "sm")}</label> <label class="inline">Orders ${numInput("ex-orders", e.orders, 1, "extra:orders", "sm")}</label></td></tr>`;
 
   // multipliers
   h = `<tr><th>Stage</th>${SETUPS.slice(1).map(s => `<th class="n">${LABEL[s]}<br><span style="text-transform:none">in / out</span></th>`).join("")}</tr>`;
@@ -508,33 +771,123 @@ function buildInputs() {
   }
   $("t-mult").innerHTML = h;
 
+  // range bands
+  const covers = { measured: "the full procedure as run, at medium effort", modelled: "other setups, the evaluation extras, changed stage factors", guessed: "other efforts, custom reasoning shares, lengths outside the measured range" };
+  $("t-bands").innerHTML = `<tr><th>Basis</th><th>Covers</th><th class="n">Low, −%</th><th class="n">High, +%</th></tr>` +
+    TRUST.map(k => `<tr><td><i class="sw" style="background:var(--t-${k})"></i>${k}</td><td class="muted">${covers[k]}</td>
+      <td class="n"><input type="number" class="sm" min="0" max="100" step="5" id="band-${k}-0" data-band="${k}:0" value="${est.bands[k][0]}"></td>
+      <td class="n"><input type="number" class="sm" min="0" step="5" id="band-${k}-1" data-band="${k}:1" value="${est.bands[k][1]}"></td></tr>`).join("");
+
   // measured
-  h = `<tr><th>Stage</th>${WRITERS.flatMap(w => ["short", "long"].map(p => `<th class="n">${LABEL[w]}<br><span style="text-transform:none">${PROFILE[w][p].words.toLocaleString()} words (${PROFILE[w][p].language}) · in / out</span></th>`)).join("")}</tr>`;
+  h = `<tr><th>Stage</th>${WRITERS.flatMap(w => ["short", "long"].map(p => `<th class="n">${LABEL[w]}<br><span style="text-transform:none">${(p === "short" ? C0 : C1).toLocaleString()} characters (${PROFILE[w][p].language}) · in / out (of which reasoning)</span></th>`)).join("")}</tr>`;
   for (const s of [...STAGES, ...JUDGES]) {
-    h += `<tr><td>${LABEL[s]}</td>${WRITERS.flatMap(w => ["short", "long"].map(p => { const x = PROFILE[w][p].stages[s]; return `<td class="n">${x ? fmt(x.in) + " / " + fmt(x.out) : "—"}</td>`; })).join("")}</tr>`;
+    h += `<tr><td>${LABEL[s]}</td>${WRITERS.flatMap(w => ["short", "long"].map(p => { const x = PROFILE[w][p].stages[s]; return `<td class="n">${x ? fmt(x.in) + " / " + fmt(x.out) + ` <span class="muted">(${fmt(x.rsn || 0)})</span>` : "—"}</td>`; })).join("")}</tr>`;
   }
   $("t-measured").innerHTML = h;
+  $("dv-label").textContent = DATA_VERSION;
+}
+
+// share of a model's output tokens that was reasoning, over all four runs
+function measuredReasoningShare(m) {
+  let out = 0, rsn = 0;
+  for (const w of WRITERS) for (const p of ["short", "long"]) {
+    const keys = WRITERS.includes(m) ? (w === m ? STAGES : []) : [m];
+    for (const k of keys) { const x = PROFILE[w][p].stages[k]; if (x) { out += x.out; rsn += x.rsn || 0; } }
+  }
+  return out ? rsn / out : 0;
 }
 
 function bars(el, rows, max) {
   el.innerHTML = rows.map(r => `<div class="bar-row"><span>${r.label}</span><div class="bar-track">${(r.parts || [[r.value, r.color]]).map(([v, c]) => `<span style="width:${max ? (100 * v / max).toFixed(2) : 0}%;background:${c}"></span>`).join("")}</div><span class="num">${usd(r.value)}</span></div>`).join("");
 }
+const fitOf = (r, budget) => r.likely > budget ? ["over", "Over"] : r.high > budget ? ["risk", "At risk"] : ["fits", "Fits"];
+const trustBar = o => {
+  const tot = o.base || 1;
+  return `<div class="tbar" role="img" aria-label="${TRUST.map(k => `${(100 * o.trust[k] / tot).toFixed(0)}% ${k}`).join(", ")}">${TRUST.map(k => `<span style="width:${(100 * o.trust[k] / tot).toFixed(2)}%;background:var(--t-${k})"></span>`).join("")}</div>`;
+};
+
+/* ---------- render ---------- */
+function renderHeader() {
+  $("est-title").textContent = est.name || "Cost estimate";
+  const when = est.saved_at ? new Date(est.saved_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+  $("est-meta").textContent = (dirty ? (est.saved_at ? `Modified from v${est.version}, not saved` : `Draft v${est.version}, not saved`) : (est.saved_at ? `v${est.version} · saved ${when}` : `v${est.version} · not saved yet`));
+  const nt = $("est-note"); nt.hidden = !est.note; nt.textContent = est.note;
+  const dv = $("dv-banner");
+  dv.hidden = est.data_version === DATA_VERSION;
+  if (!dv.hidden) dv.innerHTML = `This estimate was saved with data version <b>${esc(est.data_version)}</b>. This page uses <b>${esc(DATA_VERSION)}</b>, so current figures can differ from the saved ones. Where they differ, each option shows its saved figure under the current one.`;
+  $("budget-label").textContent = "$" + fmt(est.budget);
+  $("est-name").value = est.name; $("est-note-in").value = est.note;
+}
+
+function renderShortlist() {
+  const rows = est.options.map((op, i) => Object.assign({ op, i }, evalOption(op)));
+  const scale = est.budget > 0 ? est.budget * 2 : Math.max(...rows.map(x => x.r.high), 1);
+  const pct = v => Math.max(0, Math.min(100, 100 * v / scale));
+  let h = `<tr><th></th><th>Option</th><th class="n">Likely</th><th>Range</th><th>Budget</th><th>Basis</th><th class="n">Runs</th><th class="n">Writer time</th>${editMode ? "<th>Edit</th>" : ""}</tr>`;
+  for (const { op, i, o, r } of rows) {
+    const [cls, word] = fitOf(r, est.budget);
+    const snap = op.snapshot && Math.abs(op.snapshot.likely - r.likely) >= 0.5 ? `<div class="note">saved ${usd(op.snapshot.likely, 0)}</div>` : "";
+    const measuredPct = o.base ? 100 * o.trust.measured / o.base : 0;
+    h += `<tr class="${op.id === activeOpt ? "sel" : ""}">
+      <td class="letter">${letter(i)}</td>
+      <td class="opt"><button class="opt-open" data-open="${esc(op.id)}">${esc(op.label)}</button>${op.id === est.proposed ? ' <span class="tag">Proposed</span>' : ""}
+        <div class="note">${esc(describe(op.settings))}</div></td>
+      <td class="n likely"><b>${usd(r.likely, 0)}</b>${snap}</td>
+      <td class="wide"><div class="strip" role="img" aria-label="Range ${usd(r.low, 0)} to ${usd(r.high, 0)}, likely ${usd(r.likely, 0)}, budget ${usd(est.budget, 0)}">
+          <span class="rng ${cls}" style="left:${pct(r.low)}%;width:${pct(r.high) - pct(r.low)}%"></span>
+          <span class="dot" style="left:${pct(r.likely)}%"></span>
+          ${est.budget > 0 ? `<span class="bud" style="left:${pct(est.budget)}%"></span>` : ""}
+          ${r.high > scale ? '<span class="more" aria-hidden="true">›</span>' : ""}
+        </div><div class="note num">${usd(r.low, 0)} – ${usd(r.high, 0)}</div></td>
+      <td class="wide"><span class="state ${cls}">${word}</span></td>
+      <td class="wide" data-label="Basis">${trustBar(o)}<div class="note num">${measuredPct.toFixed(0)}% measured</div></td>
+      <td class="n wide" data-label="Runs">${fmt(o.runs)}</td>
+      <td class="n wide" data-label="Writer time">${fmt(o.hours)} h</td>
+      ${editMode ? `<td class="edit-cell wide">
+        <input type="text" data-rename="${esc(op.id)}" value="${esc(op.label)}" aria-label="Name of option ${letter(i)}">
+        <label class="inline note"><input type="radio" name="proposed" data-propose="${esc(op.id)}" ${op.id === est.proposed ? "checked" : ""}> Proposed</label>
+        <button type="button" class="linkish" data-remove="${esc(op.id)}" ${est.options.length < 2 ? "disabled" : ""}>Remove</button></td>` : ""}
+    </tr>`;
+  }
+  $("t-short").innerHTML = h;
+  $("cont-label").textContent = (opt(est.proposed)?.settings.contingency ?? st.contingency) + "%";
+
+  const pi = est.options.findIndex(o => o.id === est.proposed);
+  $("reason-head").textContent = `Why ${letter(pi)}, ${est.options[pi].label}, is proposed`;
+  $("reason-text").textContent = est.reason || "No reason written yet.";
+  $("reason-text").classList.toggle("muted", !est.reason);
+  $("reason-text").hidden = editMode;
+  const re = $("reason-edit"); re.hidden = !editMode; if (document.activeElement !== re) re.value = est.reason;
+  $("edit-fields").hidden = !editMode;
+}
 
 function render() {
   const o = compute(st);
-  $("v-total").textContent = usd(o.total, 0);
-  const over = o.total > st.budget;
+  const r = rangeOf(o, st.contingency, est.bands);
+  const ai = est.options.findIndex(x => x.id === activeOpt);
+  const mod = isModified();
+  $("v-opt").innerHTML = ai >= 0 ? `<b>${letter(ai)}</b> ${esc(est.options[ai].label)}${mod ? ' <span class="tag model">changed</span>' : ""}` : '<span class="muted">Not in the shortlist</span>';
+  $("v-total").textContent = usd(r.likely, 0);
+  $("v-range").textContent = `${usd(r.low, 0)} – ${usd(r.high, 0)}`;
+  const [cls] = fitOf(r, est.budget);
   const pill = $("v-pill");
-  pill.className = "pill " + (over ? "over" : "ok");
-  pill.textContent = over ? `${usd(o.total - st.budget, 0)} over $${fmt(st.budget)}` : `${usd(st.budget - o.total, 0)} under $${fmt(st.budget)}`;
-  const bar = $("v-bar"); bar.classList.toggle("over", over);
-  bar.firstElementChild.style.width = Math.min(100, st.budget > 0 ? 100 * o.total / st.budget : 100) + "%";
+  pill.className = "pill " + (cls === "fits" ? "ok" : cls === "risk" ? "risk" : "over");
+  pill.textContent = cls === "over" ? `${usd(r.likely - est.budget, 0)} over $${fmt(est.budget)}` : cls === "risk" ? `fits, high end over $${fmt(est.budget)}` : `${usd(est.budget - r.likely, 0)} under $${fmt(est.budget)}`;
+  const bar = $("v-bar"); bar.classList.toggle("over", cls === "over");
+  bar.firstElementChild.style.width = Math.min(100, est.budget > 0 ? 100 * r.likely / est.budget : 100) + "%";
   $("v-runs").textContent = fmt(o.runs) + " · " + o.items + " items";
   $("v-time").textContent = fmt(o.hours) + " h at " + st.concurrency + " parallel";
+  const upd = $("btn-update-opt");
+  upd.hidden = !mod; if (mod) upd.textContent = `Update ${letter(ai)}`;
+  $("btn-revert").hidden = !mod;
 
   const models = [...WRITERS, ...JUDGES];
-  const mrows = models.map((m, i) => ({ label: LABEL[m], value: o.byModel[m], color: COLORS[i] }));
-  bars($("by-model"), mrows, Math.max(...mrows.map(r => r.value), 1e-9));
+  const mrows = models.map(m => ({ label: LABEL[m] + ((st.rsnShare[m] ?? 100 * measuredReasoningShare(m)) > 0 ? ` <span class="muted">· ${st.effort[m]}${st.rsnShare[m] !== null ? ", " + st.rsnShare[m] + "% custom" : ""}</span>` : ""), value: o.split[m].total,
+    parts: [[o.split[m].in, "var(--c3)"], [o.split[m].ans, "var(--c1)"], [o.split[m].rsn, "var(--c2)"]] }));
+  bars($("by-model"), mrows, Math.max(...mrows.map(x => x.value), 1e-9));
+  const p3 = o.parts3, k = 1 + st.contingency / 100;
+  $("model-legend").innerHTML = `<span><i style="background:var(--c3)"></i>input ${usd(p3.in)}</span><span><i style="background:var(--c1)"></i>answer ${usd(p3.ans)}</span><span><i style="background:var(--c2)"></i>reasoning ${usd(p3.rsn)}</span>`;
+  $("v-rsn").textContent = `${usd(p3.rsn * k, 0)} · ${o.base ? (100 * p3.rsn / o.base).toFixed(0) : 0}%`;
   const prow = [
     { label: "Writer, main runs", value: o.byPart.writer, color: "var(--c1)" },
     { label: "Judges, main runs", value: o.byPart.judge, color: "var(--c3)" },
@@ -543,24 +896,24 @@ function render() {
     { label: "G2 pairwise", value: o.byPart.g2, color: "var(--c2)" },
     { label: `Contingency ${st.contingency}%`, value: o.total - o.base, color: "var(--muted)" }
   ];
-  bars($("by-part"), prow, Math.max(...prow.map(r => r.value), 1e-9));
+  bars($("by-part"), prow, Math.max(...prow.map(x => x.value), 1e-9));
 
   // setups table
   let h = `<tr><th>Writer</th><th>Setup</th><th class="n">Runs</th><th class="n">Writer</th><th class="n">Judges</th><th class="n">Per run</th><th class="n">Total</th></tr>`;
   for (const wr of WRITERS) for (const su of SETUPS) {
-    const r = o.bySetup[wr + "|" + su];
-    if (!r) { h += `<tr class="off"><td>${LABEL[wr]}</td><td>${LABEL[su]}</td><td class="n">0</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>`; continue; }
-    const t = r.writer + r.judge;
-    h += `<tr class="${r.runs ? "" : "off"}"><td>${LABEL[wr]}</td><td>${LABEL[su]}</td><td class="n">${fmt(r.runs)}</td><td class="n">${usd(r.writer)}</td><td class="n">${usd(r.judge)}</td><td class="n">${r.runs ? usd(t / r.runs) : "—"}</td><td class="n">${usd(t)}</td></tr>`;
+    const x = o.bySetup[wr + "|" + su];
+    if (!x) { h += `<tr class="off"><td>${LABEL[wr]}</td><td>${LABEL[su]}</td><td class="n">0</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>`; continue; }
+    const t = x.writer + x.judge;
+    h += `<tr class="${x.runs ? "" : "off"}"><td>${LABEL[wr]}</td><td>${LABEL[su]}</td><td class="n">${fmt(x.runs)}</td><td class="n">${usd(x.writer)}</td><td class="n">${usd(x.judge)}</td><td class="n">${x.runs ? usd(t / x.runs) : "—"}</td><td class="n">${usd(t)}</td></tr>`;
   }
   h += `<tr class="total"><td colspan="2">Main runs</td><td class="n">${fmt(o.runs)}</td><td class="n">${usd(o.byPart.writer)}</td><td class="n">${usd(o.byPart.judge)}</td><td class="n">${o.runs ? usd((o.byPart.writer + o.byPart.judge) / o.runs) : "—"}</td><td class="n">${usd(o.byPart.writer + o.byPart.judge)}</td></tr>`;
   $("t-setups").innerHTML = h;
-  $("setup-note").textContent = `Before contingency. Evaluation extras add ${usd(o.byPart.psalmAnchor + o.byPart.alignAnchor + o.byPart.g2)}; contingency adds ${usd(o.total - o.base)}.`;
+  $("setup-note").textContent = `Before contingency. The evaluation extras add ${usd(o.byPart.psalmAnchor + o.byPart.alignAnchor + o.byPart.g2)}; the contingency adds ${usd(o.total - o.base)}.`;
 
   // stages
   $("stage-legend").innerHTML = STAGES.map((s, i) => `<span><i style="background:${COLORS[i]}"></i>${LABEL[s]}</span>`).join("");
   const srows = WRITERS.map(wr => ({ label: LABEL[wr], value: STAGES.reduce((a, s) => a + o.byStage[wr][s], 0), parts: STAGES.map((s, i) => [o.byStage[wr][s], COLORS[i]]) }));
-  bars($("by-stage"), srows, Math.max(...srows.map(r => r.value), 1e-9));
+  bars($("by-stage"), srows, Math.max(...srows.map(x => x.value), 1e-9));
 
   // design runs per item
   for (const s of SETUPS) { const c = st.setups[s]; $("rpi-" + s).textContent = c.on ? c.samples * c.policies : 0; }
@@ -568,75 +921,134 @@ function render() {
 
   // corpus
   const items = [...CORPUS].sort((a, b) => b[3] - a[3]);
-  h = `<tr><th></th><th>Item</th><th>Lang.</th><th class="n">Words</th><th class="n">Gemma, 1 full run</th><th class="n">Mistral, 1 full run</th></tr>`;
+  h = `<tr><th></th><th>Item</th><th>Lang.</th><th class="n">Characters</th><th class="n">Words</th><th class="n">Gemma, 1 full run</th><th class="n">Mistral, 1 full run</th></tr>`;
   for (const it of items) {
     const off = st.corpusOff.includes(it[0]);
-    h += `<tr class="${off ? "off" : ""}"><td><input type="checkbox" id="item-${it[0]}" data-item="${it[0]}" ${off ? "" : "checked"} aria-label="Include ${it[2]}"></td><td>${it[2]}</td><td>${it[1]}</td><td class="n">${fmt(it[3])}</td><td class="n">${usd(o.perItem[it[0]].gemma)}</td><td class="n">${usd(o.perItem[it[0]].mistral)}</td></tr>`;
+    h += `<tr class="${off ? "off" : ""}"><td><input type="checkbox" id="item-${it[0]}" data-item="${it[0]}" ${off ? "" : "checked"} aria-label="Include ${it[2]}"></td><td>${it[2]}</td><td>${it[1]}</td><td class="n">${fmt(it[3])}</td><td class="n muted">${fmt(it[4])}</td><td class="n">${usd(o.perItem[it[0]].gemma)}</td><td class="n">${usd(o.perItem[it[0]].mistral)}</td></tr>`;
   }
   $("t-corpus").innerHTML = h;
   $("corpus-count").textContent = `${o.items} of ${CORPUS.length} items`;
 
-  document.querySelectorAll("[data-scn]").forEach(b => b.classList.toggle("active", b.dataset.scn === activeScn));
-  save();
+  renderShortlist();
+  renderHeader();
+  persist();
 }
 
-const SCN = {
-  full: s => s,
-  full1: s => { s.setups.full.samples = 1; return s; },
-  mistral: s => { s.use.gemma = false; return s; },
-  gemma: s => { s.use.mistral = false; return s; },
-  nog2: s => { s.extras.g2 = false; return s; },
-  lean: s => { s.use.gemma = false; s.setups.full.samples = 1; s.extras.g2 = false; return s; }
-};
-
+/* ---------- events ---------- */
+function markShare(m) {
+  const custom = st.rsnShare[m] !== null;
+  const tag = $("rs-tag-" + m); tag.textContent = custom ? "guessed" : "measured"; tag.classList.toggle("model", custom);
+  $("rs-reset-" + m).hidden = !custom;
+}
 document.addEventListener("click", e => {
-  const b = e.target.closest("[data-scn]"); if (!b) return;
-  const keepPrices = st.prices, keepBudget = st.budget, keepCont = st.contingency, keepConc = st.concurrency;
-  st = SCN[b.dataset.scn](defaults());
-  st.prices = keepPrices; st.budget = keepBudget; st.contingency = keepCont; st.concurrency = keepConc;
-  activeScn = b.dataset.scn;
-  buildInputs(); render();
+  const t = e.target;
+  const r = t.closest("[data-share-reset]");
+  if (r) {
+    const m = r.dataset.shareReset;
+    st.rsnShare[m] = null;
+    $("rs-" + m).value = (100 * measuredReasoningShare(m)).toFixed(0);
+    markShare(m); render(); return;
+  }
+  const o = t.closest("[data-open]");
+  if (o) { openOption(o.dataset.open); return; }
+  const rm = t.closest("[data-remove]");
+  if (rm && est.options.length > 1) {
+    const id = rm.dataset.remove;
+    est.options = est.options.filter(x => x.id !== id);
+    if (est.proposed === id) est.proposed = est.options[0].id;
+    if (activeOpt === id) activeOpt = null;
+    touch(); render(); return;
+  }
 });
+$("btn-add-opt").addEventListener("click", () => {
+  const base = opt(activeOpt);
+  const id = "opt-" + Date.now().toString(36);
+  est.options.push({ id, label: base ? base.label + ", variation" : "New option", settings: (() => { const s = clone(st); delete s.budget; return merge(defaults(), s); })(), snapshot: null });
+  activeOpt = id; touch(); editMode = true; $("edit-mode").checked = true; render();
+  const inp = document.querySelector(`[data-rename="${CSS.escape(id)}"]`); if (inp) { inp.focus(); inp.select(); inp.scrollIntoView({ block: "center" }); }
+});
+$("btn-update-opt").addEventListener("click", () => {
+  const o = opt(activeOpt); if (!o) return;
+  o.settings = clone(st); o.snapshot = null; touch(); render();
+});
+$("btn-revert").addEventListener("click", () => openOption(activeOpt));
+$("edit-mode").addEventListener("change", e => { editMode = e.target.checked; renderShortlist(); });
 
 document.addEventListener("input", e => {
   const t = e.target;
   const v = parseFloat(t.value); const val = isNaN(v) ? 0 : v;
-  if (t.dataset.bind) {
+  // estimate-level fields: these change the shortlist, not the explored settings
+  if (t.dataset.rename) { const o = opt(t.dataset.rename); if (o) { o.label = t.value; touch(); renderHeader(); render0(); } return; }
+  if (t.dataset.propose) { est.proposed = t.dataset.propose; touch(); render(); return; }
+  if (t.dataset.band) { const [k, i] = t.dataset.band.split(":"); est.bands[k][+i] = Math.max(0, val); touch(); render(); return; }
+  if (t.id === "reason-edit") { est.reason = t.value; touch(); renderHeader(); persist(); return; }
+  if (t.id === "est-name") { est.name = t.value; touch(); renderHeader(); persist(); return; }
+  if (t.id === "est-note-in") { est.note = t.value; touch(); renderHeader(); persist(); return; }
+  if (t.id === "budget") { est.budget = val; st.budget = val; touch(); render(); return; }
+  if (t.id === "edit-mode") return;
+  // settings of the option being explored
+  if (t.dataset.share) {
+    const m = t.dataset.share;
+    st.rsnShare[m] = isNaN(v) ? null : Math.max(0, Math.min(99, v));
+    markShare(m);
+  } else if (t.dataset.bind) {
     const p = t.dataset.bind.split(":");
     if (p[0] === "price") st.prices[p[1]][+p[2]] = val;
     if (p[0] === "setup") st.setups[p[1]][p[2]] = Math.round(val);
     if (p[0] === "mult") st.mult[p[1]][p[2]][+p[3]] = val;
     if (p[0] === "extra") st.extras[p[1]] = val;
-  } else if (t.id === "budget") st.budget = val;
-  else if (t.id === "contingency") st.contingency = val;
+    if (p[0] === "effortFactor") st.effortFactor[p[1]] = val;
+  } else if (t.id === "contingency") st.contingency = val;
   else if (t.id === "concurrency") st.concurrency = Math.max(1, Math.round(val));
   else if (t.dataset.use) st.use[t.dataset.use] = t.checked;
+  else if (t.dataset.effort) st.effort[t.dataset.effort] = t.value;
   else if (t.dataset.setup) { st.setups[t.dataset.setup].on = t.checked; t.closest("tr").classList.toggle("off", !t.checked); }
   else if (t.dataset.extra) st.extras[t.dataset.extra] = t.checked;
   else if (t.dataset.item) { st.corpusOff = t.checked ? st.corpusOff.filter(x => x !== t.dataset.item) : [...st.corpusOff, t.dataset.item]; }
-  else if (t.id === "meta-name") { meta.name = t.value; save(); return; }
-  else if (t.id === "meta-note") { meta.note = t.value; save(); return; }
   else return;
-  activeScn = null;
   render();
 });
+// renaming re-renders only the parts that show the label, so the text field keeps focus
+function render0() {
+  const ai = est.options.findIndex(x => x.id === activeOpt);
+  document.querySelectorAll("[data-open]").forEach(b => { const o = opt(b.dataset.open); if (o) b.textContent = o.label; });
+  if (ai >= 0) $("v-opt").innerHTML = `<b>${letter(ai)}</b> ${esc(est.options[ai].label)}${isModified() ? ' <span class="tag model">changed</span>' : ""}`;
+  const pi = est.options.findIndex(o => o.id === est.proposed);
+  $("reason-head").textContent = `Why ${letter(pi)}, ${est.options[pi].label}, is proposed`;
+  persist();
+}
 
 /* ---------- save, load, share ---------- */
 function status(msg, kind) { const el = $("save-status"); el.textContent = msg; el.className = "status " + (kind || ""); }
+function stampSave() {
+  if (dirty && est.saved_at) est.version += 1;
+  dirty = false; est.saved_at = new Date().toISOString(); est.data_version = DATA_VERSION;
+  for (const op of est.options) { const { o, r } = evalOption(op); op.snapshot = { likely: +r.likely.toFixed(2), low: +r.low.toFixed(2), high: +r.high.toFixed(2), runs: o.runs }; }
+}
 function estimateObject() {
   const o = compute(st);
   return {
-    format: FORMAT, version: FORMAT_VERSION,
-    name: meta.name, note: meta.note, saved_at: new Date().toISOString(),
-    totals: { total_usd: +o.total.toFixed(2), before_contingency_usd: +o.base.toFixed(2), budget_usd: st.budget, runs: o.runs, items: o.items },
-    settings: st
+    format: FORMAT, version: FORMAT_VERSION, data_version: est.data_version,
+    name: est.name, note: est.note, estimate_version: est.version, saved_at: est.saved_at,
+    budget: est.budget, bands: est.bands, proposed: est.proposed, reason: est.reason,
+    options: est.options.map(op => {
+      const { o: oo, r } = evalOption(op);
+      return { id: op.id, label: op.label, summary: describe(op.settings),
+        snapshot: op.snapshot || { likely: +r.likely.toFixed(2), low: +r.low.toFixed(2), high: +r.high.toFixed(2), runs: oo.runs },
+        basis_usd: { measured: +oo.trust.measured.toFixed(2), modelled: +oo.trust.modelled.toFixed(2), guessed: +oo.trust.guessed.toFixed(2) },
+        settings: op.settings };
+    }),
+    active: activeOpt,
+    // the settings being explored when saved, and their totals (read by older copies of the page)
+    settings: st,
+    totals: { total_usd: +o.total.toFixed(2), before_contingency_usd: +o.base.toFixed(2), budget_usd: est.budget, runs: o.runs, items: o.items }
   };
 }
 function fileStem() {
-  const n = (meta.name || "estimate").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "estimate";
-  return "psalm-cost-" + n + "-" + new Date().toISOString().slice(0, 10);
+  const n = (est.name || "estimate").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "estimate";
+  return `psalm-saga-estimate-${n}-v${est.version}-${new Date().toISOString().slice(0, 10)}`;
 }
-// On claude.ai the page saves through the viewer's downloads capability; opened as a file, through a normal download.
+// On claude.ai the page saves through the viewer's downloads capability; elsewhere, through a normal download.
 let dl = null, hosted = false;
 try { if (window.claude?.use) { hosted = true; window.claude.use("downloads").then(x => { dl = x; }).catch(() => {}); } } catch (e) {}
 
@@ -646,11 +1058,11 @@ async function download(text, name, type) {
     catch (err) {
       if (err && err.code === "declined") status("Save cancelled.", "");
       else if (err && err.code === "rate_limited") status("A save prompt is already open. Finish it, then try again.", "err");
-      else status("Saving isn't available in this view. Use Copy settings instead.", "err");
+      else status("Saving isn't available in this view. Use Copy JSON instead.", "err");
     }
     return;
   }
-  if (hosted) { status("Saving isn't available in this view. Use Copy settings instead.", "err"); return; }
+  if (hosted) { status("Saving isn't available in this view. Use Copy JSON instead.", "err"); return; }
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = document.createElement("a"); a.href = url; a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
@@ -664,31 +1076,22 @@ function shareableHtml(json) {
   doc.getElementById("embedded-estimate").textContent = json;
   return "<!doctype html>\n" + doc.documentElement.outerHTML;
 }
-function showBanner() {
-  const b = $("loaded-banner");
-  b.hidden = !meta.name && !meta.note;
-  $("lb-name").textContent = meta.name || "Untitled estimate";
-  const when = meta.saved_at ? "Saved " + new Date(meta.saved_at).toLocaleString() + ". " : "";
-  $("lb-meta").textContent = when + (meta.note || "");
-  $("meta-name").value = meta.name; $("meta-note").value = meta.note;
-}
 function applyLoaded(text, source) {
   try {
-    const e = parseEstimate(JSON.parse(text));
-    st = e.settings; meta = e.meta; activeScn = null;
-    buildInputs(); render(); showBanner();
-    status(`Loaded “${meta.name || "untitled"}” from ${source}.`, "ok");
+    adopt(parseEstimate(JSON.parse(text)));
+    status(`Loaded “${est.name || "untitled"}” v${est.version} from ${source}.`, "ok");
   } catch (err) {
     status(err instanceof SyntaxError ? `${source} is not valid JSON.` : err.message, "err");
+    $("save-panel").open = true;
   }
 }
 
 $("btn-save-json").addEventListener("click", () => {
-  meta.saved_at = new Date().toISOString(); showBanner();
+  stampSave(); render();
   download(JSON.stringify(estimateObject(), null, 2), fileStem() + ".json", "application/json");
 });
 $("btn-save-html").addEventListener("click", () => {
-  meta.saved_at = new Date().toISOString(); showBanner();
+  stampSave(); render();
   const json = JSON.stringify(estimateObject(), null, 1).replace(/</g, "\\u003c");
   download(shareableHtml(json), fileStem() + ".html", "text/html");
 });
@@ -704,15 +1107,26 @@ drop.addEventListener("drop", async e => {
 });
 $("btn-copy").addEventListener("click", () => {
   const text = JSON.stringify(estimateObject(), null, 2);
-  const fallback = () => { const ta = $("copy-out"); ta.hidden = false; ta.value = text; ta.focus(); ta.select(); status("Copying is blocked here. The settings are selected below; copy them with Ctrl+C.", "err"); };
-  try { navigator.clipboard.writeText(text).then(() => status("Settings copied. Paste them into a .json file to share.", "ok"), fallback); } catch (e) { fallback(); }
+  const fallback = () => { const ta = $("copy-out"); ta.hidden = false; ta.value = text; ta.focus(); ta.select(); status("Copying is blocked here. The JSON is selected below; copy it with Ctrl+C.", "err"); };
+  try { navigator.clipboard.writeText(text).then(() => status("JSON copied. Paste it into a .json file to share.", "ok"), fallback); } catch (e) { fallback(); }
 });
 $("btn-reset").addEventListener("click", () => {
-  const keep = { budget: st.budget };
-  st = defaults(); st.budget = keep.budget; meta = { name: "", note: "", saved_at: "" }; activeScn = "full";
-  buildInputs(); render(); showBanner(); status("Reset to the default design. The budget was kept.", "ok");
+  adopt({ est: defaultEstimate() });
+  status("Reset to the default shortlist.", "ok");
 });
 
-buildInputs(); render(); showBanner();
-if (embedded) { activeScn = null; $("save-panel").open = true; status(`Opened with the built-in estimate “${meta.name || "untitled"}”.`, "ok"); }
+/* ---------- start: built-in estimate, then ?estimate=, then this browser, then the defaults ---------- */
+(function start() {
+  const embedded = readEmbedded();
+  const local = embedded ? null : loadLocal();
+  if (embedded) adopt(embedded);
+  else if (local) { est = local.est; st = local.st; activeOpt = opt(local.activeOpt) ? local.activeOpt : null; dirty = local.dirty; buildInputs(); render(); }
+  else adopt({ est: defaultEstimate() });
+  const url = new URLSearchParams(location.search).get("estimate");
+  if (url && !embedded) {
+    fetch(url).then(r => { if (!r.ok) throw new Error("the server answered " + r.status); return r.text(); })
+      .then(t => applyLoaded(t, url))
+      .catch(err => { status(`Couldn't open the estimate at ${url}: ${err.message}.`, "err"); $("save-panel").open = true; });
+  }
+})();
 </script>
