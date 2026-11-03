@@ -41,3 +41,9 @@ def runs(tmp_path) -> Path:
 @pytest.fixture
 def nl_text() -> str:
     return (DATA / "nl_storm.txt").read_text(encoding="utf-8")
+
+
+@pytest.fixture(autouse=True)
+def _own_settings_folder(tmp_path, monkeypatch):
+    """Keys and the model library of a test live in its own folder, never in the user's."""
+    monkeypatch.setenv("PSALM_SAGA_HOME", str(tmp_path / "psalm-saga-home"))

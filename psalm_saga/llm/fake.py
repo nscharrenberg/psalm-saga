@@ -138,7 +138,7 @@ class FakeBackend:
         return " ".join(words)
 
     async def complete(self, *, messages: list[dict], schema: type[BaseModel] | None, hints: dict,
-                       extra: dict | None = None) -> dict:
+                       extra: dict | None = None, max_tokens: int | None = None) -> dict:
         import asyncio
 
         extra = extra or {}
@@ -168,6 +168,20 @@ class FakeBackend:
                 content = self._verse(content)
         prompt_chars = sum(len(json.dumps(m.get("content"), ensure_ascii=False)) for m in messages)
         rt = int(extra.get("fake_reasoning_tokens", 0) or 0)
+        # Simulated overthinking: the model reasons until the allowance is gone and answers nothing —
+        #   fake_overthink: [efforts]          at these reasoning efforts (null = effort not set)
+        #   fake_overthink_below: N            whenever the allowance is below N tokens
+        #   fake_overthink_unless_told: true   unless told to stop deliberating and answer
+        told = "You have thought enough" in str((messages[-1] or {}).get("content", ""))
+        over = (("fake_overthink" in extra and extra.get("reasoning_effort") in (extra["fake_overthink"] or []))
+                or (extra.get("fake_overthink_below") and (max_tokens or 10**9) < int(extra["fake_overthink_below"])))
+        if extra.get("fake_overthink_unless_told"):
+            over = (over or True) and not told
+        if over:
+            used = int(max_tokens or 16000)
+            return {"content": "", "finish_reason": "length", "reasoning": "(simulated) counting syllables… " * 20,
+                    "usage": {"prompt_tokens": prompt_chars // 4, "completion_tokens": used, "cached_tokens": 0,
+                              "reasoning_tokens": used - 1}}
         return {
             "content": content,
             "finish_reason": "stop",

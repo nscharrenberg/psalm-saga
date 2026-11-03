@@ -19,22 +19,17 @@ policies:
 # procedure gets k = 3 samples per item (run-to-run variation); the others one. The full procedure's
 # runs are also rated by the two further judges (agreement, Section 4.5).
 conditions:
-  full:        {preset: full, repeats: 3, overrides: {judges.panel: ["openai/<MODEL-D>", {name: "hosted_vllm/Qwen/Qwen3.5-397B-A17B", api_base: "<url>"}]}}
+  full:        {preset: full, repeats: 3, overrides: {judges.panel: [gpt-6-luna, qwen3.5-397b]}}
   no_graph:    {preset: no_graph}        # ablation: without the knowledge graph in the writing stages
   no_feedback: {preset: no_feedback}     # ablation: without the review loop (no conform, no review)
   paraphrase:  {preset: paraphrase, policies: [preserve]}   # baseline: rename + paraphrase (keeps everything by design)
   single_call: {preset: flat}            # baseline: one call, told the policy
 
-# Writers (paper, Table 4): Mistral Large 4 through the API, and a small open model that runs on a laptop.
+# Writers (paper, Table 4), by their name in the model library (psalm_saga/model_library.py; the
+# web app's "Models"): each model is described once there (id, address, context, limits, price).
 models:
-  mistral_large:
-    models.default.name: "mistral/mistral-large-4-0"          # pin the dated snapshot, e.g. mistral-large-4-0-<date>
-  gemma_small:
-    models.default.name: "ollama_chat/gemma4:e4b"             # Gemma 4 E4B via Ollama; check the tag with `ollama list`
-    models.default.extra.api_base: "http://localhost:11434"
-    models.default.context_window: 131072
-    models.default.max_output_tokens: 8192
-    models.default.max_concurrency: 1
+  mistral_large: {models.default.use: mistral-large-4}   # pin the dated snapshot in the library entry
+  gemma_small:   {models.default.use: gemma-4-e4b}       # Ollama on this computer
 
 repeats: 1
 concurrency: 3
@@ -42,11 +37,11 @@ overrides:
   limits.max_cost_usd: 10                       # <per-run budget>
   limits.max_minutes: 240                       # a run that hangs stops here and can be continued
   judges.enabled: true
-  judges.model: "anthropic/claude-sonnet-5-5"   # primary judge: P4/P6 and the grades
+  judges.model: claude-sonnet-5-5               # primary judge (model library): J1 and the grades
   judges.instruments: [psalm, content, style]
 judge:
-  model: "anthropic/claude-sonnet-5-5"
-  check_models: ["openai/<MODEL-D>", "hosted_vllm/Qwen/Qwen3.5-397B-A17B"]  # reused from the runs' judge panel
+  model: claude-sonnet-5-5
+  check_models: [gpt-6-luna, qwen3.5-397b]       # reused from the full procedure's judge panel
   instruments: [psalm_check, psalm_anchor, alignment_anchor, quality_pairwise]
   quality_baseline: single_call                 # G2: blind pairwise quality against the single call, same policy
   anchor_condition: full

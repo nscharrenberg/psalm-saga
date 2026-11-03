@@ -18,11 +18,8 @@ const PAPER = {
     {name: "paraphrase", preset: "paraphrase", repeats: 1, policies: ["preserve"]},
     {name: "single_call", preset: "flat", repeats: 1, policies: null},
   ],
-  models: [
-    {key: "mistral_large", name: "mistral/mistral-large-4-0", api_base: "", effort: "", max_out: "", ctx: "", conc: ""},
-    {key: "gemma_small", name: "ollama_chat/gemma4:e4b", api_base: "http://localhost:11434", effort: "", max_out: 8192, ctx: 131072, conc: 1},
-  ],
-  judges: {model: "anthropic/claude-sonnet-5-5", panel: ["openai/<model>", {name: "hosted_vllm/Qwen/Qwen3.5-397B-A17B", api_base: "http://<host>:8000/v1"}],
+  writers: ["mistral-large-4", "gemma-4-e4b"],
+  judges: {model: "claude-sonnet-5-5", panel: ["gpt-6-luna", "qwen3.5-397b"],
            instruments: ["psalm", "content", "style"], exp: ["psalm_check", "psalm_anchor", "alignment_anchor", "quality_pairwise"],
            quality_baseline: "single_call"},
 };
@@ -35,7 +32,7 @@ let EXPB = null;
 function _clone(x){ return JSON.parse(JSON.stringify(x)); }
 function newBuilderState(){
   return {name: "my_experiment", inputs: ["inputs/my_experiment/*.txt"], metadata: "", policies: _clone(PAPER.policies),
-          conditions: _clone(PAPER.conditions), models: _clone(PAPER.models), judges: _clone(PAPER.judges),
+          conditions: _clone(PAPER.conditions), writers: _clone(PAPER.writers), rawModels: {}, judges: _clone(PAPER.judges),
           repeats: 1, concurrency: 2, budget: 10, minutes: 240, hypotheses: "default", overrides: {}, quick: false};
 }
 function demoState(){
@@ -43,7 +40,8 @@ function demoState(){
   Object.assign(s, {name: "demo", policies: {preserve: {all: "preserve"}, reinvent: _clone(PAPER.policies.reinvent)},
     conditions: [{name: "full", preset: "full", repeats: 1, policies: null, panel: false},
                  {name: "single_call", preset: "flat", repeats: 1, policies: null}],
-    models: [_clone(PAPER.models[0])], budget: 2, minutes: 60, inputs: ["inputs/demo/*.txt"]});
+    writers: ["offline-test"], budget: 2, minutes: 60, inputs: ["inputs/demo/*.txt"]});
+  s.judges.model = "offline-test";
   s.judges.panel = []; s.judges.exp = []; return s;
 }
 
@@ -65,6 +63,7 @@ function stateFromPlan(name, plan){
   const ov = {...(plan.overrides||{})};
   s.budget = ov["limits.max_cost_usd"] ?? ""; s.minutes = ov["limits.max_minutes"] ?? "";
   s.judges.model = ov["judges.model"] || (plan.judge||{}).model || "";
+  if(s.judges.model && !modelEntry(s.judges.model)){ const e = MODELS.find(m=>m.name===s.judges.model); if(e) s.judges.model = e.alias; }
   s.judges.instruments = ov["judges.instruments"] || s.judges.instruments;
   s.judges.exp = (plan.judge||{}).instruments || [];
   s.judges.quality_baseline = (plan.judge||{}).quality_baseline || "";
@@ -72,9 +71,12 @@ function stateFromPlan(name, plan){
   s.conditions = Object.entries(plan.conditions||{}).map(([n,c])=>{ const o = {...(c.overrides||{})}; const pn = o["judges.panel"]; delete o["judges.panel"];
     if(pn) panel = pn; return {name: n, preset: c.preset||"full", repeats: c.repeats||1, policies: c.policies||null, panel: !!pn, overrides: o}; });
   s.judges.panel = panel.length ? panel : ((plan.judge||{}).check_models||[]);
-  s.models = Object.entries(plan.models||{}).map(([k,m])=>({key: k, name: m["models.default.name"]||"", api_base: m["models.default.extra.api_base"]||"",
-    effort: m["models.default.extra.reasoning_effort"]||"", max_out: m["models.default.max_output_tokens"]||"", ctx: m["models.default.context_window"]||"",
-    conc: m["models.default.max_concurrency"]||""}));
+  s.writers = []; s.rawModels = {};
+  Object.entries(plan.models||{}).forEach(([k,m])=>{
+    const use = m["models.default.use"], name = m["models.default.name"];
+    const lib = use || (MODELS.find(x=>x.name===name && Object.keys(m).length===1)||{}).alias;
+    if(lib) s.writers.push(lib); else { s.rawModels[k] = m; s.writers.push("raw:"+k); } });
+  s.judges.panel = (s.judges.panel||[]).map(p=>typeof p==="object" ? (p.use || p.name) : p).map(p=>modelEntry(p)?p:((MODELS.find(x=>x.name===p)||{}).alias||p));
   ["limits.max_cost_usd","limits.max_minutes","judges.enabled","judges.model","judges.instruments"].forEach(k=>delete ov[k]);
   s.overrides = ov; s.hypotheses = Array.isArray(plan.hypotheses) ? plan.hypotheses : (plan.hypotheses||"default");
   s.analyses = plan.analyses; s.tstr_label = plan.tstr_label; s.period_split = plan.period_split; s.output = plan.output;
@@ -88,13 +90,10 @@ function planFromState(s){
     if(c.panel && s.judges.panel.length) o["judges.panel"] = s.judges.panel;
     conds[c.name] = {preset: c.preset, ...(c.repeats>1?{repeats: +c.repeats}:{}), ...(c.policies&&c.policies.length?{policies: c.policies}:{}), ...(Object.keys(o).length?{overrides: o}:{})}; });
   const models = {};
-  s.models.forEach(m=>{ const o = {"models.default.name": m.name};
-    if(m.api_base) o["models.default.extra.api_base"] = m.api_base;
-    if(m.effort) o["models.default.extra.reasoning_effort"] = m.effort;
-    if(m.max_out) o["models.default.max_output_tokens"] = +m.max_out;
-    if(m.ctx) o["models.default.context_window"] = +m.ctx;
-    if(m.conc) o["models.default.max_concurrency"] = +m.conc;
-    models[m.key] = o; });
+  s.writers.forEach(w=>{
+    if(w.startsWith("raw:")){ const k = w.slice(4); if(s.rawModels[k]) models[k] = s.rawModels[k]; return; }
+    const key = w.replace(/[^\w-]+/g, "_");
+    models[key] = modelEntry(w) ? {"models.default.use": w} : {"models.default.name": w}; });
   const ov = {...s.overrides};
   if(s.budget!=="" && s.budget!=null) ov["limits.max_cost_usd"] = +s.budget;
   if(s.minutes!=="" && s.minutes!=null) ov["limits.max_minutes"] = +s.minutes;
@@ -104,7 +103,7 @@ function planFromState(s){
     concurrency: +s.concurrency||2, overrides: ov};
   if(s.judges.model && (s.judges.exp||[]).length){
     plan.judge = {model: s.judges.model, instruments: s.judges.exp,
-                  ...(s.judges.panel.length?{check_models: s.judges.panel.map(p=>typeof p==="string"?p:p.name)}:{}),
+                  ...(s.judges.panel.length?{check_models: s.judges.panel.map(p=>typeof p==="string"?p:(p.use||p.name))}:{}),
                   ...(s.judges.quality_baseline?{quality_baseline: s.judges.quality_baseline}:{})};
   }
   if(s.metadata) plan.metadata = s.metadata;
@@ -114,7 +113,7 @@ function planFromState(s){
 }
 
 async function showBuilder(name){
-  CUR=null; if(typeof closeES==="function") closeES();
+  CUR=null; if(typeof closeES==="function") closeES(); await loadModels();
   if(name){ try{ const r = await api(`/api/experiment-plans/${encodeURIComponent(name)}`); EXPB = stateFromPlan(name, r.plan||{}); EXPB.__info = r; }
             catch(e){ toast(e.message); EXPB = newBuilderState(); } }
   else EXPB = newBuilderState();
@@ -123,7 +122,14 @@ async function showBuilder(name){
 
 function _presetOptions(sel){ return META.presets.map(p=>`<option value="${esc(p.name)}" ${p.name===sel?"selected":""}>${esc(presetTitle(p.name))} (${esc(p.name)})</option>`).join(""); }
 
+function syncBuilder(){
+  if(!EXPB) return;
+  if($("#xb-writers")){ const raw = EXPB.writers.filter(w=>w.startsWith("raw:")); EXPB.writers = [...chipsValue("xb-writers"), ...raw]; }
+  if($("#xb-judge")) EXPB.judges.model = pickerValue("xb-judge");
+  if($("#xb-panel")) EXPB.judges.panel = chipsValue("xb-panel");
+}
 function renderBuilder(){
+  syncBuilder();
   const s = EXPB, P = Object.keys(s.policies);
   const polRows = Object.entries(s.policies).map(([n,spec])=>{ const full = Object.fromEntries(DIMS.map(d=>[d, spec[d]||spec.all||"preserve"]));
     return `<tr><td><input value="${esc(n)}" onchange="renamePolicy('${esc(n)}', this.value)" style="width:110px"></td>${DIMS.map(d=>`<td><select onchange="EXPB.policies['${esc(n)}']['${d}']=this.value">${POLS.map(v=>`<option ${full[d]===v?"selected":""}>${v}</option>`).join("")}</select></td>`).join("")}<td><button class="small" onclick="delete EXPB.policies['${esc(n)}'];renderBuilder()">remove</button></td></tr>`; }).join("");
@@ -133,14 +139,6 @@ function renderBuilder(){
       <td>${P.length?P.map(p=>`<label class="small" style="display:inline-flex;gap:3px;margin:0 6px 0 0"><input type="checkbox" style="width:auto" ${!c.policies||c.policies.includes(p)?"checked":""} onchange="togglePol(${i},'${esc(p)}',this.checked)">${esc(p)}</label>`).join(""):'<span class="muted small">—</span>'}</td>
       <td><input type="checkbox" style="width:auto" ${c.panel?"checked":""} onchange="EXPB.conditions[${i}].panel=this.checked" title="the further judges also rate this condition's runs"></td>
       <td><button class="small" onclick="EXPB.conditions.splice(${i},1);renderBuilder()">remove</button></td></tr>`).join("");
-  const modelRows = s.models.map((m,i)=>`<tr><td><input value="${esc(m.key)}" style="width:110px" onchange="EXPB.models[${i}].key=this.value"></td>
-      <td><input value="${esc(m.name)}" onchange="EXPB.models[${i}].name=this.value" placeholder="provider/model"></td>
-      <td><input value="${esc(m.api_base||"")}" onchange="EXPB.models[${i}].api_base=this.value" placeholder="(API)"></td>
-      <td><select onchange="EXPB.models[${i}].effort=this.value">${["","low","medium","high"].map(v=>`<option value="${v}" ${m.effort===v?"selected":""}>${v||"default"}</option>`).join("")}</select></td>
-      <td><input type="number" value="${m.max_out||""}" style="width:80px" onchange="EXPB.models[${i}].max_out=this.value" placeholder="default"></td>
-      <td><input type="number" value="${m.ctx||""}" style="width:90px" onchange="EXPB.models[${i}].ctx=this.value" placeholder="default"></td>
-      <td><input type="number" value="${m.conc||""}" style="width:55px" onchange="EXPB.models[${i}].conc=this.value" placeholder="4"></td>
-      <td><button class="small" onclick="EXPB.models.splice(${i},1);renderBuilder()">remove</button></td></tr>`).join("");
   const condNames = s.conditions.map(c=>c.name);
   const info = s.__info && !s.__info.error ? s.__info : null;
   const hypo = s.hypotheses==="default" ? "default" : "custom";
@@ -157,20 +155,20 @@ function renderBuilder(){
   <div class="card"><h3>2 · Policy settings <span class="muted" style="font:12px var(--sans)">— each condition runs under each setting it is ticked for</span></h3>
     <p class="muted small">preserve keeps a dimension (function and expression high), abstract re-invents it (function high, expression low), regenerate replaces it (both low). Leave the table empty to use each preset's own policy.</p>
     <table class="small"><tr><th>name</th>${DIMS.map(d=>`<th>${esc(d.replace(/_/g," "))}</th>`).join("")}<th></th></tr>${polRows}</table>
-    <button class="small" style="margin-top:6px" onclick="addPolicy()">Add a setting</button></div>
+    <div class="row small" style="margin-top:6px"><span class="muted">Add a setting:</span>${(H().levels||[]).map(l=>`<button class="small" onclick="addLevel('${l.key}')" title="${esc(l.summary)}">${esc(l.title)}</button>`).join("")}<button class="small" onclick="addPolicy()">empty</button></div></div>
   <div class="card"><h3>3 · Setups</h3>
     <table class="small"><tr><th>name</th><th>preset</th><th>samples per text</th><th>policy settings</th><th title="the further judges also rate it">all judges</th><th></th></tr>${condRows}</table>
     <button class="small" style="margin-top:6px" onclick="EXPB.conditions.push({name:'cond'+(EXPB.conditions.length+1),preset:'full',repeats:1,policies:null});renderBuilder()">Add a setup</button>
-    <p class="muted small">Presets: ${META.presets.map(p=>`<b>${esc(p.name)}</b> ${esc(((H().presets||{})[p.name]||{}).title||"")}`).join(" · ")}</p></div>
-  <div class="card"><h3>4 · Writer models</h3>
-    <table class="small"><tr><th>key</th><th>model id</th><th>endpoint</th><th>reasoning</th><th>max output</th><th>context</th><th>parallel</th><th></th></tr>${modelRows}</table>
-    <button class="small" style="margin-top:6px" onclick="EXPB.models.push({key:'model'+(EXPB.models.length+1),name:''});renderBuilder()">Add a writer</button>
-    <p class="muted small">A self-hosted model: e.g. <code>ollama_chat/gemma4:e4b</code> with endpoint <code>http://localhost:11434</code>, or <code>hosted_vllm/&lt;model&gt;</code> with a vLLM endpoint. Set API keys with <a href="#" onclick="showKeys();return false">API keys</a>.</p></div>
+    <p class="muted small">Every setup runs under each policy setting ticked for it, with every writer. <a href="#" onclick="helpFor('glossary');return false">What the methods do</a>.</p></div>
+  <div class="card"><h3>4 · Writers</h3>
+    <p class="muted small">Every setup runs with every writer chosen here. Models are described once under <a href="#" onclick="showModels();return false">Manage models</a> (id, address, reasoning, limits, price); here you only choose.</p>
+    ${modelChips("xb-writers", s.writers.filter(w=>!w.startsWith("raw:")))}
+    ${Object.keys(s.rawModels||{}).length?`<p class="muted small">Also in this plan, set up by hand: ${Object.keys(s.rawModels).map(k=>`<code>${esc(k)}</code>`).join(", ")} (kept as they are).</p>`:""}</div>
   <div class="card"><h3>5 · Judges</h3>
-    <div class="grid2"><div><label>Primary judge <span class="muted" style="font-weight:400">(decides the grades; another family than every writer)</span></label><input value="${esc(s.judges.model||"")}" onchange="EXPB.judges.model=this.value.trim()" placeholder="anthropic/claude-…"></div>
+    <div class="grid2"><div><label>Primary judge <span class="muted" style="font-weight:400">(decides the grades; another family than every writer)</span></label>${modelPicker("xb-judge", s.judges.model||"")}</div>
       <div><label>Judges in every run</label><div class="stagepick">${["psalm","content","style"].map(k=>`<label><input type="checkbox" ${s.judges.instruments.includes(k)?"checked":""} onchange="toggleIn(EXPB.judges.instruments,'${k}',this.checked)"> ${k}</label>`).join("")}</div></div></div>
-    <label>Further judges <span class="muted" style="font-weight:400">(one per line: model id, or <code>id @ endpoint</code>; they rate the setups ticked "all judges", for the agreement check)</span></label>
-    <textarea rows="2" class="mono" onchange="EXPB.judges.panel=parsePanel(this.value)">${esc(panelText(s.judges.panel))}</textarea>
+    <label>Further judges <span class="muted" style="font-weight:400">(they rate the setups ticked "all judges", for the agreement check)</span></label>
+    ${modelChips("xb-panel", s.judges.panel)}
     <label>Experiment-level checks</label><div class="stagepick">${Object.entries(EXP_INSTR).map(([k,l])=>`<label title="${esc(l)}"><input type="checkbox" ${(s.judges.exp||[]).includes(k)?"checked":""} onchange="toggleIn(EXPB.judges.exp,'${k}',this.checked)"> ${esc(k)}</label>`).join("")}</div>
     <label>Quality baseline <span class="muted" style="font-weight:400">(blind pairwise comparison against this setup, same policy setting)</span></label>
     <select onchange="EXPB.judges.quality_baseline=this.value"><option value="">none</option>${condNames.map(n=>`<option ${s.judges.quality_baseline===n?"selected":""}>${esc(n)}</option>`).join("")}</select></div>
@@ -199,6 +197,10 @@ function infoHTML(i){
 function toggleIn(arr, v, on){ const i = arr.indexOf(v); if(on && i<0) arr.push(v); if(!on && i>=0) arr.splice(i,1); }
 function togglePol(i, p, on){ const c = EXPB.conditions[i]; const all = Object.keys(EXPB.policies); let cur = c.policies ? [...c.policies] : [...all];
   toggleIn(cur, p, on); c.policies = cur.length===all.length ? null : cur; }
+function addLevel(key){ const L = (H().levels||[]).find(l=>l.key===key); if(!L) return;
+  const name = {keep_all:"preserve", reinvent_story:"reinvent", replace_story:"replace"}[key] || key;
+  let n = name, i = 2; while(EXPB.policies[n]) n = `${name}${i++}`;
+  EXPB.policies[n] = {...L.policy}; renderBuilder(); }
 function addPolicy(){ let n = "setting"+(Object.keys(EXPB.policies).length+1); EXPB.policies[n] = {all:"preserve"}; renderBuilder(); }
 function renamePolicy(old, nw){ nw = nw.trim(); if(!nw || nw===old) return; EXPB.policies[nw] = EXPB.policies[old]; delete EXPB.policies[old];
   EXPB.conditions.forEach(c=>{ if(c.policies) c.policies = c.policies.map(p=>p===old?nw:p); }); renderBuilder(); }
@@ -218,7 +220,9 @@ async function uploadExpTexts(){
     toast(`${r.saved.length} text${r.saved.length===1?"":"s"} saved`); renderBuilder(); }catch(e){ toast(e.message); }
 }
 async function saveBuilder(start){
+  syncBuilder();
   const msg = $("#xb-msg"); Object.assign(EXPB.overrides, readAllSettings("xb"));
+  if(!EXPB.writers.length){ if(msg) msg.textContent = "choose at least one writer"; toast("Choose at least one writer."); return; }
   try{
     const r = await api("/api/experiment-plans", {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({name: EXPB.name, plan: planFromState(EXPB)})});
     EXPB.__info = r; if(msg) msg.textContent = "saved";

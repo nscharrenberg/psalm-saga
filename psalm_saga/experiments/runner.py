@@ -370,8 +370,9 @@ async def _validity(plan: ExperimentPlan, job: Job, jobs: list[Job], runs: Path,
         checks = res.setdefault("psalm_checks", {})
         # a judge already on the run's own panel (judges.panel) is reused, not asked twice
         for pj in (ev.get("judges") or {}).get("panel") or []:
-            if pj.get("model") in plan.judge.further_judges() and (pj.get("psalm") or {}).get("dimensions"):
-                checks.setdefault(pj["model"], pj["psalm"])
+            key = next((k for k in (pj.get("use"), pj.get("model")) if k in plan.judge.further_judges()), None)
+            if key and (pj.get("psalm") or {}).get("dimensions"):
+                checks.setdefault(key, pj["psalm"])
         for model in plan.judge.further_judges():
             if model not in checks:
                 llm2 = judges.judge_llm(model, cache_dir=runs.parent / ".judge_cache")

@@ -52,9 +52,12 @@ class Preference(BaseModel):
     reason: str = ""
 
 
-def judge_llm(model: str, cache_dir=None, **model_kw) -> LLM:
-    cfg = PipelineConfig(models={"default": ModelConfig(name=model, temperature=0.0, **model_kw)})
-    return LLM(cfg, cache_dir=cache_dir)
+def judge_llm(model: str | dict, cache_dir=None, **model_kw) -> LLM:
+    """An LLM for a judge: `model` is a model-library name, a LiteLLM id or a model dict."""
+    from psalm_saga import model_library as ml
+
+    mc = ml.resolve(model, ModelConfig(name=model if isinstance(model, str) else "x"), temperature=0.0, **model_kw)
+    return LLM(PipelineConfig(models={"default": mc}), cache_dir=cache_dir)
 
 
 async def spec_recovery(llm: LLM, taxonomy: Taxonomy, source_spec: Spec, synthetic_spec: Spec,

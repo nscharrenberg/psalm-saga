@@ -24,7 +24,11 @@ class _Base(BaseModel):
 
 
 class ModelConfig(_Base):
-    """One model endpoint. `name` is any LiteLLM model id (provider/model)."""
+    """One model endpoint. `name` is any LiteLLM model id (provider/model). `use` names an entry of the
+    model library (psalm_saga/model_library.py): its settings are copied in, so a model is described once
+    and chosen by name for every task; `temperature` stays with the task."""
+
+    use: str | None = None
 
     name: str = "anthropic/claude-sonnet-5-5"
     temperature: float | None = 0.8
@@ -39,6 +43,10 @@ class ModelConfig(_Base):
     # extra.reasoning_effort = low | medium | high; the headroom only keeps that from being cut off.
     reasoning: bool | None = None
     reasoning_headroom: int = 8000
+    # Upper limit on a reasoning model's hidden reasoning per call, where the provider takes one (OpenRouter,
+    # Anthropic); None = the provider's default for the reasoning effort. Keeps a model from spending minutes
+    # and the whole allowance thinking about a small task.
+    reasoning_max_tokens: int | None = None
     context_window: int = 200_000
     timeout_s: float = 600.0
     max_concurrency: int = 4
@@ -177,6 +185,25 @@ class PipelineConfig(_Base):
             return self.models[role]
         return self.models["default"]
 
+    def judge_model(self) -> ModelConfig:
+        """The primary judge: `judges.model` (a library name or a LiteLLM id), else the `judge` role, else
+        the default model. Judges run at temperature 0."""
+        from psalm_saga import model_library as ml
+
+        j = self.judges.model
+        if j and "judge" in self.models and self.models["judge"].use == j:
+            return self.models["judge"].model_copy(update={"temperature": 0.0})
+        base = self.models.get("judge") or self.models["default"]
+        if j:
+            return ml.resolve(j, base, temperature=0.0)
+        return base
+
+    def panel_models(self) -> list[ModelConfig]:
+        """The further judges of `judges.panel`, in order."""
+        from psalm_saga import model_library as ml
+
+        return [ml.resolve(e, self.judge_model(), temperature=0.0) for e in self.judges.panel]
+
     def fingerprint(self) -> str:
         blob = json.dumps(self.model_dump(mode="json"), sort_keys=True)
         return hashlib.sha256(blob.encode()).hexdigest()[:12]
@@ -248,13 +275,65 @@ def load_config(
         data = _resolve(_read_preset(preset))
     # Start from the complete defaults so a partial override (e.g. one transform policy) keeps the rest.
     data = _deep_merge(PipelineConfig().model_dump(mode="json", exclude={"stages"}), data)
-    items = overrides.items() if isinstance(overrides, dict) else [parse_override(o) for o in overrides or []]
+    items = list(overrides.items() if isinstance(overrides, dict) else [parse_override(o) for o in overrides or []])
     for key, value in items:
         set_dotted(data, key, value)
-    # Models other than "default" inherit unspecified fields from default.
-    models = data.get("models") or {}
+    _expand_models(data, items)
+    return PipelineConfig.model_validate(data)
+
+
+def _expand_models(data: dict, items: list[tuple[str, Any]]) -> None:
+    """Copy model-library entries into the configuration (see psalm_saga/model_library.py), then let
+    roles other than "default" inherit what they do not set from default. An entry is copied when it is
+    chosen in this call (an override) or not copied yet; a copy already in a run's settings is kept, so
+    the run keeps the model settings it was made with."""
+    from psalm_saga import model_library as ml
+
+    chosen = {k.split(".")[1] for k, _ in items if k.startswith("models.") and k.endswith(".use")}
+    chosen |= {k.split(".")[1] for k, _ in items if k.startswith("models.") and k.count(".") == 1}
+    judges_chosen = any(k in ("judges.model", "judges.panel", "judges") for k, _ in items)
+
+    def fill(role: str, m: dict) -> dict:
+        alias = m.get("use")
+        if not alias:
+            return m
+        e = ml.get(alias)
+        if e is None:
+            raise ValueError(f"models.{role}: no model called {alias!r} in the model library "
+                             f"({', '.join(sorted(ml.library()))})")
+        if role in chosen or m.get("name") != e.get("name"):
+            return {**m, **ml.model_fields(e), "use": alias}
+        return m
+
+    models = data.setdefault("models", {})
+    own_model = set()
+    for role, m in list(models.items()):
+        m = dict(m or {})
+        if role != "default" and (m.get("name") or m.get("use")):
+            own_model.add(role)
+            m.setdefault("use", None)  # a model of its own, not the default's library entry
+        models[role] = fill(role, m)
     default = models.get("default", {})
     for role, m in list(models.items()):
         if role != "default":
-            models[role] = _deep_merge(default, m or {})
-    return PipelineConfig.model_validate(data)
+            merged = _deep_merge(default, m or {})
+            if role in own_model:  # another model: the default's endpoint and provider options do not apply
+                merged["extra"] = dict((m or {}).get("extra") or {})
+            models[role] = merged
+    j = data.get("judges") or {}
+    jm = j.get("model")
+    if isinstance(jm, str) and ml.get(jm):
+        cur = models.get("judge") or {}
+        if judges_chosen or cur.get("use") != jm or cur.get("name") != ml.get(jm).get("name"):
+            models["judge"] = {**_deep_merge(default, {}), **ml.model_fields(ml.get(jm)), "use": jm, "temperature": 0.0}
+    panel = []
+    for entry in j.get("panel") or []:
+        if isinstance(entry, str) and ml.get(entry):
+            panel.append(ml.expand(entry))
+        elif isinstance(entry, dict) and entry.get("use") and ml.get(entry["use"]) and (
+                judges_chosen or entry.get("name") != ml.get(entry["use"]).get("name")):
+            panel.append(ml.expand({"use": entry["use"]}))
+        else:
+            panel.append(entry)
+    if j.get("panel"):
+        j["panel"] = panel

@@ -108,3 +108,72 @@ def test_anthropic_cache_markers():
     assert "cache_control" not in msgs[1]["content"][1]
     cfg2 = PipelineConfig(models={"default": ModelConfig(name="openai/gpt-5.5")})
     assert isinstance(LLM(cfg2)._messages("x", "sys", [Part("a", cache=True), Part("b")])[1]["content"], str)
+
+
+async def test_all_reasoning_no_answer_is_answered_from_the_models_own_notes():
+    events = []
+    llm = make(extra={"reasoning_effort": "medium", "fake_overthink_unless_told": True})
+    llm.on_event = events.append
+    out = await llm.json("x", "s", [Part("give")], Thing)
+    assert isinstance(out, Thing)
+    retries = [e for e in events if e["type"] == "llm_retry"]
+    assert len(retries) == 1 and "from its own reasoning so far" in retries[0]["error"] and "'low'" in retries[0]["error"]
+    assert llm.export_behaviour()["fake/t"]["effort"] == "low"
+
+
+async def test_then_without_a_limit_of_our_own_then_a_clear_error():
+    events = []
+    llm = make(extra={"fake_overthink_below": 30000}, max_output_tokens=8000)
+    llm.on_event = events.append
+    txt = await llm.text("x", "s", [Part("write")], hints={"target_words": 50})
+    assert txt and any("no output limit" in e.get("error", "") for e in events)
+    stuck = make(extra={"fake_overthink": [None, "low"]})
+    with pytest.raises(LLMError, match="kept reasoning without giving an answer"):
+        await stuck.text("x", "s", [Part("write")], hints={"target_words": 50})
+
+
+async def test_an_empty_answer_is_never_continued_or_cached(tmp_path):
+    llm = make(tmp_path, extra={"fake_overthink": [None, "low"]})
+    with pytest.raises(LLMError):
+        await llm.text("x", "s", [Part("write")], hints={"target_words": 50})
+    assert not list(tmp_path.rglob("*.json"))                 # nothing replayable was kept
+
+
+async def test_the_reasoning_a_model_needed_sets_the_room_for_later_calls():
+    llm = make(extra={"fake_reasoning_tokens": 20000}, reasoning=True, reasoning_headroom=8000)
+    await llm.text("x", "s", [Part("one")], hints={"target_words": 50})
+    mc = llm.config.models["default"]
+    assert llm.headroom(mc) == 25000 and llm.allowance(mc, 1000) >= 26000
+    b = llm.export_behaviour()
+    fresh = make()
+    fresh.load_behaviour(b)                                    # e.g. after resuming the run
+    assert fresh.headroom(fresh.config.models["default"]) == 25000
+
+
+def test_no_limit_of_our_own_stays_within_the_budget():
+    cfg = PipelineConfig(models={"default": ModelConfig(name="fake/t", max_output_tokens=0, output_cost_per_mtok=10.0)})
+    cfg.limits.max_cost_usd = 0.5
+    llm = LLM(cfg, limiters=LimiterRegistry())
+    assert llm.allowance(cfg.models["default"], None) == 50000   # $0.50 at $10 per million output tokens
+    cfg.limits.max_cost_usd = None
+    assert LLM(cfg, limiters=LimiterRegistry()).allowance(cfg.models["default"], None) == 0   # no limit sent at all
+
+
+def test_reasoning_settings_in_the_providers_form():
+    from psalm_saga.llm.client import _reasoning_params
+
+    kw = {"reasoning_effort": "medium"}
+    _reasoning_params(ModelConfig(name="openrouter/google/gemma-4-26b-a4b-it"), kw)
+    assert kw == {"extra_body": {"reasoning": {"effort": "medium"}}}
+    kw = {"reasoning_effort": "medium"}
+    _reasoning_params(ModelConfig(name="openrouter/google/gemma-4-26b-a4b-it", reasoning_max_tokens=3000), kw)
+    assert kw["extra_body"]["reasoning"] == {"max_tokens": 3000}
+    kw = {"reasoning_effort": "none"}
+    _reasoning_params(ModelConfig(name="openrouter/x/y", reasoning_max_tokens=3000), kw)
+    assert kw["extra_body"]["reasoning"] == {"effort": "none"}
+    kw = {}
+    _reasoning_params(ModelConfig(name="anthropic/claude-sonnet-5-5", reasoning_max_tokens=2000), kw)
+    assert kw["thinking"] == {"type": "enabled", "budget_tokens": 2000}
+    kw = {"reasoning_effort": "high"}
+    _reasoning_params(ModelConfig(name="openai/gpt-x"), kw)
+    assert kw == {"reasoning_effort": "high"}

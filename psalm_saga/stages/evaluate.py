@@ -58,16 +58,12 @@ class Evaluate(Stage):
         import asyncio
 
         from psalm_saga.artifacts import Bible, ChapterDraft, TransformMap
-        from psalm_saga.config import ModelConfig
         from psalm_saga.eval.run_judges import content_judge, psalm_judge, style_judge
 
         jcfg = ctx.config.judges
-        if jcfg.model:  # the judge model is configured separately from the writer's
-            base = ctx.config.models.get("judge") or ctx.config.models["default"]
-            ctx.config.models["judge"] = ModelConfig(**{**base.model_dump(), "name": jcfg.model, "temperature": 0.0,
-                                                        "extra": {k: v for k, v in base.extra.items() if not k.startswith("fake_")}
-                                                        if base.name != jcfg.model else base.extra})
-        out: dict = {"model": ctx.config.model_for("judge").name}
+        if jcfg.model:  # the judge model is chosen separately from the writer's (a library name or a model id)
+            ctx.config.models["judge"] = ctx.config.judge_model()
+        out: dict = {"model": ctx.config.model_for("judge").name, "use": ctx.config.model_for("judge").use}
         out["same_model_as_writer"] = out["model"] == ctx.config.model_for("draft").name
         policy = dict(ctx.config.transform.policy)
         tmap = ctx.store.maybe("transform.json", TransformMap)
@@ -111,25 +107,19 @@ class Evaluate(Stage):
         and their agreement. The primary judge's results (above) stay the ones the grades use."""
         import asyncio
 
-        from psalm_saga.config import ModelConfig
         from psalm_saga.eval.run_judges import content_judge, psalm_judge, style_judge
         from psalm_saga.eval.validity import judge_summary, panel_agreement
         from psalm_saga.taxonomy import load_taxonomy
 
         jcfg = ctx.config.judges
-        base = ctx.config.model_for("judge")
         members = []
-        for i, entry in enumerate(jcfg.panel, 2):
-            spec = {"name": entry} if isinstance(entry, str) else dict(entry)
-            name = spec.pop("name")
+        for i, mc in enumerate(ctx.config.panel_models(), 2):
             role = f"judge_{i}"
-            ctx.config.models[role] = ModelConfig(**{**base.model_dump(), "name": name, "temperature": 0.0,
-                                                     "extra": {**{k: v for k, v in base.extra.items()
-                                                                  if not k.startswith("fake_") and k != "api_base"}, **spec}})
-            members.append((name, _RoleContext(ctx, role)))
+            ctx.config.models[role] = mc
+            members.append((mc, _RoleContext(ctx, role)))
 
-        async def one(name, jctx):
-            res: dict = {"model": name}
+        async def one(mc, jctx):
+            res: dict = {"model": mc.name, "use": mc.use}
 
             async def safe(key, coro):
                 try:
@@ -148,9 +138,9 @@ class Evaluate(Stage):
             await asyncio.gather(*jobs)
             return res
 
-        panel = await asyncio.gather(*(one(n, j) for n, j in members))
+        panel = await asyncio.gather(*(one(m, j) for m, j in members))
         out["panel"] = panel
-        primary = {"model": out["model"], **{k: out.get(k) for k in ("psalm", "content", "style")}}
+        primary = {"model": out["model"], "use": out.get("use"), **{k: out.get(k) for k in ("psalm", "content", "style")}}
         out["agreement"] = panel_agreement([primary, *panel])
         out["per_judge"] = [judge_summary(j) for j in (primary, *panel)]
 

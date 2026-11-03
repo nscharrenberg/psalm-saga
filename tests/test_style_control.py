@@ -116,10 +116,10 @@ async def test_drafting_prompt_carries_rhythm_and_form(runs, monkeypatch):
     seen: list[str] = []
     orig = fk.FakeBackend.complete
 
-    async def spy(self, *, messages, schema, hints, extra=None):
+    async def spy(self, *, messages, schema, hints, extra=None, max_tokens=None):
         if schema is None and "target_words" in hints:
             seen.append(json.dumps(messages, ensure_ascii=False))
-        return await orig(self, messages=messages, schema=schema, hints=hints, extra=extra)
+        return await orig(self, messages=messages, schema=schema, hints=hints, extra=extra, max_tokens=max_tokens)
 
     monkeypatch.setattr(fk.FakeBackend, "complete", spy)
     prose = Pipeline.create("full", runs_dir=runs, source=(DATA / "nl_archaic.txt").read_text(encoding="utf-8"),

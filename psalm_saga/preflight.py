@@ -73,10 +73,7 @@ def roles_needed(config: PipelineConfig, stages: list[str]) -> dict[str, str]:
 
 
 def _judge_model(config: PipelineConfig) -> ModelConfig:
-    base = config.model_for("judge")
-    if config.judges.model:
-        return ModelConfig(**{**base.model_dump(), "name": config.judges.model})
-    return base
+    return config.judge_model()
 
 
 def workload(config: PipelineConfig, stages: list[str]) -> dict | None:
@@ -153,8 +150,8 @@ def static_checks(config: PipelineConfig, *, stages: list[str], has_input: bool 
         for i, entry in enumerate(config.judges.panel):
             name = entry if isinstance(entry, str) else (entry or {}).get("name")
             if not name:
-                out.append(Problem("error", f"judges.panel[{i}]", "a panel judge has no model name",
-                                   "Give a model id, or {name: <id>, api_base: <url>}."))
+                out.append(Problem("error", f"judges.panel[{i}]", "a further judge has no model",
+                                   "Choose a model from the model library, or give a model id."))
                 continue
             if name == wm and not name.startswith("fake/"):
                 out.append(Problem("warning", f"judges.panel[{i}]", f"this judge is the writer's own model ({name})",
@@ -205,6 +202,27 @@ def key_checks(models: dict[str, ModelConfig]) -> list[Problem]:
     return out
 
 
+def _key_hint(mc: ModelConfig) -> str:
+    """What to check after an authentication error: which key was sent, from where, and how to test it."""
+    from psalm_saga import keys
+
+    if any(k in (mc.extra or {}) for k in ("api_key",)):
+        return "The model's own api_key setting was sent; check it in the model's settings."
+    prov = _provider(mc.name)
+    spec = keys.PROVIDERS.get({"hosted_vllm": "vllm", "ollama_chat": "ollama"}.get(prov or "", prov or "")) or {}
+    var = next((v for v, kind in spec.get("vars", {}).items() if kind == "key"), None)
+    if not var:
+        return "Check the API key."
+    s = keys.source(var)
+    if not s["set"]:
+        return f"No {var} is set: add it under API keys."
+    warn = keys.problem(var, os.environ.get(var) or "")
+    return (f"The key sent was {var} {s['display']} ({s['source']}); the provider did not accept it. "
+            + (f"Note: {warn}. " if warn else "")
+            + "Use 'Check' next to it under API keys: if the provider rejects it there too, the key itself is wrong, "
+              "deleted or expired — create a new one at the provider and paste it again.")
+
+
 async def live_checks(config: PipelineConfig, models: dict[str, ModelConfig], timeout_s: float = 90) -> tuple[list[Problem], list[dict]]:
     from psalm_saga.llm import LLM, Part
     from psalm_saga.llm.limiter import LimiterRegistry
@@ -233,9 +251,9 @@ async def live_checks(config: PipelineConfig, models: dict[str, ModelConfig], ti
         except Exception as exc:
             msg = str(exc)
             low = msg.lower()
-            hint = ("Check the model name (provider/model) and that your account has access to it."
+            hint = (_key_hint(mc) if any(w in low for w in ("authenticat", "api key", "401", "user not found", "permission", "403"))
+                    else "Check the model name (provider/model) and that your account has access to it."
                     if any(w in low for w in ("not found", "does not exist", "notfound", "unknown model", "invalid model"))
-                    else "Check the API key." if any(w in low for w in ("auth", "api key", "401", "permission", "403"))
                     else "Check the endpoint address and your network." if any(w in low for w in ("connect", "timeout", "resolve"))
                     else "")
             results.append({"model": name, "used_by": where, "ok": False, "seconds": round(time.monotonic() - t0, 2),
@@ -254,12 +272,7 @@ async def preflight(config: PipelineConfig, *, stages: list[str], has_input: boo
     for stage, role in roles.items():
         if role.startswith("judge_"):
             i = int(role.split("_")[1])
-            entry = config.judges.panel[i - 2]
-            spec = {"name": entry} if isinstance(entry, str) else dict(entry)
-            base = _judge_model(config)
-            mc = ModelConfig(**{**base.model_dump(), "name": spec.pop("name"),
-                                "extra": {**{k: v for k, v in base.extra.items() if k != "api_base"}, **spec}})
-            models[f"judges.panel[{i - 2}] (for {stage})"] = mc
+            models[f"judges.panel[{i - 2}] (for {stage})"] = config.panel_models()[i - 2]
             continue
         mc = _judge_model(config) if role == "judge" else config.model_for(role)
         key = "models." + (role if role in config.models else "default") if role != "judge" else (

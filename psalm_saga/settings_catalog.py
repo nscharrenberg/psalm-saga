@@ -105,10 +105,13 @@ MODEL_FIELDS: dict[str, dict] = {
     "extra.reasoning_effort": _p("choice", None, "How much a reasoning model thinks before answering.",
                                  [None, "low", "medium", "high"]),
     "extra.api_base": _p("str", None, "Endpoint of a self-hosted model (vLLM, Ollama)."),
-    "max_output_tokens": _p("int", 8000, "Largest answer per call."),
+    "max_output_tokens": _p("int", 8000, "Largest answer per call; 0 = no limit of our own (the provider's maximum, "
+                            "within the run's budget)."),
     "min_output_tokens": _p("int", 2048, "Smallest output allowance per call (reasoning models need room)."),
     "reasoning": _p("choice", None, "Treat as a reasoning model (empty = detect).", [None, True, False]),
     "reasoning_headroom": _p("int", 8000, "Extra output tokens for a reasoning model's hidden reasoning."),
+    "reasoning_max_tokens": _p("int", None, "Most hidden reasoning per call, where the provider takes a limit (OpenRouter, "
+                               "Anthropic); empty = the provider's default for the reasoning effort."),
     "context_window": _p("int", 200000, "Input the model accepts, in tokens."),
     "timeout_s": _p("float", 600, "Seconds before a call is abandoned."),
     "timeout_retries": _p("int", 2, "Retries after a timeout."),

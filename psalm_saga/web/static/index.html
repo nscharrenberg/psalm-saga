@@ -193,13 +193,40 @@ details summary{cursor:pointer} .empty{color:var(--muted);text-align:center;padd
 .asf label{margin:4px 0 2px}.asf .k{font-family:var(--mono,monospace);font-size:12px;color:var(--ink)}
 .asf input,.asf select,.asf textarea{font-size:12.5px}
 .asf .small{font-size:11.5px;line-height:1.3}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin:6px 0}
+.tile{all:unset;box-sizing:border-box;cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;gap:4px;font-size:12.5px;line-height:1.35;min-height:84px}
+.tile:hover{border-color:var(--accent)} .tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tile.on{border-color:var(--accent);background:var(--soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.tile b{font-size:13.5px} .tile span{color:var(--muted)} .tile small{color:var(--muted);font-size:11.5px;font-style:italic}
+.tile.custom{cursor:default;opacity:.8} .tile.custom:not(.on){border-style:dashed}
+.polbar{display:inline-flex;gap:2px} .polbar i{width:16px;height:6px;border-radius:2px;display:inline-block}
+.pb-preserve{background:var(--ok)} .pb-abstract{background:var(--warn)} .pb-regenerate{background:var(--bad)}
+.polrow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:7px 14px;font-size:12.5px;color:var(--ink);background:var(--bg);border-left:1px solid var(--line)}
+.seg button:first-child{border-left:0} .seg button:hover{background:var(--soft)} .seg button:focus-visible{outline:2px solid var(--accent)}
+.seg button.on.s-preserve{background:var(--ok);color:#fff} .seg button.on.s-abstract{background:var(--warn);color:#fff} .seg button.on.s-regenerate{background:var(--bad);color:#fff}
+.poldetail{margin-top:8px} .poldetail>summary{cursor:pointer;font-size:13px}
+.flags{display:flex;flex-wrap:wrap;gap:3px} .flags i{font-style:normal;font-size:10.5px;padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+.flags i.yes{color:var(--ok)} .flags i.no{color:var(--muted);text-decoration:line-through} .flags i.neg{color:var(--warn)}
+.mpick select{width:100%} .mpick input{margin-top:4px} .mnote{font-size:11.5px;margin-top:2px}
+.mchips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0}
+.mchip{margin:0;display:inline-flex;gap:5px;align-items:center;font-size:12.5px;color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:4px 10px;background:var(--bg);cursor:pointer}
+.mchip input{width:auto;margin:0} .mchip.on{border-color:var(--accent);background:var(--soft)}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;cursor:pointer;color:var(--ink);font-size:13px}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--soft)}
+.actionbar{position:sticky;bottom:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-top:12px;box-shadow:0 -4px 14px rgba(0,0,0,.06)}
+.jbox{border-top:1px solid var(--line);margin-top:10px;padding-top:4px}
+h4{margin:12px 0 4px;font:600 13px var(--sans)}
 </style>
 <script src="/static/vendor/cytoscape-3.34.4.min.js"></script>
 <script src="/static/kg.js"></script>
+<script src="/static/models.js"></script>
+<script src="/static/newrun.js"></script>
 <script src="/static/experiments.js"></script>
 </head>
 <body><div id="netbar"></div>
-<header><h1>PSALM<span>·</span>SAGA</h1><p>Synthetic counterparts of literary texts: the same research-relevant properties, new wording.</p><span class="grow"></span><button class="small nobusy" onclick="showKeys()" title="API keys and endpoints for the model providers">API keys</button><button class="small nobusy" onclick="helpFor('glossary')">Help &amp; glossary</button></header>
+<header><h1>PSALM<span>·</span>SAGA</h1><p>Synthetic counterparts of literary texts: the same research-relevant properties, new wording.</p><span class="grow"></span><button class="small nobusy" onclick="showModels()" title="The models you use: described once, chosen by name everywhere">Models</button><button class="small nobusy" onclick="showKeys()" title="API keys and endpoints for the model providers">API keys</button><button class="small nobusy" onclick="helpFor('glossary')">Help &amp; glossary</button></header>
 <aside>
   <button class="primary" style="width:100%" onclick="showNew()">+ New run</button>
   <div class="runs" id="runs" style="margin-top:12px"></div>
@@ -246,15 +273,28 @@ async function showKeys(){
   const rows = k.providers.map(p=>`<details class="card" style="margin:6px 0;padding:10px 14px" ${p.ready?"":""}><summary><b>${esc(p.label)}</b> ${p.ready?'<span class="chip preserve">set</span>':'<span class="chip">not set</span>'} <span class="muted small">model ids like <code>${esc(p.example)}</code></span></summary>
       ${p.vars.map(v=>`<div class="row" style="margin-top:8px"><label style="margin:0;min-width:190px" class="mono">${esc(v.var)}</label>
         <input class="grow keyin" data-var="${esc(v.var)}" type="${v.kind==="key"?"password":"text"}" autocomplete="off" placeholder="${v.set?esc(v.display)+" ("+esc(v.source==="saved"?"saved here":"from the environment")+")":(v.kind==="url"?"https://…":v.kind==="key"?"paste the key":"")}" style="flex:1;max-width:none">
-        <button class="small" onclick="saveKey('${esc(v.var)}')">Save</button>${v.source==="saved"?`<button class="small" onclick="saveKey('${esc(v.var)}', true)">Remove</button>`:""}</div>`).join("")}</details>`).join("");
+        <button class="small" onclick="saveKey('${esc(v.var)}')">Save</button>${v.set&&v.checkable?`<button class="small" onclick="checkKey('${esc(v.var)}', this)" title="Ask the provider whether it accepts this key (no model call, no cost)">Check</button>`:""}${v.source==="saved"?`<button class="small" onclick="saveKey('${esc(v.var)}', true)">Remove</button>`:""}</div>
+        <div class="small keymsg" data-var="${esc(v.var)}"></div>`).join("")}</details>`).join("");
   modal("API keys and endpoints", `<p>Models are called through LiteLLM; each provider needs its key (or, for self-hosted models, its address). Keys you save here are kept <b>on this computer only</b>, in <code>${esc(k.file)}</code>, and used for every run started here or with the <code>saga</code> command. They are never written into run folders or shown again in full. A key saved here takes precedence over one set as an environment variable.</p>
     <p class="muted small">Copyrighted input: sending in-copyright library material to an external API may not be allowed by your licences — for such runs use a model hosted inside the library (Ollama or vLLM).</p>${rows}`);
 }
 async function saveKey(v, remove){
   const inp = document.querySelector(`.keyin[data-var="${v}"]`); const value = remove ? "" : (inp ? inp.value.trim() : "");
   if(!remove && !value){ toast("Paste a value first."); return; }
-  try{ await api("/api/keys", {method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify({var:v, value})}); toast(remove?`${v} removed`:`${v} saved`); showKeys(); }
+  try{ const r = await api("/api/keys", {method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify({var:v, value})});
+    toast(remove?`${v} removed`:`${v} saved`); await showKeys();
+    if(!remove){ const m = document.querySelector(`.keymsg[data-var="${v}"]`); const det = m && m.closest("details"); if(det) det.open = true;
+      if(r.warning && m) m.innerHTML = `<span class="warn">${esc(r.warning)}</span>`;
+      const b = m && m.parentElement.querySelector(`button[onclick^="checkKey('${v}'"]`); if(b) checkKey(v, b); } }
   catch(e){ toast(e.message); }
+}
+async function checkKey(v, btn){
+  const m = document.querySelector(`.keymsg[data-var="${v}"]`); if(m) m.innerHTML = `<span class="muted">asking the provider…</span>`;
+  if(btn) btn.disabled = true;
+  try{ const r = await api(`/api/keys/${encodeURIComponent(v)}/check`, {method:"POST"});
+    if(m) m.innerHTML = `<span class="${r.ok?"good":"warn"}">${esc(r.message)}</span>`; }
+  catch(e){ if(m) m.innerHTML = `<span class="warn">${esc(e.message)}</span>`; }
+  if(btn) btn.disabled = false;
 }
 function closeModal(){ const m = $("#modal"); if(m) m.remove(); }
 document.addEventListener("keydown", ev => { if(ev.key === "Escape") closeModal(); });
@@ -332,150 +372,6 @@ async function loadRuns(){
 }
 
 // ------------------------------------------------------------------ new run
-let PRESET = "full";
-const JUDGES = {psalm: ["PSALM dimensions", "six dimensions × six aspects; function and expression rated separately, with evidence and reasoning (6 calls)"],
-  content: ["Same story", "chapter summaries of both texts compared (1 call)"], style: ["Same style", "name-masked excerpts compared (1 call)"]};
-function judgePicker(prefix){ return `<div class="stagepick">${Object.entries(JUDGES).map(([k,[l,h]])=>`<label title="${esc(h)}"><input type="checkbox" class="jpick-${prefix}" value="${k}" checked> ${esc(l)}</label>`).join("")}</div>`; }
-// Further judges, one per line: "model-id" or "model-id @ http://endpoint" (a self-hosted model)
-function parsePanel(txt){ return (txt||"").split("\n").map(l=>l.trim()).filter(Boolean).map(l=>{ const i=l.indexOf("@");
-  return i>0 ? {name:l.slice(0,i).trim(), api_base:l.slice(i+1).trim()} : l; }); }
-function panelText(p){ return (p||[]).map(x=>typeof x==="string"?x:`${x.name}${x.api_base?" @ "+x.api_base:""}`).join("\n"); }
-const PANEL_HELP = `Further judges <span class="muted" style="font-weight:400">(optional; one per line — a model id, or <code>id @ endpoint</code> for a self-hosted model). Each runs the same judges; the first judge still decides the grades, the others show where judges agree.</span>`;
-async function runJudges(){
-  const model = ($("#jModelEv")||{}).value||"", instruments=[...document.querySelectorAll(".jpick-ev:checked")].map(x=>x.value);
-  const panel = parsePanel(($("#jPanelEv")||{}).value);
-  if(!instruments.length){ toast("Choose at least one judge."); return; }
-  try{ await api(`/api/runs/${CUR}/judge`, {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({model, instruments, panel})}); toast("Judges running — only the evaluation is redone."); TAB="activity"; await openRun(CUR); }
-  catch(e){ toast(e.message); }
-}
-function showNew(){
-  CUR=null; closeES(); loadRuns();
-  const hp = H().presets||{}, kinds = H().kinds||{};
-  const byKind = {}; META.presets.forEach(p=>{ const k=(hp[p.name]||{}).kind||"baseline"; (byKind[k]=byKind[k]||[]).push(p); });
-  const presetCards = Object.keys(kinds).filter(k=>byKind[k]).map(k=>`<div class="pkind">${esc(kinds[k])}</div><div class="pcards">${byKind[k].map(p=>{ const h=hp[p.name]||{};
-      return `<label class="pcard ${p.name===PRESET?"on":""}" data-preset="${p.name}"><input type="radio" name="preset" value="${p.name}" ${p.name===PRESET?"checked":""} onchange="presetChanged('${p.name}')"><b>${esc(h.title||p.name)}${h.recommended?' <span class="core">recommended</span>':""}${info("preset",p.name)}</b><span>${esc(h.summary||p.description)}</span></label>`; }).join("")}</div>`).join("");
-  const P = H().policies||{}, EX = H().dimension_examples||{};
-  const polRows = META.taxonomy.dimensions.map(d=>`<tr><td><div class="dl">${esc(d.label)}${info("dimension",d.key)}</div><div class="dd">${esc(d.description)}</div></td>
-      ${["preserve","abstract","regenerate"].map(o=>`<td class="opt" title="${esc((P[o]||{}).title||o)}: ${esc((EX[d.key]||{})[o]||"")}"><input type="radio" name="pol-${d.key}" value="${o}" data-pol="${d.key}"><div class="dd">${esc((EX[d.key]||{})[o]||"")}</div></td>`).join("")}</tr>`).join("");
-  $("#main").innerHTML = `
-  <h2 style="font:600 24px var(--serif);margin:0 0 4px">New run</h2>
-  <p class="lead">Give a text, choose what to run and what should carry over from the source, and start. You can follow every step live in the run's <b>activity</b> tab.</p>
-  <div class="card"><h3>1 · Input</h3>
-    <p class="lead">Upload or paste the text. Any language: the synthetic text is written in the language of the input.</p>
-    <div class="row"><input type="file" id="file" accept=".txt,.md,.json" style="max-width:320px">
-      <label style="margin:0">Kind of input${info("mode")}</label>
-      <select id="kind" style="max-width:260px"><option value="auto">decide automatically</option><option value="source">a source text to make a counterpart of</option><option value="premise">a premise for a new story</option><option value="spec">a specification (JSON)</option></select></div>
-    <label>…or paste text</label><textarea id="text" rows="7" placeholder="Paste a book, a chapter or a premise."></textarea>
-  </div>
-  <div class="card"><h3>2 · What to run</h3>
-    <p class="lead">A <i>preset</i> is a ready-made pipeline. Use <b>Full pipeline</b> to produce a synthetic text; the others are for testing or for experiments that compare methods.</p>
-    <div class="presets">${presetCards}</div>
-    <label>Stages in this preset <span class="muted" style="font-weight:400">— hover for what each does; untick to skip one</span></label><div id="stages" class="stagepick"></div>
-  </div>
-  <div class="card"><h3>3 · What carries over from the source ${info("policy")}</h3>
-    <p class="lead">For each dimension: <b>Keep</b> it as in the source, <b>Re-invent</b> it (same function, new particulars) or <b>Replace</b> it freely. Names are always replaced. Only applies when the input is a source text.</p>
-    <div class="row" style="margin-bottom:8px"><span class="muted small">Quick choice:</span>
-      <button class="small nobusy" onclick="setPolicies('all')">Keep everything</button>
-      <button class="small nobusy" onclick="setPolicies('surface')">Keep story and style, new people and world</button>
-      <button class="small nobusy" onclick="setPolicies('structure')">Keep only the structure</button></div>
-    <table class="pol"><tr><th>dimension</th>${["preserve","abstract","regenerate"].map(o=>`<th class="polhead">${esc((P[o]||{}).title||o)}<small>${esc((P[o]||{}).short||"")}</small></th>`).join("")}</tr>${polRows}</table>
-    <div class="row" style="margin-top:10px"><label style="margin:0" title="Replace every character and place name with a new one (recommended: original names are protected expression)."><input type="checkbox" id="rename" checked style="width:auto"> replace all names</label>
-    <label style="margin:0" title="New names fit the source's culture and period (Dutch names for a Dutch novel), instead of being free."><input type="checkbox" id="culture" checked style="width:auto"> keep the cultural setting of names</label></div>
-  </div>
-  <div class="grid2">
-    <div class="card"><h3>4 · Model</h3>
-      <label>Model <span class="muted" style="font-weight:400">(any LiteLLM model id; leave empty for the preset's) — <a href="#" onclick="showKeys();return false">set API keys</a></span></label><input id="model" placeholder="e.g. anthropic/claude-sonnet-5-5, openai/gpt-5.5, mistral/mistral-large-latest — fake/test runs offline">
-      <label>Reasoning effort <span class="muted" style="font-weight:400">(reasoning models only: how much the model thinks before answering — more costs more)</span></label>
-      <select id="effort"><option value="">provider default</option><option>low</option><option>medium</option><option>high</option></select>
-      <label>Budget in US dollars <span class="muted" style="font-weight:400">(the run stops when it is spent)</span></label><input id="budget" type="number" step="0.5" placeholder="no limit">
-      <label>Time limit in minutes <span class="muted" style="font-weight:400">(the run stops there, keeps everything, and can be continued)</span></label><input id="minutes" type="number" step="5" placeholder="no limit">
-    </div>
-    <div class="card"><h3>5 · Language and length</h3>
-      <div class="grid3"><div><label title="Output language; auto = the input's language">Language</label><input id="lang" placeholder="as input"></div>
-        <div><label title="Target length in words; empty = the source's length">Words</label><input id="words" type="number" placeholder="as source"></div>
-        <div><label title="Number of chapters; empty = the source's">Chapters</label><input id="chapters" placeholder="as source"></div></div>
-      <label>Language variety <span class="muted" style="font-weight:400">(dialect or historical spelling)</span></label><input id="variety" placeholder="empty = keep the source's variety · 'modern' = modernise · or describe one">
-    </div>
-  </div>
-  <div class="card"><h3>6 · Judges <span class="muted" style="font:12px var(--sans)">— optional</span></h3>
-    <p class="lead">Language-model judges add evaluations no count can make: the <b>PSALM judge</b> compares the two texts on all six dimensions and 36 aspects, citing evidence from both and arguing each verdict; the others ask whether it tells the same story and reads like the same writing. Use a model of a <b>different family</b> from the writer, so it does not favour its own text. You can also run the judges later from a run's evaluation.</p>
-    <label style="margin:0 0 6px;color:var(--ink);font-size:13px"><input type="checkbox" id="jOn" style="width:auto"> run the judges in this run's evaluation</label>
-    <div class="grid2"><div><label>Judge model <span class="muted" style="font-weight:400">(LiteLLM id; empty = the writer's model, not advised)</span></label><input id="jModel" placeholder="e.g. anthropic/claude-sonnet-5-5 when the writer is an OpenAI model"></div>
-      <div><label>Judges</label>${judgePicker("j")}</div></div>
-    <label>${PANEL_HELP}</label><textarea id="jPanel" rows="2" class="mono" placeholder="openai/gpt-…&#10;hosted_vllm/deepseek-… @ http://localhost:8000/v1"></textarea>
-  </div>
-  <details class="card"><summary><b>7 · Priorities</b> <span class="muted small">— optional: which evaluation measures matter most for your study</span></summary>
-    ${priorityPicker("nr", [])}
-  </details>
-  <details class="card" id="allNew"><summary><b>All settings</b> <span class="muted small">— every setting of the run, from the chosen preset: models, stages and their parameters, judges, limits</span></summary>
-    <div id="allNewBody"></div>
-  </details>
-  <details class="card"><summary><b>Advanced</b> <span class="muted small">— pause points and raw settings</span></summary>
-    <label>Pause after <span class="muted" style="font-weight:400">(stop to inspect or edit, then resume)</span></label><select id="until"><option value="">run to the end</option><option value="spec">the specification (check it before anything is written)</option><option value="transform">the transform step (check names and design)</option><option value="plan">the plan (check it before drafting)</option></select>
-    <label style="color:var(--ink);font-size:13px" title="Every model answer is kept on disk. By default a run only replays its own answers (resuming is free), so running the same text again gives a new sample. Tick this to replay the answers of an earlier identical run instead: free and identical, but not an independent sample."><input type="checkbox" id="sharedCache" style="width:auto"> reuse answers from earlier identical runs (free, but not a new sample)</label>
-    <label>Extra settings <span class="muted" style="font-weight:400">(one key=value per line; see the config tab of a run for all keys)</span></label><textarea id="extra" rows="2" class="mono" placeholder="stages.review.params.rounds=2&#10;stages.guard.params.min_span=8"></textarea>
-  </details>
-  <div class="row"><button class="primary" onclick="createRun()" title="The settings are checked first (models, keys, one tiny test call per model); if something is wrong the run waits for you to fix it">Start run</button>
-    <button onclick="checkNew()" title="Check the models, API keys and settings without starting">Check settings</button><span class="muted small">Starting checks the settings first; a run with a problem waits for you to fix it instead of failing halfway.</span></div>
-  <div id="pfnew"></div>`;
-  presetChanged(PRESET); prioWire("nr");
-}
-function setPolicies(kind){
-  const sets = {all: {}, surface: {character:"abstract", world_building:"abstract"},
-    structure: {writing_style:"abstract", narrative_voice:"abstract", character:"abstract", world_building:"abstract"}};
-  META.taxonomy.dimensions.forEach(d=>{ const v=(sets[kind]||{})[d.key]||"preserve"; const r=document.querySelector(`input[data-pol="${d.key}"][value="${v}"]`); if(r) r.checked=true; });
-}
-function presetChanged(name){
-  PRESET = name || PRESET;
-  document.querySelectorAll(".pcard").forEach(c=>c.classList.toggle("on", c.dataset.preset===PRESET));
-  const p = META.presets.find(x=>x.name===PRESET);
-  const order=["extract","spec","transform","plan","draft","conform","review","guard","assemble","recover","evaluate"];
-  $("#stages").innerHTML = order.filter(s=>s in p.config.stages).map(s=>{const c=p.config.stages[s];
-    return `<label title="${esc(((H().stages||{})[s]||{}).what||s)}"><input type="checkbox" data-stage="${s}" ${c.enabled?"checked":""}> ${esc(stageTitle(s))}${c.impl&&c.impl!==s?` <span class="muted">(${esc(c.impl)})</span>`:""}</label>`}).join("");
-  for(const [k,v] of Object.entries(p.config.transform.policy)){ const r=document.querySelector(`input[data-pol="${k}"][value="${v}"]`); if(r) r.checked=true; }
-  const ab = $("#allNewBody"); if(ab){ window.__extraRoles = {}; ab.innerHTML = allSettingsBox("nr", p.config); }
-}
-function newOverrides(){
-  const p = META.presets.find(x=>x.name===PRESET);
-  const ov = {};
-  document.querySelectorAll("[data-stage]").forEach(c=>{ if(c.checked!==p.config.stages[c.dataset.stage].enabled) ov[`stages.${c.dataset.stage}.enabled`]=c.checked; });
-  document.querySelectorAll("input[data-pol]:checked").forEach(r=>{ if(r.value!==p.config.transform.policy[r.dataset.pol]) ov[`transform.policy.${r.dataset.pol}`]=r.value; });
-  if(!$("#rename").checked) ov["transform.rename_entities"]=false;
-  if(!$("#culture").checked) ov["transform.keep_cultural_setting"]=false;
-  if($("#model").value) ov["models.default.name"]=$("#model").value.trim();
-  if($("#effort").value) ov["models.default.extra.reasoning_effort"]=$("#effort").value;
-  if($("#lang").value) ov["language.output"]=$("#lang").value.trim();
-  if($("#variety").value) ov["language.variety"]=$("#variety").value.trim();
-  if($("#words").value) ov["length.target_words"]=+$("#words").value;
-  if($("#chapters").value) ov["length.chapters"]= isNaN(+$("#chapters").value)? $("#chapters").value : +$("#chapters").value;
-  if($("#budget").value) ov["limits.max_cost_usd"]=+$("#budget").value;
-  if($("#jOn").checked){ ov["judges.enabled"]=true; if($("#jModel").value.trim()) ov["judges.model"]=$("#jModel").value.trim();
-    ov["judges.instruments"]=[...document.querySelectorAll(".jpick-j:checked")].map(x=>x.value);
-    const pn = parsePanel($("#jPanel").value); if(pn.length) ov["judges.panel"]=pn; }
-  if($("#minutes") && $("#minutes").value) ov["limits.max_minutes"]=+$("#minutes").value;
-  $("#extra").value.split("\n").map(l=>l.trim()).filter(Boolean).forEach(l=>{const i=l.indexOf("="); let v=l.slice(i+1).trim(); try{v=JSON.parse(v)}catch{} ov[l.slice(0,i).trim()]=v;});
-  const pr = readPriorities("nr"); if(pr.length) ov["priorities"]=pr;
-  if($("#sharedCache") && $("#sharedCache").checked) ov["cache_scope"]="shared";
-  Object.assign(ov, readAllSettings("nr"));   // the full editor wins where both set a value
-  return ov;
-}
-async function checkNew(){
-  const box=$("#pfnew"); box.innerHTML = `<div class="card"><span class="muted">Checking the settings, with one tiny test call per model…</span></div>`;
-  try{ const r = await api("/api/check", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({preset:PRESET, overrides:newOverrides()})}); box.innerHTML = `<div class="card">${pfHTML(r)}</div>`; }
-  catch(e){ box.innerHTML = `<div class="card"><div class="pf error">${esc(e.message)}</div></div>`; }
-}
-async function createRun(){
-  const p = META.presets.find(x=>x.name===PRESET);
-  const ov = newOverrides();
-  if(!$("#text").value.trim() && !$("#file").files[0]){ toast("Add a text first: upload a file or paste it."); return; }
-  const fd = new FormData();
-  fd.append("text", $("#text").value); fd.append("kind", $("#kind").value); fd.append("preset", p.name);
-  fd.append("overrides", JSON.stringify(ov)); fd.append("until", $("#until").value);
-  if($("#file").files[0]) fd.append("file", $("#file").files[0]);
-  try{ const r = await api("/api/runs", {method:"POST", body:fd}); toast("Run created — starting. Follow it in the activity tab."); TAB="activity"; await openRun(r.id); }catch(e){ toast(e.message); }
-}
-
-// ------------------------------------------------------------------ run view
 function closeES(){ if(ES){ ES.close(); ES=null; } }
 async function openRun(id){
   CUR=id; EVENTS=[]; closeES(); await loadRuns(); await renderRun();
@@ -608,14 +504,19 @@ function _fieldHTML(id, key, f, cur){
   else input = `<input ${f.type==="int"||f.type==="float"?`type="number" step="${f.type==="int"?1:"any"}"`:""} ${attrs} value="${v===null||v===undefined?"":esc(String(v))}" placeholder="${f.default===null||f.default===undefined?"(default)":esc(String(f.default))}">`;
   return `<div class="asf"><label>${lab}</label>${input}${help}</div>`;
 }
+// Settings that have their own control elsewhere on the page are not repeated here (each setting
+// appears once): the models, the judges' models, what carries over, length and language, limits.
+const SHOWN_ELSEWHERE = ["judges.enabled", "judges.model", "judges.panel", "judges.instruments", "transform.rename_entities",
+  "transform.keep_cultural_setting", "length.target_words", "length.chapters", "language.output", "language.variety",
+  "limits.max_cost_usd", "limits.max_minutes", "cache_scope"];
 function allSettingsHTML(id, cfg){
   const S = META.settings||{}; if(!S.stages) return "";
   const groups = {};
-  (S.run_fields||[]).forEach(f=>{ (groups[f.group]=groups[f.group]||[]).push(_fieldHTML(id, f.key, f, cfgGet(cfg, f.key))); });
+  (S.run_fields||[]).filter(f=>!SHOWN_ELSEWHERE.includes(f.key)).forEach(f=>{ (groups[f.group]=groups[f.group]||[]).push(_fieldHTML(id, f.key, f, cfgGet(cfg, f.key))); });
   const roles = Object.keys(cfg.models||{default:{}}).filter(r=>!r.startsWith("__") && !/^judge_\d+$/.test(r));
-  const modelBlock = roles.map(r=>`<details class="asg"><summary><b>Model role <code>${esc(r)}</code></b> <span class="muted small">${esc(cfgGet(cfg,`models.${r}.name`)||"")}</span></summary><div class="asgrid">
-      ${Object.entries(S.model_fields).map(([k,f])=>_fieldHTML(id, `models.${r}.${k}`, f, cfgGet(cfg, `models.${r}.${k}`))).join("")}</div></details>`).join("")
-    + `<div class="row small" style="margin:6px 0"><input id="as-${id}-newrole" placeholder="add a model role, e.g. judge, extract, plan" style="max-width:280px"><button class="small" onclick="addRole('${id}')">Add role</button></div>`;
+  const temps = roles.map(r=>{ const m = (cfg.models||{})[r]||{};
+      return _fieldHTML(id, `models.${r}.temperature`, {...S.model_fields.temperature, help: r==="default" ? "Writing (and every step without its own model)." : `Step ${r}.`}, m.temperature); }).join("");
+  const modelBlock = `<details class="asg"><summary><b>Sampling temperature per step</b> <span class="muted small">— which model does what is chosen under Models; how a model is set up, under Manage models</span></summary><div class="asgrid">${temps}</div></details>`;
   const stageBlock = STAGE_ORDER.filter(s=>(cfg.stages||{})[s]).map(s=>{ const sc = cfg.stages[s], params = (S.stages||{})[s]||{};
     const impls = (S.impls||{})[s]||[]; const impl = sc.impl || (s==="draft"?"chapter":s);
     const own = Object.entries(params).filter(([k,f])=>!f.impl || f.impl===impl);
@@ -629,22 +530,19 @@ function allSettingsHTML(id, cfg){
       ${extra.map(([k,v])=>_fieldHTML(id, `stages.${s}.params.${k}`, {type: typeof v==="boolean"?"bool":typeof v==="number"?"float":"str", default:v, help:"set in this configuration"}, v)).join("")}
       </div>${others.length?`<details class="small"><summary class="muted">parameters of other implementations (${others.length})</summary><div class="asgrid">${others.map(([k,f])=>_fieldHTML(id, `stages.${s}.params.${k}`, f, (sc.params||{})[k])).join("")}</div></details>`:""}</details>`; }).join("");
   return `<div class="allsettings">
-    <p class="muted small">Every setting of the run. Changed values are applied on top of the preset; the rest stays as it is. Hover a name for what it does, or read the line under it.</p>
-    <h4>Models</h4>${modelBlock}
+    <p class="muted small">Every other setting of the run; the ones with their own control above are not repeated. Changed values are applied on top of the chosen method; the rest stays as it is.</p>
+    ${modelBlock}
     ${Object.entries(groups).map(([g,fs])=>`<details class="asg"><summary><b>${esc(g)}</b></summary><div class="asgrid">${fs.join("")}</div></details>`).join("")}
     <h4>Stages</h4>${stageBlock}</div>`;
 }
-function addRole(id){ const n = ($(`#as-${id}-newrole`).value||"").trim(); if(!n) return;
-  window.__extraRoles = window.__extraRoles||{}; (window.__extraRoles[id]=window.__extraRoles[id]||new Set()).add(n);
-  const box = $(`#as-${id}-box`); if(!box) return; const cfg = JSON.parse(box.dataset.cfg); cfg.models = cfg.models||{}; 
-  [...window.__extraRoles[id]].forEach(r=>{ if(!cfg.models[r]) cfg.models[r] = {...(cfg.models.default||{}), __new:true}; });
-  box.dataset.cfg = JSON.stringify(cfg); box.innerHTML = allSettingsHTML(id, cfg); }
 function allSettingsBox(id, cfg){ return `<div id="as-${id}-box" data-cfg="${esc(JSON.stringify(cfg))}">${allSettingsHTML(id, cfg)}</div>`; }
 function readAllSettings(id){
   const ov = {}; const seen = new Set();
   document.querySelectorAll(`.as-${id}`).forEach(el=>{
     const key = el.dataset.key, type = el.dataset.type, orig = JSON.parse(el.dataset.orig||"null");
     let v;
+    if(type==="model"){ const role = key.split(".")[1]; const v2 = pickerValue(el.dataset.picker);
+      if(JSON.stringify(v2||"")!==JSON.stringify(orig||"")){ if(v2) roleOverrides(role, v2, ov); else ov[`models.${role}`] = null; } return; }
     if(type==="list"){ if(seen.has(key)) return; seen.add(key); v = [...document.querySelectorAll(`.as-${id}[data-key="${CSS.escape(key)}"]`)].filter(x=>x.checked).map(x=>x.dataset.item); }
     else if(type==="bool") v = el.checked;
     else if(type==="choice") v = JSON.parse(el.value);
@@ -652,56 +550,9 @@ function readAllSettings(id){
     else if(type==="int"||type==="float") v = el.value==="" ? null : +el.value;
     else v = el.value==="" ? null : el.value;
     if(type==="text" && v===null) v = "";
-    const isNewRole = /^models\.[^.]+\./.test(key) && (window.__extraRoles||{})[id] && [...window.__extraRoles[id]].some(r=>key.startsWith(`models.${r}.`)) && key.endsWith(".name");
-    if(JSON.stringify(v)!==JSON.stringify(orig) || isNewRole) ov[key] = v;
+    if(JSON.stringify(v)!==JSON.stringify(orig)) ov[key] = v;
   });
   return ov;
-}
-function editSettings(){
-  const cfg = (ST.meta||{}).config||{};
-  const roles = Object.keys(cfg.models||{}).filter(r=>r!=="default" && !r.startsWith("__"));
-  const stageModels = Object.entries(cfg.stages||{}).filter(([n,s])=>s.enabled && s.model).map(([n,s])=>[n,s.model]);
-  modal("Edit settings", `<p class="small">Changes apply to what the run still has to do (and to anything you redo). Finished stages are kept — to apply a change to them, use <i>Redo from…</i> afterwards. <a href="#" onclick="showKeys();return false">API keys</a> are set separately.</p>
-    <div class="grid2"><div><label>Model (default for every stage)</label><input id="es-model" value="${esc(cfgGet(cfg,"models.default.name")||"")}"></div>
-      <div><label>Reasoning effort (reasoning models)</label><select id="es-effort">${["","low","medium","high"].map(v=>`<option value="${v}" ${(cfgGet(cfg,"models.default.extra.reasoning_effort")||"")===v?"selected":""}>${v||"provider default"}</option>`).join("")}</select></div></div>
-    ${roles.map(r=>`<label>Model for role <code>${esc(r)}</code></label><input class="es-role" data-role="${esc(r)}" value="${esc(cfgGet(cfg,`models.${r}.name`)||"")}">`).join("")}
-    ${stageModels.length?`<p class="muted small">Stages with their own model role: ${stageModels.map(([n,m])=>`${esc(stageTitle(n))} → <code>${esc(m)}</code>`).join(", ")}.</p>`:""}
-    <div class="grid2"><div><label>Budget (US dollars; empty = no limit)</label><input id="es-budget" type="number" step="0.5" value="${cfgGet(cfg,"limits.max_cost_usd")??""}"></div>
-      <div><label style="margin-top:28px;color:var(--ink)"><input type="checkbox" id="es-jon" style="width:auto" ${cfgGet(cfg,"judges.enabled")?"checked":""}> run the judges in the evaluation</label></div></div>
-    <label>Judge model</label><input id="es-jmodel" value="${esc(cfgGet(cfg,"judges.model")||"")}" placeholder="empty = the writer's model (not advised)">
-    <label>${PANEL_HELP}</label><textarea id="es-jpanel" rows="2" class="mono">${esc(panelText(cfgGet(cfg,"judges.panel")))}</textarea>
-    <label>Time limit (minutes of work; empty = none — the run stops there and can be continued)</label><input id="es-minutes" type="number" step="5" value="${cfgGet(cfg,"limits.max_minutes")??""}">
-    <h3 style="margin-top:14px">Priorities</h3>${priorityPicker("es", cfg.priorities||[])}
-    <details style="margin-top:12px"><summary><b>All settings</b> <span class="muted small">— models, stages and their parameters, judges, limits</span></summary>${allSettingsBox("es", cfg)}</details>
-    <label>Other settings <span class="muted" style="font-weight:400">(one key=value per line, e.g. stages.review.params.rounds=2)</span></label><textarea id="es-extra" rows="2" class="mono"></textarea>
-    <div class="row" style="margin-top:12px"><button class="primary" onclick="saveSettings(true)">Save, check and continue</button><button onclick="saveSettings(false)">Save and check</button><span class="muted small" id="es-msg"></span></div>
-    <div id="pfm"></div>`);
-  prioWire("es");
-}
-async function saveSettings(go){
-  const cfg = (ST.meta||{}).config||{}, ov = {};
-  const set = (k, v, cur) => { if(v!==cur) ov[k]=v; };
-  set("models.default.name", $("#es-model").value.trim(), cfgGet(cfg,"models.default.name"));
-  const eff = $("#es-effort").value; if(eff!==(cfgGet(cfg,"models.default.extra.reasoning_effort")||"")) ov["models.default.extra.reasoning_effort"] = eff||null;
-  document.querySelectorAll(".es-role").forEach(i=>set(`models.${i.dataset.role}.name`, i.value.trim(), cfgGet(cfg,`models.${i.dataset.role}.name`)));
-  const b = $("#es-budget").value; const bv = b===""?null:+b; if(bv!==(cfgGet(cfg,"limits.max_cost_usd")??null)) ov["limits.max_cost_usd"]=bv;
-  if($("#es-jon").checked!==!!cfgGet(cfg,"judges.enabled")) ov["judges.enabled"]=$("#es-jon").checked;
-  set("judges.model", $("#es-jmodel").value.trim(), cfgGet(cfg,"judges.model")||"");
-  { const pn = parsePanel($("#es-jpanel").value); if(JSON.stringify(pn)!==JSON.stringify(cfgGet(cfg,"judges.panel")||[])) ov["judges.panel"]=pn; }
-  { const m=$("#es-minutes").value; const mv = m===""?null:+m; if(mv!==(cfgGet(cfg,"limits.max_minutes")??null)) ov["limits.max_minutes"]=mv; }
-  const pr = readPriorities("es"); if(JSON.stringify(pr)!==JSON.stringify(cfg.priorities||[])) ov["priorities"]=pr;
-  Object.assign(ov, readAllSettings("es"));
-  $("#es-extra").value.split("\n").map(l=>l.trim()).filter(Boolean).forEach(l=>{const i=l.indexOf("="); if(i<1) return; let v=l.slice(i+1).trim(); try{v=JSON.parse(v)}catch{} ov[l.slice(0,i).trim()]=v;});
-  const msg=$("#es-msg");
-  try{
-    if(Object.keys(ov).length){ await api(`/api/runs/${CUR}/config`, {method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify({overrides:ov})}); if(msg) msg.textContent=`saved ${Object.keys(ov).length} change${Object.keys(ov).length>1?"s":""} — checking…`; }
-    else if(msg) msg.textContent="no changes — checking…";
-    const st = await api(`/api/runs/${CUR}`); window.ST = st;
-    const r = await api(`/api/runs/${CUR}/check`, {method:"POST"}); const box=$("#pfm"); if(box) box.innerHTML = pfHTML(r);
-    if(r.ok && go){ closeModal(); await runAgain(); return; }
-    if(msg) msg.textContent = r.ok ? "saved; the settings are ready" : "saved; the check still finds problems";
-    renderRun(true);
-  }catch(e){ if(msg) msg.textContent = e.message; toast(e.message); }
 }
 function priorityPicker(id, selected){
   const sel = new Set(selected||[]), G = META.evaluation.groups;
@@ -1077,8 +928,8 @@ function groupExtras(gkey, e){
   if(gkey==="content"){
     const jd = e.judges, ps = jd && jd.psalm;
     const runCard = `<div class="card"><h3>${jd?"Run the judges again":"Run the judges"}</h3><p class="small">${jd?`Last run with <b>${esc(jd.model)}</b>${jd.same_model_as_writer?' — <span class="warn">the same model that wrote the text, so it may be lenient</span>':""}.`:"The judges are optional and off by default."} Only the evaluation is redone; the text is not touched. Choose a model of a different family from the writer (${esc(((ST.meta||{}).config||{}).models?.default?.name||"")}).</p>
-      <div class="grid2"><div><label>Judge model</label><input id="jModelEv" value="${esc(jd?jd.model:"")}" placeholder="LiteLLM model id"></div><div><label>Judges</label>${judgePicker("ev")}</div></div>
-      <label>${PANEL_HELP}</label><textarea id="jPanelEv" rows="2" class="mono">${esc(panelText(cfgGet((ST.meta||{}).config||{},"judges.panel")))}</textarea>
+      <div class="grid2"><div><label>Primary judge</label>${modelPicker("jModelEv", jd?(jd.use||jd.model):"")}</div><div><label>Judges</label>${judgePicker("ev")}</div></div>
+      <label>Further judges <span class="muted" style="font-weight:400">(optional: the same judgements by other models, to see whether judges agree)</span></label>${modelChips("jPanelEv", (cfgGet((ST.meta||{}).config||{},"judges.panel")||[]))}
       <button class="small" style="margin-top:8px" onclick="runJudges()">Run the judges</button></div>`;
     const panelCard = (jd && jd.per_judge) ? (()=>{ const ag = jd.agreement||{}, f = v => v==null?"—":pct(v);
       const a = v => v==null?"—":(+v).toFixed(2);

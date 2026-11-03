@@ -104,8 +104,13 @@ Lower level: `psalm_saga.Pipeline.create(...)/open(...)` and `await pipeline.run
 
 ### Web app
 
-`saga serve` → upload or paste a text, pick a preset, toggle stages, set the per-dimension
-transform policy, model, language, length and budget; watch the run live in the **activity**
+`saga serve` → **New synthetic text** asks four things in order: the text (drop or paste); what
+carries over (one click for the common answers — keep everything, new people and places,
+re-invent the story, replace the story, only the structure, re-invent or replace everything — and
+Keep / Re-invent / Replace per dimension); which models write and judge (chosen from the model
+library); and how (the full pipeline, or one of the methods the paper compares it with). Options
+(language, length, budget, time limit, priorities) and every other setting are one click further;
+a bar at the bottom always says what will run. Watch the run live in the **activity**
 tab (stages as collapsible groups, chapters within them, every model call with tokens, time,
 cost and the start of its answer, calls still in flight, retries and warnings — built from
 the run's own `events.jsonl`, so watching does not slow the run); read and edit the spec (field by field or with an instruction), the story bible and
@@ -124,9 +129,9 @@ characters, content, protected expression); a **core** subset is what experiment
 
 **Judges (optional).** Language-model judges are off by default and have their own settings, so
 they can run on a model of a different family from the writer: `--set judges.enabled=true --set
-judges.model=anthropic/claude-sonnet-5-5` (or the *Judges* section of the web form, or *Run the
-judges* on a finished run's evaluation, which redoes only the evaluation). **Several judges:**
-`judges.panel` lists further judge models (`["openai/…", {name: "hosted_vllm/…", api_base: "http://…"}]`);
+judges.model=claude-sonnet-5-5` (a model-library name or a LiteLLM id; or the *Models* section of the
+web form, or *Run the judges* on a finished run's evaluation, which redoes only the evaluation).
+**Several judges:** `judges.panel` lists further judge models by name (`["gpt-6-luna", "qwen3.5-397b"]`);
 each runs the same instruments, the primary judge (`judges.model`) still decides the grades, and the
 evaluation adds every judge's results (`judges.per_judge`, `judges.panel`) and their agreement
 (`judges.agreement`: Krippendorff's α on the 36 PSALM ratings, mean and range of each result). Instruments
@@ -228,6 +233,30 @@ token/cost usage per stage tag). Edit any of them by hand and `saga resume --fro
 
 ---
 
+## Models: described once, chosen by name
+
+Every model is described once in the **model library**: its LiteLLM id, the address of a
+self-hosted server, its reasoning effort, context and output limits, how many calls it takes at
+once, and its price. Built-in entries cover the paper's models (`mistral-large-4`, `gemma-4-e4b`,
+`claude-sonnet-5-5`, `gpt-6-luna`, `qwen3.5-397b`) and a free offline test model
+(`offline-test`); your own and edited entries live in `~/.psalm-saga/models.json`, next to the API
+keys (web app: **Models**, top right, with a *Test* button per model).
+
+Every task then chooses a model by name; what belongs to the task (the analysis' low temperature,
+the judges' temperature 0) stays with the task:
+
+```bash
+saga run book.txt --set models.default.use=mistral-large-4 \
+                  --set models.extract.use=gemma-4-e4b \
+                  --set judges.enabled=true --set judges.model=claude-sonnet-5-5 \
+                  --set 'judges.panel=["gpt-6-luna","qwen3.5-397b"]'
+```
+
+A run keeps a copy of the chosen entries, so it keeps the exact model settings it was made with
+even if the library changes; choosing a model again (in *Edit settings* or with `--set ...use=`)
+refreshes the copy. Raw LiteLLM ids (`--set models.default.name=openai/...`) still work for a
+model you do not want to add to the library.
+
 ## Presets (experimental conditions)
 
 | Preset | What it is |
@@ -297,13 +326,16 @@ then `--set stages.draft.impl=my_writer`.
   The pre-flight check warns with the worst-case number of rewrites per chapter, and review shows
   its progress (chapter k of n; second pass after going back to planning).
 - **Reasoning models.** Their hidden reasoning counts against the output allowance, so a call
-  sized for a 125-word poem could come back empty or cut off. For a reasoning model every call
-  gets `models.<role>.reasoning_headroom` (default 8,000) tokens on top of what the visible
-  answer needs; models are recognised from LiteLLM's table or from reasoning tokens in their
-  first answer (force with `models.<role>.reasoning=true`). The headroom only prevents
-  truncation; how much a model thinks is the provider's setting, e.g.
-  `--set models.default.extra.reasoning_effort=high` (also in the web form). Every call has at
-  least `min_output_tokens` (2,048), and an empty answer at the limit is retried with more room.
+  sized for a 125-word poem could come back empty or cut off. Every call of a reasoning model
+  gets room for reasoning on top of what the visible answer needs: `reasoning_headroom` (default
+  8,000), raised automatically to what the run has seen the model need (kept in `run.json`, so a
+  resumed run starts with it). `reasoning_max_tokens` limits the reasoning where the provider
+  takes a limit (OpenRouter, Anthropic); `max_output_tokens: 0` means no limit of our own (the
+  provider's maximum, or what the run's budget still allows). A call that still ends with
+  reasoning only and no answer is (1) asked to write the final answer from its own reasoning so far,
+  at reasoning effort "low", then (2) asked again with no limit of our own, and then (3) stops with
+  a message saying what to change. An empty answer is never continued or cached, and a lowered
+  effort is kept for the rest of the run.
 - **Full call logs.** Every call is kept under `calls/<id>.json`: all messages in, the answer,
   any reasoning text the provider returns, finish reason, tokens, time and cost
   (`log_calls: false` to switch off). The web app's activity tab opens them per call; release

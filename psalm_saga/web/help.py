@@ -9,57 +9,59 @@ from __future__ import annotations
 
 PRESETS: dict[str, dict] = {
     "full": {"title": "Full pipeline", "kind": "main", "recommended": True,
-             "summary": "Analyse the source, decide per dimension what carries over, plan, write chapter by chapter, "
-                        "match the source's measured style, check against the plan and the story design, remove any "
-                        "copied wording, and evaluate.",
+             "summary": "Analyse the source, decide per dimension what carries over, plan, write chapter by chapter from "
+                        "the story graph, measure every chapter and correct its style and content, remove copied "
+                        "wording, and evaluate.",
              "when": "The default for producing a synthetic counterpart of a text."},
-    "fast": {"title": "Quick test", "kind": "quick",
-             "summary": "The full pipeline with the expensive checks left out (no alias merging, no review) and a small "
-                        "model for the analysis. Cheaper and faster, lower quality.",
-             "when": "Trying settings or a new text before a real run."},
-    "no_review": {"title": "Without review (ablation)", "kind": "ablation",
-                  "summary": "The full pipeline without the review-and-repair step.",
-                  "when": "Experiments: what does the review step contribute?"},
-    "no_graph": {"title": "Without knowledge graph (ablation)", "kind": "ablation",
-                 "summary": "The full pipeline, but planning, writing and review do not see the story graph (characters, "
-                            "places, relations, events and causes): only the specification, a synopsis per chapter and "
-                            "the measured scene shapes. The graph is still built so the evaluation can measure it.",
-                 "when": "Experiments: what does the knowledge graph contribute?"},
-    "no_feedback": {"title": "Without the review loop (ablation)", "kind": "ablation",
-                    "summary": "The full pipeline without measuring and correcting the draft: no style matching and no "
-                               "review. The writer is still told the source's measured targets once.",
-                    "when": "Experiments: what does steering by the data properties contribute?"},
-    "no_spec": {"title": "Without specification (ablation)", "kind": "ablation",
-                "summary": "No dimension specification: the story is planned from the chapter outline only.",
-                "when": "Experiments: what does the specification contribute?"},
-    "no_conform": {"title": "Without style matching (ablation)", "kind": "ablation",
-                   "summary": "The full pipeline without the step that steers the prose towards the source's measured "
-                              "rhythm (and without numeric style targets for the writer).",
-                   "when": "Experiments: what do measured style targets contribute?"},
-    "flat_spec": {"title": "One call from the specification (baseline)", "kind": "baseline",
+    "no_graph": {"title": "Without the story graph", "kind": "paper",
+                 "summary": "As the full pipeline, but planning, writing and checking do not see the story graph "
+                            "(characters, places, relations, events, causes) — only the specification and a synopsis per "
+                            "chapter. The graph is still built, so the evaluation can measure it.",
+                 "when": "Shows what the knowledge graph contributes."},
+    "no_feedback": {"title": "Without measuring and correcting", "kind": "paper",
+                    "summary": "As the full pipeline, but drafts are kept as written: neither style matching nor "
+                               "check-and-repair runs. The writer is still told the source's measured style once.",
+                    "when": "Shows what steering by the measured data properties contributes."},
+    "paraphrase": {"title": "Rename and paraphrase", "kind": "paper",
+                   "summary": "Rename the characters and places, then paraphrase the source passage by passage. Keeps "
+                              "everything by construction; the question is how much of the source's wording it keeps "
+                              "too. Always keeps every dimension.",
+                   "when": "The naive way to make a synthetic text."},
+    "flat": {"title": "Single call", "kind": "paper",
+             "summary": "The model gets the source and what should carry over, and writes the counterpart in one call. "
+                        "No analysis, plan, checks or copy guard.",
+             "when": "What one model call achieves on its own."},
+    "no_review": {"title": "Without check-and-repair only", "kind": "more",
+                  "summary": "As the full pipeline without checking chapters against the plan and design; style "
+                             "matching still runs. (\"Without measuring and correcting\" turns off both.)",
+                  "when": "Separates the content check from the style correction."},
+    "no_conform": {"title": "Without style matching only", "kind": "more",
+                   "summary": "As the full pipeline without the step that corrects the prose towards the source's "
+                              "measured rhythm, and without style numbers for the writer; check-and-repair still runs.",
+                   "when": "Separates the style correction from the content check."},
+    "no_spec": {"title": "Without the specification", "kind": "more",
+                "summary": "No description of the six dimensions: the story is planned from the chapter outline only.",
+                "when": "What the dimension specification contributes."},
+    "flat_spec": {"title": "Single call from the design", "kind": "more",
                   "summary": "Analyse and transform as usual, then write the whole story in one call from the "
-                             "specification and outline — no planning, no review.",
-                  "when": "Experiments: what do planning and review add?"},
-    "flat": {"title": "One call from the source (baseline)", "kind": "baseline",
-             "summary": "The model gets the source and is asked for a synthetic counterpart in one call. No analysis, "
-                        "specification, plan or review; no copy guard.",
-             "when": "Experiments: the naive approach every method should beat."},
-    "flat_refine": {"title": "One call + self-revision (compute-matched baseline)", "kind": "baseline",
-                    "summary": "The one-call rewrite of the source, then rounds of self-critique and revision against "
-                               "the source, so that it uses about as much inference as the full pipeline.",
-                    "when": "Experiments: separates what the pipeline's design adds from what more compute adds."},
-    "paraphrase": {"title": "Rename and paraphrase (baseline)", "kind": "baseline",
-                   "summary": "Rename the characters and places, then paraphrase the source passage by passage. Keeps the "
-                              "structure trivially; the question is how much wording leaks.",
-                   "when": "Experiments: the naive synthetic-corpus method."},
-    "agents_room": {"title": "Agents' Room (baseline)", "kind": "baseline",
+                             "specification and outline — no planning, no checks.",
+                  "when": "What planning and chapter-by-chapter writing add."},
+    "flat_refine": {"title": "Single call + self-revision", "kind": "more",
+                    "summary": "The single call, then rounds of self-critique and revision against the source, so that "
+                               "it uses about as much inference as the full pipeline.",
+                    "when": "Separates the pipeline's design from simply using more compute."},
+    "agents_room": {"title": "Agents' Room", "kind": "more",
                     "summary": "A published multi-agent story-writing method (Huot et al., 2024): planners for conflict, "
                                "character, setting and plot, then writers per part of the story arc.",
-                    "when": "Experiments: comparison with a state-of-the-art generation method."},
+                    "when": "Comparison with a published generation method."},
+    "fast": {"title": "Quick test", "kind": "more",
+             "summary": "The full pipeline with the expensive checks left out and a small model for the analysis. "
+                        "Cheaper and faster, lower quality.",
+             "when": "Trying settings or a new text before a real run."},
 }
 
-KINDS = {"main": "Recommended", "quick": "For trying things out", "baseline": "Baselines (for experiments)",
-         "ablation": "Ablations (for experiments)"}
+KINDS = {"main": "Recommended", "paper": "Compared in the paper's experiments",
+         "more": "Other ablations and baselines"}
 
 STAGES: dict[str, dict] = {
     "extract": {"title": "Analyse the source",
@@ -201,6 +203,9 @@ GLOSSARY: dict[str, str] = {
     "PSALM judge": "A judge that compares the two texts on the six dimensions and their 36 aspects. For each aspect it "
                    "describes both texts, quotes short evidence, argues its verdict and rates function (does it do the "
                    "same thing?) and expression (are the concrete particulars the same?) separately.",
+    "model library": "Every model is described once (Models, top right): its id, where it runs, how much it reasons, "
+                     "its limits and price. Everywhere a model is needed — the writer, a step, the judges, an experiment's "
+                     "writers — you choose it by name. A run keeps a copy of the settings it was made with.",
     "judge panel": "Further judge models next to the primary one (judges.panel). Each runs the same judges; the primary "
                    "judge still decides the grades, and the evaluation shows every judge's results side by side with "
                    "their agreement (Krippendorff's α on the 36 PSALM ratings: ≥ 0.8 reliable, below 0.667 the judges "
@@ -246,5 +251,37 @@ MODES: dict[str, str] = {
 
 
 def help_bundle() -> dict:
-    return {"presets": PRESETS, "kinds": KINDS, "stages": STAGES, "policies": POLICIES,
+    return {"presets": PRESETS, "kinds": KINDS, "stages": STAGES, "policies": POLICIES, "levels": LEVELS,
             "dimension_examples": DIMENSION_EXAMPLES, "tabs": TABS, "glossary": GLOSSARY, "modes": MODES}
+
+
+# Ready-made answers to "what carries over?", offered as one click in the interface (new runs and
+# experiment plans). `policy` lists the dimensions; `psalm` is what the PSALM judge should find on
+# the story dimensions.
+_STYLE = {"writing_style": "preserve", "narrative_voice": "preserve"}
+_STORY = ("character", "plot_structure", "scene_sequence", "world_building")
+LEVELS: list[dict] = [
+    {"key": "keep_all", "title": "Keep everything", "summary": "Same story, people, places and style, told in new words "
+     "with new names.", "psalm": "function high, expression moderate (same particulars, new words)",
+     "policy": {**_STYLE, **{d: "preserve" for d in _STORY}}},
+    {"key": "new_people", "title": "New people and places", "summary": "Keep the plot and the style; re-invent the "
+     "characters, scenes and world. The default.", "psalm": "plot kept; people, scenes and world re-invented",
+     "policy": {**_STYLE, "plot_structure": "preserve", "character": "abstract", "scene_sequence": "abstract",
+                "world_building": "abstract"}},
+    {"key": "reinvent_story", "title": "Re-invent the story", "summary": "Keep the style; keep what every part of the "
+     "story does, with new particulars.", "psalm": "function high, expression low",
+     "policy": {**_STYLE, **{d: "abstract" for d in _STORY}}},
+    {"key": "replace_story", "title": "Replace the story", "summary": "Keep only the style and voice; write a different "
+     "story.", "psalm": "function low, expression low",
+     "policy": {**_STYLE, **{d: "regenerate" for d in _STORY}}},
+    {"key": "structure_only", "title": "Only the structure", "summary": "Keep the plot and the order of scenes; "
+     "re-invent the style, voice, people and world.", "psalm": "plot and scenes kept, everything else re-invented",
+     "policy": {"writing_style": "abstract", "narrative_voice": "abstract", "character": "abstract",
+                "plot_structure": "preserve", "scene_sequence": "preserve", "world_building": "abstract"}},
+    {"key": "reinvent_all", "title": "Re-invent everything", "summary": "Every dimension does what it did, with new "
+     "particulars — style included.", "psalm": "function high, expression low on all six",
+     "policy": {d: "abstract" for d in ("writing_style", "narrative_voice", *_STORY)}},
+    {"key": "replace_all", "title": "Replace everything", "summary": "Only the length and the number of chapters carry "
+     "over: a new story in a new style.", "psalm": "function low, expression low on all six",
+     "policy": {d: "regenerate" for d in ("writing_style", "narrative_voice", *_STORY)}},
+]

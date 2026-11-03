@@ -68,6 +68,10 @@ class PlanRequest(BaseModel):
     yaml: str | None = None  # ... or as YAML text (edited by hand)
 
 
+class ModelEntry(BaseModel):
+    entry: dict[str, Any]
+
+
 class DefaultTestsRequest(BaseModel):
     conditions: dict[str, str]  # name -> preset
     policies: dict[str, dict[str, str]] = {}
@@ -403,7 +407,63 @@ def create_app(runs_dir: str | Path = "runs", experiments_dir: str | Path = "exp
             keys.set_value(req.var, req.value)
         except KeyError as exc:
             raise HTTPException(400, str(exc)) from exc
-        return {"providers": keys.status()}
+        return {"providers": keys.status(), "warning": keys.problem(req.var, keys.clean(req.var, req.value))}
+
+    @app.post("/api/keys/{var}/check")
+    async def check_key(var: str):
+        """Ask the provider whether it accepts the key (no model call, no cost)."""
+        if var not in keys.known_vars() or not keys.can_check(var):
+            raise HTTPException(400, f"{var} cannot be checked on its own; use Test on a model instead")
+        return await keys.check(var)
+
+    # ---------------------------------------------------------------- model library
+
+    @app.get("/api/models")
+    def list_models():
+        """The model library: every model described once (built-in and the user's), with whether its
+        provider's key or address is set."""
+        from psalm_saga import model_library as ml
+
+        ready = {p["id"]: p["ready"] for p in keys.status()}
+        prov = {"hosted_vllm": "vllm", "ollama_chat": "ollama", "ollama": "ollama"}
+        out = []
+        for e in ml.library().values():
+            p = e["name"].split("/", 1)[0]
+            p = prov.get(p, p)
+            needs = p not in ("fake", "ollama", "vllm") and not e.get("api_base")
+            out.append({**e, "provider": p, "key_ready": (not needs) or ready.get(p, False)})
+        return {"models": sorted(out, key=lambda m: (m.get("kind") != "api", m["label"].lower())), "file": str(ml.path())}
+
+    @app.put("/api/models/{alias}")
+    def put_model(alias: str, req: ModelEntry):
+        from psalm_saga import model_library as ml
+
+        try:
+            return ml.save(alias, req.entry)
+        except (ValueError, Exception) as exc:
+            raise HTTPException(400, str(exc)[:500]) from exc
+
+    @app.delete("/api/models/{alias}")
+    def delete_model(alias: str):
+        from psalm_saga import model_library as ml
+
+        ml.delete(alias)
+        return {"ok": True}
+
+    @app.post("/api/models/{alias}/test")
+    async def test_model(alias: str):
+        """One tiny call ("reply with OK") to check the model's name, key and address."""
+        from psalm_saga import model_library as ml
+        from psalm_saga.config import PipelineConfig
+        from psalm_saga.preflight import live_checks
+
+        e = ml.get(alias)
+        if not e:
+            raise HTTPException(404, f"no model {alias}")
+        cfg = PipelineConfig(models={"default": ml.to_model_config(e)})
+        probs, results = await live_checks(cfg, {f"model library: {alias}": cfg.models["default"]})
+        return {"ok": not any(p.severity == "error" for p in probs), "problems": [p.__dict__ for p in probs],
+                "results": results}
 
     @app.post("/api/runs/{run_id}/judge")
     async def judge(run_id: str, req: JudgeRequest):

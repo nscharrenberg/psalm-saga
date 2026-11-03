@@ -55,6 +55,7 @@ class Pipeline:
         self.llm = LLM(config, cache_dir=cache, on_event=store.emit,
                        call_log=(lambda cid, rec: store.write_json(f"calls/{cid}.json", rec)) if config.log_calls else None)
         self.llm.gate = self._gate
+        self.llm.load_behaviour(store.meta().get("model_behaviour"))  # what earlier invocations learnt about the models
         if config.cache_scope != "shared":
             # a version of a run (<run>-vN) keeps its parent's answers for the stages it does not redo
             # (those are files already) and samples afresh for the ones it redoes
@@ -375,7 +376,8 @@ class Pipeline:
     def _checkpoint(self, **kw) -> None:
         self._timing["wall_seconds"] = round(self._wall0 + time.monotonic() - self._t0 - self._paused_total, 3)
         self.store.update_meta(usage=_sum_usage(self._base_usage, self.llm.usage.to_dict()), timing=self._timing,
-                               seconds=round(self._timing["wall_seconds"], 1), **kw)
+                               seconds=round(self._timing["wall_seconds"], 1),
+                               model_behaviour=self.llm.export_behaviour(), **kw)
 
     def _fail(self, status: str, exc: BaseException) -> None:
         self._close_stage(completed=False)
