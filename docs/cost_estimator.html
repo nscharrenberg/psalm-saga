@@ -1,0 +1,718 @@
+<title>Psalm-Saga Cost Estimator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a sticky verdict strip, then results (summary before detail), then the editable assumptions as folding panels. */
+:root {
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --ink: #1b2422;
+  --muted: #5d6b67;
+  --line: #d9dfdc;
+  --accent: #2c6e63;
+  --accent-soft: #e2efec;
+  --good: #2f7a3e;
+  --good-soft: #e3f1e5;
+  --bad: #b3401f;
+  --bad-soft: #f8e6df;
+  --warn: #9a6a10;
+  --c1: #2c6e63; --c2: #c9822b; --c3: #5868b8; --c4: #a14e7d; --c5: #7a8a3a; --c6: #3d93b8;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121816; --surface: #19211f; --ink: #e4ebe8; --muted: #93a39e; --line: #2c3734;
+    --accent: #6cc0ae; --accent-soft: #1f3631; --good: #7fcb8d; --good-soft: #1d3324;
+    --bad: #f08b6a; --bad-soft: #3a221a; --warn: #e2b456;
+    --c1: #6cc0ae; --c2: #e3a65a; --c3: #8f9ce6; --c4: #d987b5; --c5: #b3c46a; --c6: #73bfe0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121816; --surface: #19211f; --ink: #e4ebe8; --muted: #93a39e; --line: #2c3734;
+  --accent: #6cc0ae; --accent-soft: #1f3631; --good: #7fcb8d; --good-soft: #1d3324;
+  --bad: #f08b6a; --bad-soft: #3a221a; --warn: #e2b456;
+  --c1: #6cc0ae; --c2: #e3a65a; --c3: #8f9ce6; --c4: #d987b5; --c5: #b3c46a; --c6: #73bfe0;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 28px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: 2rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.3rem; }
+h3 { font-size: 1rem; }
+p { margin: 0; max-width: 68ch; }
+.muted { color: var(--muted); }
+.num, td.n, th.n { font-variant-numeric: tabular-nums; font-family: var(--f-mono); font-size: 0.86rem; }
+td.n, th.n { text-align: right; white-space: nowrap; }
+.eyebrow { font: 500 0.72rem/1 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header.top { display: grid; gap: 8px; }
+
+/* verdict strip */
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.verdict { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); }
+.verdict-inner { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; }
+.big { font: 700 2.1rem/1 var(--f-display); font-variant-numeric: tabular-nums; }
+.kv { display: grid; gap: 4px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font: 600 0.85rem/1 var(--f-body); }
+.pill.ok { background: var(--good-soft); color: var(--good); }
+.pill.over { background: var(--bad-soft); color: var(--bad); }
+.budget-bar { position: relative; height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; width: min(320px, 100%); }
+.budget-bar > span { position: absolute; inset: 0 auto 0 0; background: var(--good); }
+.budget-bar.over > span { background: var(--bad); }
+
+/* scenarios */
+.scenarios { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button { font: 500 0.88rem/1 var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 7px; padding: 9px 13px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.active { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* panels */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 14px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; }
+.scroll { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th { text-align: left; font: 500 0.72rem/1.2 var(--f-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding: 8px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr.total td { font-weight: 600; border-bottom: none; }
+tr.off td { color: var(--muted); }
+input[type=number] { font: 0.86rem var(--f-mono); width: 6.5em; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); text-align: right; }
+input[type=number].sm { width: 4.6em; }
+input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); vertical-align: middle; }
+label.inline { display: inline-flex; gap: 8px; align-items: center; }
+
+/* bars */
+.bars { display: grid; gap: 9px; }
+.bar-row { display: grid; grid-template-columns: minmax(110px, 170px) 1fr auto; gap: 10px; align-items: center; font-size: 0.88rem; }
+.bar-track { height: 14px; background: var(--bg); border-radius: 4px; overflow: hidden; display: flex; }
+.bar-track > span { height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.82rem; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+details.panel > summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+details.panel > summary::-webkit-details-marker { display: none; }
+details.panel > summary::after { content: "Show"; font: 500 0.78rem var(--f-mono); color: var(--accent); }
+details.panel[open] > summary::after { content: "Hide"; }
+.tag { font: 500 0.7rem/1 var(--f-mono); padding: 3px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.tag.model { background: var(--bad-soft); color: var(--warn); }
+.note { font-size: 0.86rem; color: var(--muted); }
+ul.notes { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 80ch; }
+.row-flex { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; }
+@media (prefers-reduced-motion: no-preference) { .bar-track > span, .budget-bar > span { transition: width .25s ease; } }
+
+/* saved estimates */
+.save-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; align-items: start; }
+.field { display: grid; gap: 5px; font-size: 0.86rem; color: var(--muted); }
+input[type=text], textarea { font: 0.92rem var(--f-body); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; width: 100%; }
+textarea { resize: vertical; min-height: 64px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: 14px; font-size: 0.86rem; color: var(--muted); display: grid; gap: 8px; }
+.drop.hover { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.status { font-size: 0.86rem; min-height: 1.3em; }
+.status.err { color: var(--bad); }
+.status.ok { color: var(--good); }
+.loaded-banner { background: var(--accent-soft); border-radius: 8px; padding: 10px 14px; display: grid; gap: 2px; }
+.loaded-banner b { font-family: var(--f-display); }
+</style>
+<script type="application/json" id="embedded-estimate"></script>
+
+<div class="verdict">
+  <div class="wrap" style="padding-block: 0; gap: 0;">
+    <div class="verdict-inner">
+      <div class="kv"><span class="eyebrow">Estimated total</span><span class="big" id="v-total">$0</span></div>
+      <div class="kv"><span class="eyebrow">Budget</span>
+        <div class="row-flex" style="gap:10px"><span class="pill ok" id="v-pill">within budget</span><div class="budget-bar" id="v-bar"><span></span></div></div></div>
+      <div class="kv"><span class="eyebrow">Runs</span><span class="num" id="v-runs">0</span></div>
+      <div class="kv"><span class="eyebrow">Writer time</span><span class="num" id="v-time">0 h</span></div>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+  <header class="top">
+    <span class="eyebrow">kb_main · Section 4 design · priced from the four measured full runs</span>
+    <h1>Psalm-Saga Cost Estimator</h1>
+    <p class="muted">Tokens per stage are read from the four measured runs of the full procedure (shortest and longest corpus item, per writer), drawn as a line through those two points against source length, and priced at the rates below. Change any number and the totals follow. Settings are remembered in this browser; save them to a file to keep or share them.</p>
+    <div class="loaded-banner" id="loaded-banner" hidden><b id="lb-name"></b><span class="note" id="lb-meta"></span></div>
+  </header>
+
+  <details class="panel" id="save-panel">
+    <summary><h3>Save, load and share estimates</h3><span></span></summary>
+    <div class="save-grid">
+      <div style="display:grid; gap:10px">
+        <label class="field" for="meta-name">Estimate name
+          <input type="text" id="meta-name" placeholder="e.g. Mistral only, ×1 sample, no G2"></label>
+        <label class="field" for="meta-note">Note for colleagues
+          <textarea id="meta-note" placeholder="What this estimate assumes and why"></textarea></label>
+      </div>
+      <div style="display:grid; gap:10px">
+        <div class="actions">
+          <button class="primary" id="btn-save-json">Save estimate (.json)</button>
+          <button id="btn-save-html">Save as shareable HTML</button>
+        </div>
+        <p class="note">The <b>.json</b> file holds the settings and opens with <i>Load estimate</i> in this calculator. The <b>HTML</b> file is this calculator with the estimate built in: a colleague opens it in any browser and sees your numbers, and can change them from there.</p>
+        <div class="drop" id="drop">
+          <span>Drop a saved <b>.json</b> estimate here, or</span>
+          <div class="actions"><button id="btn-load">Load estimate</button><button id="btn-copy">Copy settings</button><button id="btn-reset">Reset to defaults</button></div>
+          <input type="file" id="file-in" accept=".json,application/json" hidden>
+          <textarea id="copy-out" readonly hidden aria-label="Settings as JSON" style="min-height:120px; font-family: var(--f-mono); font-size: 0.78rem"></textarea>
+        </div>
+        <p class="status" id="save-status" role="status"></p>
+        <p class="note">On claude.ai you are asked to confirm each save. Where saving isn't available, <i>Copy settings</i> puts the same JSON on the clipboard to paste into a <code>.json</code> file.</p>
+      </div>
+    </div>
+  </details>
+
+  <section class="scenarios" aria-label="Scenarios">
+    <span class="eyebrow" style="margin-right:6px">Scenario</span>
+    <button data-scn="full">Full design</button>
+    <button data-scn="full1">Full procedure ×1 sample</button>
+    <button data-scn="mistral">Mistral only</button>
+    <button data-scn="gemma">Gemma only</button>
+    <button data-scn="nog2">Without G2</button>
+    <button data-scn="lean">Mistral only, ×1, without G2</button>
+  </section>
+
+  <div class="grid2">
+    <section class="panel">
+      <h2>Where the money goes</h2>
+      <p class="note">By model billed, before contingency.</p>
+      <div class="bars" id="by-model"></div>
+    </section>
+    <section class="panel">
+      <h2>Cost by part of the experiment</h2>
+      <p class="note">Main runs split into writer and judge cost, plus the evaluation extras, before contingency.</p>
+      <div class="bars" id="by-part"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>Runs by writer and setup</h2>
+    <div class="scroll"><table id="t-setups"></table></div>
+    <p class="note" id="setup-note"></p>
+  </section>
+
+  <section class="panel">
+    <h2>Writer cost by pipeline stage</h2>
+    <p class="note">All main runs, per writer. Stage multipliers of each setup are applied.</p>
+    <div class="legend" id="stage-legend"></div>
+    <div class="bars" id="by-stage"></div>
+  </section>
+
+  <h2 style="margin-top:8px">Assumptions</h2>
+
+  <details class="panel" open>
+    <summary><h3>Prices and models</h3><span></span></summary>
+    <p class="note">USD per million tokens on OpenRouter. These values reproduce every recorded <code>cost_usd</code> of the measured runs exactly. Untick a writer or judge to leave it out.</p>
+    <div class="scroll"><table id="t-prices"></table></div>
+  </details>
+
+  <details class="panel" open>
+    <summary><h3>Design</h3><span></span></summary>
+    <div class="row-flex">
+      <label class="inline">Budget $ <input type="number" id="budget" min="0" step="10"></label>
+      <label class="inline">Contingency % <input type="number" id="contingency" class="sm" min="0" step="5"></label>
+      <label class="inline">Concurrent runs <input type="number" id="concurrency" class="sm" min="1" step="1"></label>
+    </div>
+    <div class="scroll"><table id="t-design"></table></div>
+    <p class="note">Samples per item and policy setting. In the paper's design the full procedure runs 3 times, every other setup once, and paraphrase only under <em>preserve</em>, which gives 19 runs per item and writer.</p>
+  </details>
+
+  <details class="panel" open>
+    <summary><h3>Evaluation extras</h3><span></span></summary>
+    <p class="note">Instruments of the <code>judge:</code> block that run once per experiment, not per run. None of the four measured runs included them, so their size is derived from the measured judge calls.</p>
+    <div class="scroll"><table id="t-extras"></table></div>
+  </details>
+
+  <details class="panel">
+    <summary><h3>How the setups differ from the full procedure</h3><span class="tag model">modelled, not measured</span></summary>
+    <p class="note">Only the full procedure was measured. Each other setup uses the full procedure's tokens per stage times these factors (input / output). 0 removes a stage. Judges run on every setup.</p>
+    <div class="scroll"><table id="t-mult"></table></div>
+  </details>
+
+  <details class="panel">
+    <summary><h3>Corpus</h3><span id="corpus-count" class="tag"></span></summary>
+    <p class="note">The 29 items of <code>experiments/data/stories/corpus.csv</code>. Untick an item to leave it out. Cost per item is one full-procedure run per writer, before contingency.</p>
+    <div class="scroll"><table id="t-corpus"></table></div>
+  </details>
+
+  <details class="panel">
+    <summary><h3>Measured runs</h3><span></span></summary>
+    <p class="note">Tokens per stage in the four runs the estimate is built on. Source: <code>final_psalm_saga_data/&lt;writer&gt;/&lt;language&gt;/&lt;run&gt;/calls/*.json</code>.</p>
+    <div class="scroll"><table id="t-measured"></table></div>
+  </details>
+
+  <section class="panel">
+    <h2>Method and limits</h2>
+    <ul class="notes">
+      <li><b>Scaling.</b> For each writer and stage, tokens = a + b × source words, a straight line through the 300-word run and the 8,521-word run. Every corpus item lies between them, so nothing is extrapolated. Writer time scales the same way.</li>
+      <li><b>Language and length are confounded.</b> The short runs are Dutch and the long runs English, so a language effect cannot be told from a length effect. Each point is a single draw; Mistral's output is mostly reasoning and varies between runs. The contingency covers this, along with retries and failed runs.</li>
+      <li><b>Gemma's short run</b> recorded $0 because no price was set; its tokens are priced at the rates the other Gemma run recorded.</li>
+      <li><b>Judges.</b> Claude Sonnet 5.5, GPT-6.1 Sol and Qwen 3.8 Flash rate every run of every setup, so no measure rests on one judge. The judges read the writer's text, so their tokens are taken from the same writer's run.</li>
+      <li><b>PSALM lower anchor:</b> one pair per item (the source against the next source of its language) × each judge. One pair costs the share of a run's judge tokens that the six PSALM calls take (85% measured).</li>
+      <li><b>Alignment lower anchor:</b> one alignment of an item's design with another item's text, per item and writer, priced as that writer's <code>recover</code> stage.</li>
+      <li><b>G2 pairwise quality:</b> every text of full (each sample), no_graph, no_feedback and paraphrase against the single call for the same item, policy and writer, in both orders, by each judge. One comparison is priced as one PSALM call (14% of a run's judge tokens).</li>
+      <li><b>Unmeasured setups.</b> no_graph, no_feedback, paraphrase and single_call are modelled from the full procedure's stages; see the factor table. Running one item of each setup per writer would replace these guesses with measurements.</li>
+    </ul>
+  </section>
+</main>
+
+<script id="app">
+/* ---------- measured data (final_psalm_saga_data, Nov 2026) ---------- */
+const PROFILE = {"gemma":{"short":{"run":"full-20261102-164927-110d92-full","language":"dutch","words":300,"story_words":353,"stages":{"gpt":{"calls":8,"in":15267,"out":10912,"sec":226},"recover":{"calls":10,"in":7393,"out":2145,"sec":37},"extract":{"calls":16,"in":24252,"out":135347,"sec":2147},"claude":{"calls":8,"in":25680,"out":11386,"sec":89},"qwen":{"calls":10,"in":22773,"out":90907,"sec":1108},"spec":{"calls":6,"in":10777,"out":4318,"sec":68},"plan":{"calls":4,"in":19948,"out":4253,"sec":80},"draft":{"calls":3,"in":13357,"out":568,"sec":13},"transform":{"calls":2,"in":3808,"out":817,"sec":19},"conform":{"calls":6,"in":5146,"out":1060,"sec":33},"review":{"calls":9,"in":34576,"out":5383,"sec":85}}},"long":{"run":"full-20261103-081949-ec21fa-full","language":"english","words":8521,"story_words":7903,"stages":{"conform":{"calls":13,"in":70734,"out":45706,"sec":777},"gpt":{"calls":8,"in":55539,"out":9494,"sec":227},"qwen":{"calls":8,"in":55977,"out":67850,"sec":1220},"extract":{"calls":17,"in":53146,"out":63301,"sec":846},"recover":{"calls":13,"in":20445,"out":1991,"sec":33},"spec":{"calls":6,"in":15872,"out":3560,"sec":80},"plan":{"calls":5,"in":27972,"out":9901,"sec":109},"draft":{"calls":9,"in":65314,"out":29550,"sec":436},"review":{"calls":10,"in":69855,"out":11426,"sec":186},"claude":{"calls":8,"in":85070,"out":12182,"sec":96},"transform":{"calls":2,"in":3924,"out":1432,"sec":10}}}},"mistral":{"short":{"run":"full-20261103-090439-74f13c-full","language":"dutch","words":300,"story_words":371,"stages":{"extract":{"calls":11,"in":14885,"out":163639,"sec":1134},"draft":{"calls":30,"in":191606,"out":92567,"sec":664},"claude":{"calls":8,"in":27679,"out":11306,"sec":88},"transform":{"calls":2,"in":8532,"out":10624,"sec":85},"gpt":{"calls":8,"in":16447,"out":10505,"sec":269},"review":{"calls":8,"in":66362,"out":166449,"sec":1470},"guard":{"calls":1,"in":553,"out":2600,"sec":28},"plan":{"calls":5,"in":52791,"out":45061,"sec":307},"recover":{"calls":10,"in":9262,"out":89106,"sec":703},"spec":{"calls":6,"in":19747,"out":45793,"sec":387},"conform":{"calls":5,"in":10077,"out":120273,"sec":893},"qwen":{"calls":8,"in":18190,"out":67060,"sec":1148}}},"long":{"run":"full-20261103-105212-15fc38-full","language":"english","words":8521,"story_words":8371,"stages":{"extract":{"calls":27,"in":66976,"out":480565,"sec":3588},"conform":{"calls":11,"in":32167,"out":420487,"sec":3001},"qwen":{"calls":8,"in":97984,"out":90079,"sec":1355},"recover":{"calls":10,"in":20372,"out":83121,"sec":763},"plan":{"calls":5,"in":68896,"out":42093,"sec":413},"review":{"calls":8,"in":97987,"out":152898,"sec":1265},"spec":{"calls":6,"in":34317,"out":35794,"sec":278},"gpt":{"calls":8,"in":96670,"out":9639,"sec":246},"claude":{"calls":8,"in":148266,"out":11929,"sec":96},"guard":{"calls":1,"in":522,"out":3947,"sec":26},"transform":{"calls":2,"in":9980,"out":18174,"sec":124},"draft":{"calls":8,"in":116444,"out":373051,"sec":2706}}}}};
+
+const CORPUS = [
+  ["satire_the_happy_prince","en","The Happy Prince",3471],
+  ["satire_a_modest_proposal","en","A Modest Proposal",3386],
+  ["satire_jumping_frog_of_calaveras_county","en","The Celebrated Jumping Frog of Calaveras County",2558],
+  ["gothic_the_fall_of_the_house_of_usher","en","The Fall of the House of Usher",7044],
+  ["gothic_the_yellow_wallpaper","en","The Yellow Wallpaper",6078],
+  ["gothic_oh_whistle_and_ill_come_to_you_my_lad","en","Oh, Whistle, and I'll Come to You, My Lad",7944],
+  ["detective_the_blue_cross","en","The Blue Cross",7470],
+  ["detective_a_scandal_in_bohemia","en","A Scandal in Bohemia",8521],
+  ["detective_the_moonstone_ch11","en","The Moonstone, ch. XI",8018],
+  ["domestic_cranford_ch1","en","Cranford, ch. I",3944],
+  ["domestic_silas_marner_ch1","en","Silas Marner, ch. I",4431],
+  ["domestic_pride_and_prejudice_ch18","en","Pride and Prejudice, ch. XVIII",5169],
+  ["adventure_treasure_island_ch1-3","en","Treasure Island, ch. I–III",6615],
+  ["adventure_typhoon_ch2","en","Typhoon, ch. II",5609],
+  ["adventure_two_years_before_the_mast_ch6","en","Two Years Before the Mast, ch. VI",2064],
+  ["gothic_een_aardig_prentenboek","nl","Een aardig prentenboek",1691],
+  ["gothic_de_vliegende_robert","nl","De vliegende Robert",300],
+  ["gothic_vrouw_holle","nl","Vrouw Holle",1159],
+  ["detective_de_pleegzoon_ch9","nl","De pleegzoon, ch. 9",5307],
+  ["detective_ferdinand_huyck_ch11","nl","Ferdinand Huyck, ch. 11",5523],
+  ["domestic_de_kinderen_van_t_woud","nl","De kinderen van 't woud",5316],
+  ["domestic_de_ooievaar_komt","nl","De ooievaar komt",2673],
+  ["domestic_majoor_frans_opening","nl","Majoor Frans, opening",6671],
+  ["adventure_reizen_en_avonturen_van_mijnheer_prikkebeen","nl","Reizen en avonturen van mijnheer Prikkebeen",5721],
+  ["adventure_de_hollandsche_robinson_crusoe","nl","De Hollandsche Robinson Crusoe, ch. 1",4932],
+  ["adventure_ferdinand_huyck_ch5","nl","Ferdinand Huyck, ch. 5",5479],
+  ["satire_fabelen_en_gedichtjes","nl","Fabelen en gedichtjes",602],
+  ["satire_piet_de_smeerpoets","nl","Piet de Smeerpoets",894],
+  ["satire_de_ondeugende_kinderen","nl","De ondeugende kinderen",2165]
+];
+
+const WRITERS = ["gemma", "mistral"];
+const JUDGES = ["claude", "gpt", "qwen"];
+const STAGES = ["extract", "recover", "spec", "transform", "plan", "draft", "conform", "review", "guard"];
+const SETUPS = ["full", "no_graph", "no_feedback", "paraphrase", "single_call"];
+const LABEL = {
+  gemma: "Gemma 4 26B-A4B", mistral: "Mistral Large 4", claude: "Claude Sonnet 5.5", gpt: "GPT-6.1 Sol", qwen: "Qwen 3.8 Flash",
+  full: "Full procedure", no_graph: "Without the knowledge graph", no_feedback: "Without the review loop",
+  paraphrase: "Rename and paraphrase", single_call: "Single call",
+  extract: "extract", recover: "recover", spec: "spec", transform: "transform", plan: "plan + replan",
+  draft: "draft", conform: "conform", review: "review + repair", guard: "guard"
+};
+const STAGE_NOTE = { extract: "source analysis", recover: "analysis of the synthetic text", review: "review + repair", plan: "plan + replan" };
+const W0 = 300, W1 = 8521;
+
+function defaults() {
+  const ones = () => Object.fromEntries([...STAGES, ...JUDGES].map(s => [s, [1, 1]]));
+  const mult = Object.fromEntries(SETUPS.map(s => [s, ones()]));
+  for (const s of ["plan", "draft", "conform", "review"]) mult.no_graph[s] = [0.9, 1];
+  for (const s of ["conform", "review"]) mult.no_feedback[s] = [0, 0];
+  for (const s of ["spec", "transform", "plan", "conform", "review", "guard"]) mult.paraphrase[s] = [0, 0];
+  mult.paraphrase.draft = [0.5, 1];
+  for (const s of ["spec", "transform", "plan", "conform", "review", "guard"]) mult.single_call[s] = [0, 0];
+  mult.single_call.draft = [0.25, 0.8];
+  return {
+    prices: { gemma: [0.04, 0.15], mistral: [0.70, 2.10], claude: [2.00, 10.00], gpt: [2.00, 10.00], qwen: [0.15, 0.47] },
+    use: { gemma: true, mistral: true, claude: true, gpt: true, qwen: true },
+    setups: {
+      full: { on: true, samples: 3, policies: 3 },
+      no_graph: { on: true, samples: 1, policies: 3 },
+      no_feedback: { on: true, samples: 1, policies: 3 },
+      paraphrase: { on: true, samples: 1, policies: 1 },
+      single_call: { on: true, samples: 1, policies: 3 }
+    },
+    mult,
+    extras: { psalmAnchor: true, alignAnchor: true, g2: true, anchorShare: 0.85, pairShare: 0.14, orders: 2 },
+    budget: 400, contingency: 30, concurrency: 3,
+    corpusOff: []
+  };
+}
+
+/* ---------- the model: pure function of the settings ---------- */
+function interp(writer, key, field, w) {
+  const a = PROFILE[writer].short.stages[key]?.[field] || 0;
+  const b = PROFILE[writer].long.stages[key]?.[field] || 0;
+  return Math.max(0, a + (b - a) * (w - W0) / (W1 - W0));
+}
+function price(model, tin, tout, st) { return (tin * st.prices[model][0] + tout * st.prices[model][1]) / 1e6; }
+
+function oneRun(st, writer, setup, w) {
+  // cost of one run of `setup` by `writer` on an item of w words, split by stage
+  const r = { writer: 0, judge: 0, stages: {}, judges: {}, sec: 0 };
+  for (const s of STAGES) {
+    const [mi, mo] = st.mult[setup][s];
+    const c = price(writer, interp(writer, s, "in", w) * mi, interp(writer, s, "out", w) * mo, st);
+    r.stages[s] = c; r.writer += c;
+    r.sec += interp(writer, s, "sec", w) * Math.max(mi, mo);
+  }
+  for (const j of JUDGES) {
+    if (!st.use[j]) { r.judges[j] = 0; continue; }
+    const [mi, mo] = st.mult[setup][j];
+    const c = price(j, interp(writer, j, "in", w) * mi, interp(writer, j, "out", w) * mo, st);
+    r.judges[j] = c; r.judge += c;
+  }
+  return r;
+}
+
+function compute(st) {
+  const items = CORPUS.filter(c => !st.corpusOff.includes(c[0]));
+  const writers = WRITERS.filter(w => st.use[w]);
+  const judges = JUDGES.filter(j => st.use[j]);
+  const out = {
+    items: items.length, runs: 0, sec: 0,
+    byModel: Object.fromEntries([...WRITERS, ...JUDGES].map(m => [m, 0])),
+    byPart: { writer: 0, judge: 0, psalmAnchor: 0, alignAnchor: 0, g2: 0 },
+    bySetup: {}, byStage: Object.fromEntries(WRITERS.map(w => [w, Object.fromEntries(STAGES.map(s => [s, 0]))])),
+    perItem: {}, g2Comparisons: 0
+  };
+  for (const wr of writers) for (const su of SETUPS) {
+    const cfg = st.setups[su];
+    const n = cfg.on ? cfg.samples * cfg.policies : 0;
+    const row = out.bySetup[wr + "|" + su] = { runs: n * items.length, writer: 0, judge: 0 };
+    if (!n) continue;
+    for (const it of items) {
+      const r = oneRun(st, wr, su, it[3]);
+      row.writer += r.writer * n; row.judge += r.judge * n;
+      out.byModel[wr] += r.writer * n;
+      for (const j of JUDGES) out.byModel[j] += r.judges[j] * n;
+      for (const s of STAGES) out.byStage[wr][s] += r.stages[s] * n;
+      out.sec += r.sec * n;
+    }
+    out.runs += row.runs; out.byPart.writer += row.writer; out.byPart.judge += row.judge;
+  }
+  // per-item cost of one full run (for the corpus table)
+  for (const it of CORPUS) out.perItem[it[0]] = Object.fromEntries(WRITERS.map(wr => { const r = oneRun(st, wr, "full", it[3]); return [wr, r.writer + r.judge]; }));
+
+  const ex = st.extras;
+  // PSALM lower anchor: one source-vs-source pair per item, judged by each judge; judge tokens averaged over the two writers' runs
+  if (ex.psalmAnchor) for (const it of items) for (const j of judges) {
+    let c = 0; for (const wr of WRITERS) c += price(j, interp(wr, j, "in", it[3]), interp(wr, j, "out", it[3]), st) / WRITERS.length;
+    c *= ex.anchorShare; out.byPart.psalmAnchor += c; out.byModel[j] += c;
+  }
+  // alignment lower anchor: one alignment per item and writer, priced as that writer's recover stage
+  if (ex.alignAnchor) for (const it of items) for (const wr of writers) {
+    const c = price(wr, interp(wr, "recover", "in", it[3]), interp(wr, "recover", "out", it[3]), st);
+    out.byPart.alignAnchor += c; out.byModel[wr] += c;
+  }
+  // G2: each text of the other setups against the single call, same item, policy and writer, in both orders, by each judge
+  if (ex.g2 && st.setups.single_call.on) {
+    let perItemWriter = 0;
+    for (const su of ["full", "no_graph", "no_feedback", "paraphrase"]) { const c = st.setups[su]; if (c.on) perItemWriter += c.samples * c.policies; }
+    perItemWriter *= ex.orders;
+    out.g2Comparisons = perItemWriter * items.length * writers.length;
+    for (const it of items) for (const wr of writers) for (const j of judges) {
+      const c = price(j, interp(wr, j, "in", it[3]), interp(wr, j, "out", it[3]), st) * ex.pairShare * perItemWriter;
+      out.byPart.g2 += c; out.byModel[j] += c;
+    }
+  }
+  out.base = Object.values(out.byPart).reduce((a, b) => a + b, 0);
+  out.total = out.base * (1 + st.contingency / 100);
+  out.hours = out.sec / 3600 / Math.max(1, st.concurrency);
+  return out;
+}
+
+/* ---------- UI ---------- */
+// captured before any rendering changes the DOM: the source of "Save as shareable HTML"
+const PAGE_SOURCE = "<!doctype html>\n" + document.documentElement.outerHTML;
+const FORMAT = "psalm-saga-cost-estimate", FORMAT_VERSION = 1;
+
+// fill the settings of an older or partial file from the current defaults, key by key
+function merge(base, inc) {
+  if (Array.isArray(base)) return Array.isArray(inc) ? inc : base;
+  if (base && typeof base === "object") {
+    const out = {};
+    for (const k of Object.keys(base)) out[k] = (inc && k in inc) ? merge(base[k], inc[k]) : base[k];
+    return out;
+  }
+  return (typeof inc === typeof base) ? inc : base;
+}
+function parseEstimate(obj) {
+  if (!obj || obj.format !== FORMAT || !obj.settings) throw new Error("This is not a saved cost estimate (missing \"format\": \"" + FORMAT + "\").");
+  if (obj.version > FORMAT_VERSION) throw new Error(`This estimate was saved by a newer calculator (version ${obj.version}). Open it with the HTML it was shared with.`);
+  return { settings: merge(defaults(), obj.settings), meta: { name: obj.name || "", note: obj.note || "", saved_at: obj.saved_at || "" } };
+}
+function readEmbedded() {
+  try { const t = document.getElementById("embedded-estimate").textContent.trim(); return t ? parseEstimate(JSON.parse(t)) : null; } catch (e) { return null; }
+}
+
+let meta = { name: "", note: "", saved_at: "" };
+let st;
+const embedded = readEmbedded();
+if (embedded) { st = embedded.settings; meta = embedded.meta; }
+else { const l = load(); st = l ? merge(defaults(), l) : defaults(); try { meta = Object.assign(meta, JSON.parse(localStorage.getItem("psalm-cost-meta-v1")) || {}); } catch (e) {} }
+let activeScn = null;
+const $ = id => document.getElementById(id);
+const usd = (x, d) => { const k = d ?? (x >= 100 ? 0 : x >= 1 ? 2 : 3); return "$" + x.toLocaleString("en-US", { minimumFractionDigits: k, maximumFractionDigits: k }); };
+const fmt = x => x.toLocaleString("en-US", { maximumFractionDigits: 0 });
+const COLORS = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)", "var(--c5)", "var(--c6)", "var(--muted)", "var(--accent)", "var(--warn)"];
+
+function load() { try { const s = JSON.parse(localStorage.getItem("psalm-cost-v1")); if (s && s.prices && s.mult) return s; } catch (e) {} return null; }
+function save() { try { localStorage.setItem("psalm-cost-v1", JSON.stringify(st)); localStorage.setItem("psalm-cost-meta-v1", JSON.stringify(meta)); } catch (e) {} }
+
+function numInput(id, val, step, onset, cls) {
+  return `<input type="number" id="${id}" class="${cls || ""}" value="${val}" step="${step}" min="0" data-bind="${onset}">`;
+}
+
+function buildInputs() {
+  // prices
+  let h = `<tr><th></th><th>Model</th><th>Role</th><th class="n">$ / M in</th><th class="n">$ / M out</th></tr>`;
+  for (const m of [...WRITERS, ...JUDGES]) {
+    const role = WRITERS.includes(m) ? "writer" : (m === "claude" ? "primary judge" : "agreement judge");
+    h += `<tr><td><input type="checkbox" id="use-${m}" data-use="${m}" ${st.use[m] ? "checked" : ""} aria-label="Use ${LABEL[m]}"></td><td>${LABEL[m]}</td><td class="muted">${role}</td>
+      <td class="n">${numInput("pin-" + m, st.prices[m][0], 0.01, "price:" + m + ":0")}</td><td class="n">${numInput("pout-" + m, st.prices[m][1], 0.01, "price:" + m + ":1")}</td></tr>`;
+  }
+  $("t-prices").innerHTML = h;
+
+  // design
+  h = `<tr><th></th><th>Setup</th><th class="n">Samples</th><th class="n">Policy settings</th><th class="n">Runs per item and writer</th><th>Data</th></tr>`;
+  for (const s of SETUPS) {
+    const c = st.setups[s];
+    h += `<tr class="${c.on ? "" : "off"}"><td><input type="checkbox" id="on-${s}" data-setup="${s}" ${c.on ? "checked" : ""} aria-label="Run ${LABEL[s]}"></td><td>${LABEL[s]}</td>
+      <td class="n">${numInput("smp-" + s, c.samples, 1, "setup:" + s + ":samples", "sm")}</td>
+      <td class="n">${numInput("pol-" + s, c.policies, 1, "setup:" + s + ":policies", "sm")}</td>
+      <td class="n" id="rpi-${s}">${c.on ? c.samples * c.policies : 0}</td>
+      <td>${s === "full" ? '<span class="tag">measured</span>' : '<span class="tag model">modelled</span>'}</td></tr>`;
+  }
+  $("t-design").innerHTML = h;
+  $("budget").value = st.budget; $("contingency").value = st.contingency; $("concurrency").value = st.concurrency;
+
+  // extras
+  const e = st.extras;
+  $("t-extras").innerHTML = `<tr><th></th><th>Instrument</th><th>Size</th><th class="n">Parameter</th></tr>
+    <tr><td><input type="checkbox" id="ex-psalm" data-extra="psalmAnchor" ${e.psalmAnchor ? "checked" : ""} aria-label="PSALM lower anchor"></td><td>PSALM lower anchor</td><td class="muted">1 pair per item × each judge</td><td class="n"><label class="inline">PSALM share of judge tokens ${numInput("ex-share", e.anchorShare, 0.05, "extra:anchorShare", "sm")}</label></td></tr>
+    <tr><td><input type="checkbox" id="ex-align" data-extra="alignAnchor" ${e.alignAnchor ? "checked" : ""} aria-label="Alignment lower anchor"></td><td>Alignment lower anchor</td><td class="muted">1 alignment per item × writer, as <code>recover</code></td><td class="n muted">—</td></tr>
+    <tr><td><input type="checkbox" id="ex-g2" data-extra="g2" ${e.g2 ? "checked" : ""} aria-label="G2 pairwise quality"></td><td>G2 pairwise quality</td><td class="muted" id="g2-size"></td><td class="n"><label class="inline">One comparison as share of run's judge tokens ${numInput("ex-pair", e.pairShare, 0.01, "extra:pairShare", "sm")}</label> <label class="inline">Orders ${numInput("ex-orders", e.orders, 1, "extra:orders", "sm")}</label></td></tr>`;
+
+  // multipliers
+  h = `<tr><th>Stage</th>${SETUPS.slice(1).map(s => `<th class="n">${LABEL[s]}<br><span style="text-transform:none">in / out</span></th>`).join("")}</tr>`;
+  for (const s of [...STAGES, ...JUDGES]) {
+    h += `<tr><td>${LABEL[s]}${STAGE_NOTE[s] && !LABEL[s].includes("+") ? ` <span class="muted">(${STAGE_NOTE[s]})</span>` : ""}${JUDGES.includes(s) ? ' <span class="muted">(judge)</span>' : ""}</td>`;
+    for (const su of SETUPS.slice(1)) {
+      h += `<td class="n">${numInput(`m-${su}-${s}-0`, st.mult[su][s][0], 0.05, `mult:${su}:${s}:0`, "sm")} ${numInput(`m-${su}-${s}-1`, st.mult[su][s][1], 0.05, `mult:${su}:${s}:1`, "sm")}</td>`;
+    }
+    h += `</tr>`;
+  }
+  $("t-mult").innerHTML = h;
+
+  // measured
+  h = `<tr><th>Stage</th>${WRITERS.flatMap(w => ["short", "long"].map(p => `<th class="n">${LABEL[w]}<br><span style="text-transform:none">${PROFILE[w][p].words.toLocaleString()} words (${PROFILE[w][p].language}) · in / out</span></th>`)).join("")}</tr>`;
+  for (const s of [...STAGES, ...JUDGES]) {
+    h += `<tr><td>${LABEL[s]}</td>${WRITERS.flatMap(w => ["short", "long"].map(p => { const x = PROFILE[w][p].stages[s]; return `<td class="n">${x ? fmt(x.in) + " / " + fmt(x.out) : "—"}</td>`; })).join("")}</tr>`;
+  }
+  $("t-measured").innerHTML = h;
+}
+
+function bars(el, rows, max) {
+  el.innerHTML = rows.map(r => `<div class="bar-row"><span>${r.label}</span><div class="bar-track">${(r.parts || [[r.value, r.color]]).map(([v, c]) => `<span style="width:${max ? (100 * v / max).toFixed(2) : 0}%;background:${c}"></span>`).join("")}</div><span class="num">${usd(r.value)}</span></div>`).join("");
+}
+
+function render() {
+  const o = compute(st);
+  $("v-total").textContent = usd(o.total, 0);
+  const over = o.total > st.budget;
+  const pill = $("v-pill");
+  pill.className = "pill " + (over ? "over" : "ok");
+  pill.textContent = over ? `${usd(o.total - st.budget, 0)} over $${fmt(st.budget)}` : `${usd(st.budget - o.total, 0)} under $${fmt(st.budget)}`;
+  const bar = $("v-bar"); bar.classList.toggle("over", over);
+  bar.firstElementChild.style.width = Math.min(100, st.budget > 0 ? 100 * o.total / st.budget : 100) + "%";
+  $("v-runs").textContent = fmt(o.runs) + " · " + o.items + " items";
+  $("v-time").textContent = fmt(o.hours) + " h at " + st.concurrency + " parallel";
+
+  const models = [...WRITERS, ...JUDGES];
+  const mrows = models.map((m, i) => ({ label: LABEL[m], value: o.byModel[m], color: COLORS[i] }));
+  bars($("by-model"), mrows, Math.max(...mrows.map(r => r.value), 1e-9));
+  const prow = [
+    { label: "Writer, main runs", value: o.byPart.writer, color: "var(--c1)" },
+    { label: "Judges, main runs", value: o.byPart.judge, color: "var(--c3)" },
+    { label: "PSALM anchor", value: o.byPart.psalmAnchor, color: "var(--c4)" },
+    { label: "Alignment anchor", value: o.byPart.alignAnchor, color: "var(--c5)" },
+    { label: "G2 pairwise", value: o.byPart.g2, color: "var(--c2)" },
+    { label: `Contingency ${st.contingency}%`, value: o.total - o.base, color: "var(--muted)" }
+  ];
+  bars($("by-part"), prow, Math.max(...prow.map(r => r.value), 1e-9));
+
+  // setups table
+  let h = `<tr><th>Writer</th><th>Setup</th><th class="n">Runs</th><th class="n">Writer</th><th class="n">Judges</th><th class="n">Per run</th><th class="n">Total</th></tr>`;
+  for (const wr of WRITERS) for (const su of SETUPS) {
+    const r = o.bySetup[wr + "|" + su];
+    if (!r) { h += `<tr class="off"><td>${LABEL[wr]}</td><td>${LABEL[su]}</td><td class="n">0</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>`; continue; }
+    const t = r.writer + r.judge;
+    h += `<tr class="${r.runs ? "" : "off"}"><td>${LABEL[wr]}</td><td>${LABEL[su]}</td><td class="n">${fmt(r.runs)}</td><td class="n">${usd(r.writer)}</td><td class="n">${usd(r.judge)}</td><td class="n">${r.runs ? usd(t / r.runs) : "—"}</td><td class="n">${usd(t)}</td></tr>`;
+  }
+  h += `<tr class="total"><td colspan="2">Main runs</td><td class="n">${fmt(o.runs)}</td><td class="n">${usd(o.byPart.writer)}</td><td class="n">${usd(o.byPart.judge)}</td><td class="n">${o.runs ? usd((o.byPart.writer + o.byPart.judge) / o.runs) : "—"}</td><td class="n">${usd(o.byPart.writer + o.byPart.judge)}</td></tr>`;
+  $("t-setups").innerHTML = h;
+  $("setup-note").textContent = `Before contingency. Evaluation extras add ${usd(o.byPart.psalmAnchor + o.byPart.alignAnchor + o.byPart.g2)}; contingency adds ${usd(o.total - o.base)}.`;
+
+  // stages
+  $("stage-legend").innerHTML = STAGES.map((s, i) => `<span><i style="background:${COLORS[i]}"></i>${LABEL[s]}</span>`).join("");
+  const srows = WRITERS.map(wr => ({ label: LABEL[wr], value: STAGES.reduce((a, s) => a + o.byStage[wr][s], 0), parts: STAGES.map((s, i) => [o.byStage[wr][s], COLORS[i]]) }));
+  bars($("by-stage"), srows, Math.max(...srows.map(r => r.value), 1e-9));
+
+  // design runs per item
+  for (const s of SETUPS) { const c = st.setups[s]; $("rpi-" + s).textContent = c.on ? c.samples * c.policies : 0; }
+  $("g2-size").textContent = st.setups.single_call.on ? `${fmt(o.g2Comparisons)} comparisons × ${JUDGES.filter(j => st.use[j]).length} judges` : "needs the single call setup";
+
+  // corpus
+  const items = [...CORPUS].sort((a, b) => b[3] - a[3]);
+  h = `<tr><th></th><th>Item</th><th>Lang.</th><th class="n">Words</th><th class="n">Gemma, 1 full run</th><th class="n">Mistral, 1 full run</th></tr>`;
+  for (const it of items) {
+    const off = st.corpusOff.includes(it[0]);
+    h += `<tr class="${off ? "off" : ""}"><td><input type="checkbox" id="item-${it[0]}" data-item="${it[0]}" ${off ? "" : "checked"} aria-label="Include ${it[2]}"></td><td>${it[2]}</td><td>${it[1]}</td><td class="n">${fmt(it[3])}</td><td class="n">${usd(o.perItem[it[0]].gemma)}</td><td class="n">${usd(o.perItem[it[0]].mistral)}</td></tr>`;
+  }
+  $("t-corpus").innerHTML = h;
+  $("corpus-count").textContent = `${o.items} of ${CORPUS.length} items`;
+
+  document.querySelectorAll("[data-scn]").forEach(b => b.classList.toggle("active", b.dataset.scn === activeScn));
+  save();
+}
+
+const SCN = {
+  full: s => s,
+  full1: s => { s.setups.full.samples = 1; return s; },
+  mistral: s => { s.use.gemma = false; return s; },
+  gemma: s => { s.use.mistral = false; return s; },
+  nog2: s => { s.extras.g2 = false; return s; },
+  lean: s => { s.use.gemma = false; s.setups.full.samples = 1; s.extras.g2 = false; return s; }
+};
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-scn]"); if (!b) return;
+  const keepPrices = st.prices, keepBudget = st.budget, keepCont = st.contingency, keepConc = st.concurrency;
+  st = SCN[b.dataset.scn](defaults());
+  st.prices = keepPrices; st.budget = keepBudget; st.contingency = keepCont; st.concurrency = keepConc;
+  activeScn = b.dataset.scn;
+  buildInputs(); render();
+});
+
+document.addEventListener("input", e => {
+  const t = e.target;
+  const v = parseFloat(t.value); const val = isNaN(v) ? 0 : v;
+  if (t.dataset.bind) {
+    const p = t.dataset.bind.split(":");
+    if (p[0] === "price") st.prices[p[1]][+p[2]] = val;
+    if (p[0] === "setup") st.setups[p[1]][p[2]] = Math.round(val);
+    if (p[0] === "mult") st.mult[p[1]][p[2]][+p[3]] = val;
+    if (p[0] === "extra") st.extras[p[1]] = val;
+  } else if (t.id === "budget") st.budget = val;
+  else if (t.id === "contingency") st.contingency = val;
+  else if (t.id === "concurrency") st.concurrency = Math.max(1, Math.round(val));
+  else if (t.dataset.use) st.use[t.dataset.use] = t.checked;
+  else if (t.dataset.setup) { st.setups[t.dataset.setup].on = t.checked; t.closest("tr").classList.toggle("off", !t.checked); }
+  else if (t.dataset.extra) st.extras[t.dataset.extra] = t.checked;
+  else if (t.dataset.item) { st.corpusOff = t.checked ? st.corpusOff.filter(x => x !== t.dataset.item) : [...st.corpusOff, t.dataset.item]; }
+  else if (t.id === "meta-name") { meta.name = t.value; save(); return; }
+  else if (t.id === "meta-note") { meta.note = t.value; save(); return; }
+  else return;
+  activeScn = null;
+  render();
+});
+
+/* ---------- save, load, share ---------- */
+function status(msg, kind) { const el = $("save-status"); el.textContent = msg; el.className = "status " + (kind || ""); }
+function estimateObject() {
+  const o = compute(st);
+  return {
+    format: FORMAT, version: FORMAT_VERSION,
+    name: meta.name, note: meta.note, saved_at: new Date().toISOString(),
+    totals: { total_usd: +o.total.toFixed(2), before_contingency_usd: +o.base.toFixed(2), budget_usd: st.budget, runs: o.runs, items: o.items },
+    settings: st
+  };
+}
+function fileStem() {
+  const n = (meta.name || "estimate").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "estimate";
+  return "psalm-cost-" + n + "-" + new Date().toISOString().slice(0, 10);
+}
+// On claude.ai the page saves through the viewer's downloads capability; opened as a file, through a normal download.
+let dl = null, hosted = false;
+try { if (window.claude?.use) { hosted = true; window.claude.use("downloads").then(x => { dl = x; }).catch(() => {}); } } catch (e) {}
+
+async function download(text, name, type) {
+  if (dl) {
+    try { await dl.save({ filename: name, data: text }); status("Saved " + name + ".", "ok"); }
+    catch (err) {
+      if (err && err.code === "declined") status("Save cancelled.", "");
+      else if (err && err.code === "rate_limited") status("A save prompt is already open. Finish it, then try again.", "err");
+      else status("Saving isn't available in this view. Use Copy settings instead.", "err");
+    }
+    return;
+  }
+  if (hosted) { status("Saving isn't available in this view. Use Copy settings instead.", "err"); return; }
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement("a"); a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  status("Saved " + name + ".", "ok");
+}
+// A clean copy of this page with the estimate built in: only this page's own scripts, nothing a host added.
+function shareableHtml(json) {
+  const doc = new DOMParser().parseFromString(PAGE_SOURCE, "text/html");
+  doc.querySelectorAll("script:not(#app):not(#embedded-estimate), meta[http-equiv]").forEach(n => n.remove());
+  doc.getElementById("embedded-estimate").textContent = json;
+  return "<!doctype html>\n" + doc.documentElement.outerHTML;
+}
+function showBanner() {
+  const b = $("loaded-banner");
+  b.hidden = !meta.name && !meta.note;
+  $("lb-name").textContent = meta.name || "Untitled estimate";
+  const when = meta.saved_at ? "Saved " + new Date(meta.saved_at).toLocaleString() + ". " : "";
+  $("lb-meta").textContent = when + (meta.note || "");
+  $("meta-name").value = meta.name; $("meta-note").value = meta.note;
+}
+function applyLoaded(text, source) {
+  try {
+    const e = parseEstimate(JSON.parse(text));
+    st = e.settings; meta = e.meta; activeScn = null;
+    buildInputs(); render(); showBanner();
+    status(`Loaded “${meta.name || "untitled"}” from ${source}.`, "ok");
+  } catch (err) {
+    status(err instanceof SyntaxError ? `${source} is not valid JSON.` : err.message, "err");
+  }
+}
+
+$("btn-save-json").addEventListener("click", () => {
+  meta.saved_at = new Date().toISOString(); showBanner();
+  download(JSON.stringify(estimateObject(), null, 2), fileStem() + ".json", "application/json");
+});
+$("btn-save-html").addEventListener("click", () => {
+  meta.saved_at = new Date().toISOString(); showBanner();
+  const json = JSON.stringify(estimateObject(), null, 1).replace(/</g, "\\u003c");
+  download(shareableHtml(json), fileStem() + ".html", "text/html");
+});
+$("btn-load").addEventListener("click", () => $("file-in").click());
+$("file-in").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (f) applyLoaded(await f.text(), f.name); e.target.value = "";
+});
+const drop = $("drop");
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hover"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, () => drop.classList.remove("hover")));
+drop.addEventListener("drop", async e => {
+  e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) applyLoaded(await f.text(), f.name);
+});
+$("btn-copy").addEventListener("click", () => {
+  const text = JSON.stringify(estimateObject(), null, 2);
+  const fallback = () => { const ta = $("copy-out"); ta.hidden = false; ta.value = text; ta.focus(); ta.select(); status("Copying is blocked here. The settings are selected below; copy them with Ctrl+C.", "err"); };
+  try { navigator.clipboard.writeText(text).then(() => status("Settings copied. Paste them into a .json file to share.", "ok"), fallback); } catch (e) { fallback(); }
+});
+$("btn-reset").addEventListener("click", () => {
+  const keep = { budget: st.budget };
+  st = defaults(); st.budget = keep.budget; meta = { name: "", note: "", saved_at: "" }; activeScn = "full";
+  buildInputs(); render(); showBanner(); status("Reset to the default design. The budget was kept.", "ok");
+});
+
+buildInputs(); render(); showBanner();
+if (embedded) { activeScn = null; $("save-panel").open = true; status(`Opened with the built-in estimate “${meta.name || "untitled"}”.`, "ok"); }
+</script>
