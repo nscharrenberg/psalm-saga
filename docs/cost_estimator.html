@@ -159,6 +159,13 @@ button.opt-open:hover { text-decoration-color: var(--accent); }
 .reason p { max-width: 90ch; }
 [hidden] { display: none !important; }
 code { overflow-wrap: anywhere; }
+.addbox { border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 10px; }
+.form-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+.form-row .field { flex: 1 1 120px; }
+.form-row input[type=number] { width: 100%; }
+.form-row input, .form-row select { height: 36px; }
+details.sub > summary { cursor: pointer; font-size: 0.88rem; color: var(--accent); }
+details.sub[open] { display: grid; gap: 8px; }
 .wrap, .explore, .panel { grid-template-columns: minmax(0, 1fr); }
 /* phones: each option becomes a card */
 @media (max-width: 720px) {
@@ -301,6 +308,19 @@ code { overflow-wrap: anywhere; }
       <div class="scroll"><table id="t-prices"></table></div>
       <p class="note">All four runs used reasoning effort <i>medium</i>, so only medium is measured. <i>None</i> drops the reasoning tokens and keeps the visible answer; that gives the cost, not the effect on quality. <i>Low</i> and <i>high</i> scale the measured reasoning by the factors below. The reasoning share is editable per model, for example to give Claude reasoning: a custom share keeps the measured answer tokens and adds reasoning until it makes up that share of the output. Clear the field or press <i>reset</i> to return to the measured tokens.</p>
       <div class="scroll"><table id="t-effort"></table></div>
+      <div class="addbox">
+        <h3>Add a model</h3>
+        <p class="note">A new model is priced as a copy of a measured one: it uses that model's tokens per stage with its own name, prices and reasoning settings, and its cost counts as modelled. A new judge rates everything the other judges rate.</p>
+        <div class="form-row">
+          <label class="field">Name <input type="text" id="am-name" placeholder="e.g. Llama 5 70B"></label>
+          <label class="field">Role <select id="am-role"><option value="writer">writer</option><option value="judge">judge</option></select></label>
+          <label class="field">Behaves like <select id="am-like"></select></label>
+          <label class="field">$ / M in <input type="number" id="am-pin" min="0" step="0.01"></label>
+          <label class="field">$ / M out <input type="number" id="am-pout" min="0" step="0.01"></label>
+          <button id="am-add">Add model</button>
+        </div>
+        <p class="status" id="am-status" role="status"></p>
+      </div>
     </details>
 
     <details class="panel" open>
@@ -334,7 +354,26 @@ code { overflow-wrap: anywhere; }
 
     <details class="panel">
       <summary><h3>Corpus</h3><span id="corpus-count" class="tag"></span></summary>
-      <p class="note">The 29 items of <code>experiments/data/stories/corpus.csv</code>. Cost scales with the source's length in characters. Untick an item to leave it out. Cost per item is one full-procedure run per writer, before contingency.</p>
+      <p class="note">The 29 items of <code>experiments/data/stories/corpus.csv</code>, plus any you add. Cost scales with the source's length in characters. Untick an item to leave it out. Cost per item is one full-procedure run per writer, before contingency.</p>
+      <div class="addbox">
+        <h3>Add items</h3>
+        <p class="note">Added items are saved with the option. An item shorter than 1,720 or longer than 46,377 characters is priced on the extended line and counts as guessed. A language other than English (<code>en</code>) or Dutch (<code>nl</code>) is priced like them and counts as modelled.</p>
+        <div class="form-row">
+          <label class="field" style="flex:2 1 220px">Title <input type="text" id="ai-title" placeholder="e.g. The Monkey's Paw"></label>
+          <label class="field">Language <input type="text" id="ai-lang" list="langs" placeholder="en" style="width:6em"></label>
+          <label class="field">Characters <input type="number" id="ai-chars" min="1" step="1"></label>
+          <label class="field">Words, optional <input type="number" id="ai-words" min="1" step="1"></label>
+          <button id="ai-add">Add item</button>
+        </div>
+        <datalist id="langs"><option value="en"><option value="nl"></datalist>
+        <details class="sub">
+          <summary>Paste rows from a CSV</summary>
+          <p class="note">The first row must name the columns: <code>title</code> or <code>id</code>, <code>language</code>, and <code>char_count</code> or <code>characters</code>; <code>word_count</code> is optional. Rows copied from <code>corpus.csv</code> work as they are. Items already in the corpus are skipped.</p>
+          <textarea id="ai-csv" aria-label="CSV rows" placeholder="title,language,char_count,word_count&#10;The Monkey's Paw,en,22850,4100"></textarea>
+          <div class="actions"><button id="ai-csv-add">Add rows</button></div>
+        </details>
+        <p class="status" id="ai-status" role="status"></p>
+      </div>
       <div class="scroll"><table id="t-corpus"></table></div>
     </details>
   </section>
@@ -347,7 +386,7 @@ code { overflow-wrap: anywhere; }
       <ul class="notes">
         <li><b>Measured.</b> Tokens per stage from four runs of the full procedure at reasoning effort medium: the shortest item (De vliegende Robert, 1,720 characters, Dutch) and the longest (A Scandal in Bohemia, 46,377 characters, English), once per writer. Gemma's short run recorded $0 because no price was set; its tokens are priced at the rates of the other Gemma run.</li>
         <li><b>Scaling.</b> For each writer and stage, a straight line through the two runs, by source characters. Every corpus item lies between them. Length and language are confounded: the short runs are Dutch and the long runs English. Each point is a single run.</li>
-        <li><b>Modelled.</b> The four other setups (factors under <i>How the setups differ</i>), the PSALM anchor (85% of a run's judge tokens per pair), the alignment anchor (priced as the writer's <code>recover</code> stage) and G2 (14% of a run's judge tokens per comparison).</li>
+        <li><b>Modelled.</b> The four other setups (factors under <i>How the setups differ</i>), the PSALM anchor (85% of a run's judge tokens per pair), the alignment anchor (priced as the writer's <code>recover</code> stage) and G2 (14% of a run's judge tokens per comparison). Also any model added as a copy of a measured one, and items in a language other than English or Dutch.</li>
         <li><b>Guessed.</b> Output at an effort other than medium, custom reasoning shares, and items outside the measured length range.</li>
         <li><b>Not priced.</b> Failed calls and retries. The Mistral Dutch run had 12 failed draft retries in which reasoning used up the output allowance; they carry no usage. The contingency covers these.</li>
         <li><b>Data version</b> <span class="num" id="dv-label"></span>. Saved estimates record it; when it changes, they show their saved figures next to the current ones.</li>
@@ -444,7 +483,11 @@ function defaults() {
     effortFactor: { none: 0, low: 0.4, medium: 1, high: 2 },
     // reasoning share of output at medium, in %; null = use the measured tokens per stage.
     // An override keeps the measured answer tokens and sets reasoning = answer × s / (100 − s).
-    rsnShare: { gemma: null, mistral: null, claude: null, gpt: null, qwen: null }
+    rsnShare: { gemma: null, mistral: null, claude: null, gpt: null, qwen: null },
+    // items added to the corpus: { id, title, lang, chars, words }
+    corpusAdd: [],
+    // copies of a measured model: { id, label, role, like, price: [in, out], use, effort, share }
+    models: []
   };
 }
 const EFFORTS = ["none", "low", "medium", "high"];
@@ -457,28 +500,72 @@ function interp(writer, key, field, c) {
   return Math.max(0, a + (b - a) * (c - C0) / (C1 - C0));
 }
 const inRange = c => c >= C0 && c <= C1;
+const MEASURED_LANGS = ["en", "nl"];
+
+/* models: the five measured ones, plus copies that reuse a measured model's tokens with their own prices and reasoning */
+const copiesOf = st => st.models || [];
+const writersOf = st => [...WRITERS, ...copiesOf(st).filter(c => c.role === "writer").map(c => c.id)];
+const judgesOf = st => [...JUDGES, ...copiesOf(st).filter(c => c.role === "judge").map(c => c.id)];
+const modelsOf = st => [...writersOf(st), ...judgesOf(st)];
+function mdl(st, m) {
+  const c = copiesOf(st).find(x => x.id === m);
+  if (c) return { id: m, label: c.label, role: c.role, like: c.like, copy: true, price: c.price, use: c.use, effort: c.effort, share: c.share };
+  return { id: m, label: LABEL[m], role: WRITERS.includes(m) ? "writer" : "judge", like: m, copy: false,
+    price: st.prices[m], use: st.use[m], effort: st.effort[m], share: st.rsnShare[m] };
+}
+// one place that writes a model's price, use, effort or reasoning share, for measured models and copies alike
+function setModel(st, m, field, value) {
+  const c = copiesOf(st).find(x => x.id === m);
+  if (c) { if (field === "price") c.price[value[0]] = value[1]; else c[field] = value; return; }
+  if (field === "price") st.prices[m][value[0]] = value[1];
+  else ({ use: st.use, effort: st.effort, share: st.rsnShare })[field][m] = value;
+}
+
+/* corpus: the 29 items of corpus.csv plus added ones. Item = [id, language, title, characters, words, added] */
+const itemsOf = st => [...CORPUS.map(c => [...c, false]), ...(st.corpusAdd || []).map(a => [a.id, a.lang, a.title, a.chars, a.words, true])];
+
+// keep only well-formed added items and model copies (they arrive from files)
+function cleanSettings(s) {
+  const num = x => typeof x === "number" && isFinite(x);
+  const seen = new Set(CORPUS.map(c => c[0]));
+  s.corpusAdd = (Array.isArray(s.corpusAdd) ? s.corpusAdd : []).filter(a => a && typeof a.id === "string" && a.id && !seen.has(a.id) && seen.add(a.id) && num(a.chars) && a.chars > 0)
+    .map(a => ({ id: a.id.slice(0, 80), title: String(a.title || a.id).slice(0, 120), lang: String(a.lang || "?").toLowerCase().slice(0, 12), chars: Math.round(a.chars), words: num(a.words) ? Math.round(a.words) : null }));
+  const ids = new Set([...WRITERS, ...JUDGES]);
+  s.models = (Array.isArray(s.models) ? s.models : []).filter(c => c && typeof c.id === "string" && c.id && !ids.has(c.id) && ids.add(c.id)
+      && ((c.role === "writer" && WRITERS.includes(c.like)) || (c.role === "judge" && JUDGES.includes(c.like))))
+    .map(c => ({ id: c.id.slice(0, 40), label: String(c.label || c.id).slice(0, 60), role: c.role, like: c.like,
+      price: Array.isArray(c.price) && c.price.length === 2 && c.price.every(num) ? c.price.map(x => Math.max(0, x)) : [...defaults().prices[c.like]],
+      use: c.use !== false, effort: EFFORTS.includes(c.effort) ? c.effort : "medium", share: num(c.share) ? Math.max(0, Math.min(99, c.share)) : null }));
+  return s;
+}
+const settingsFrom = x => cleanSettings(merge(defaults(), x));
+
 const zeroT = () => ({ measured: 0, modelled: 0, guessed: 0 });
 // Where a stage's cost comes from. base: "measured" for the full procedure as run, else "modelled".
-// Output priced at an effort other than medium is a guess; so is reasoning from a custom share; so is anything outside the measured length range.
-function addTrust(acc, st, model, c, base, chars, n = 1) {
-  if (!inRange(chars)) { acc.guessed += c.total * n; return; }
-  const effortGuess = st.effort[model] !== "medium";
-  const shareGuess = st.rsnShare[model] !== null;
+// A copied model, or a language that wasn't measured, turns measured into modelled. Output at an effort other than medium,
+// reasoning from a custom share, and anything outside the measured length range are guesses.
+function addTrust(acc, st, model, c, base, it, n = 1) {
+  if (!inRange(it[3])) { acc.guessed += c.total * n; return; }
+  const M = mdl(st, model);
+  if (base === "measured" && (M.copy || !MEASURED_LANGS.includes(it[1]))) base = "modelled";
+  const effortGuess = M.effort !== "medium";
+  const shareGuess = M.share !== null;
   acc[base] += c.in * n;
   acc[effortGuess ? "guessed" : base] += c.ans * n;
   acc[effortGuess || shareGuess ? "guessed" : base] += c.rsn * n;
 }
-// Cost of one stage, billed to `model`, with tokens read from `prof`'s runs; split into input, answer and reasoning.
+// Cost of one stage, billed to `model`, with tokens read from writer profile `prof`, stage or judge `key`; split into input, answer and reasoning.
 // Output tokens = answer + reasoning; reasoning is scaled by the model's effort factor (medium = 1, as measured).
 function cost3(st, model, prof, key, w, mi = 1, mo = 1) {
+  const M = mdl(st, model);
   const tin = interp(prof, key, "in", w) * mi;
   const out = interp(prof, key, "out", w);
   const rsnMeasured = Math.min(out, interp(prof, key, "rsn", w));
   const ans = out - rsnMeasured;
-  const s = st.rsnShare?.[model];
+  const s = M.share;
   const rsn = (s === null || s === undefined) ? rsnMeasured : ans * Math.min(s, 99) / (100 - Math.min(s, 99));
-  const f = st.effortFactor[st.effort[model]] ?? 1;
-  const [pi, po] = st.prices[model];
+  const f = st.effortFactor[M.effort] ?? 1;
+  const [pi, po] = M.price;
   const c = { in: tin * pi / 1e6, ans: ans * mo * po / 1e6, rsn: rsn * f * mo * po / 1e6 };
   c.total = c.in + c.ans + c.rsn;
   c.outScale = out > 0 ? (ans + rsn * f) / out : 1; // for time: generation time follows output tokens
@@ -487,39 +574,43 @@ function cost3(st, model, prof, key, w, mi = 1, mo = 1) {
 const zero3 = () => ({ in: 0, ans: 0, rsn: 0, total: 0 });
 function add3(acc, c, n = 1) { acc.in += c.in * n; acc.ans += c.ans * n; acc.rsn += c.rsn * n; acc.total += c.total * n; }
 
-function oneRun(st, writer, setup, w) {
-  // cost of one run of `setup` by `writer` on an item of w characters, split by stage, by model and by trust
+function oneRun(st, writer, setup, it) {
+  // cost of one run of `setup` by `writer` on item `it`, split by stage, by model and by trust
+  const W = mdl(st, writer), w = it[3], prof = W.like;
   const r = { writer: 0, judge: 0, stages: {}, judges: {}, sec: 0, split: {}, trust: zeroT() };
-  const baseOf = ([mi, mo]) => (setup === "full" && mi === 1 && mo === 1) ? "measured" : "modelled";
+  // judging a copied writer's texts is modelled too: those texts were never generated
+  const baseOf = ([mi, mo]) => (setup === "full" && mi === 1 && mo === 1 && !W.copy) ? "measured" : "modelled";
   r.split[writer] = zero3();
   for (const s of STAGES) {
     const [mi, mo] = st.mult[setup][s];
-    const c = cost3(st, writer, writer, s, w, mi, mo);
+    const c = cost3(st, writer, prof, s, w, mi, mo);
     r.stages[s] = c.total; r.writer += c.total; add3(r.split[writer], c);
-    addTrust(r.trust, st, writer, c, baseOf(st.mult[setup][s]), w);
-    r.sec += interp(writer, s, "sec", w) * mo * c.outScale;
+    addTrust(r.trust, st, writer, c, baseOf(st.mult[setup][s]), it);
+    r.sec += interp(prof, s, "sec", w) * mo * c.outScale;
   }
-  for (const j of JUDGES) {
+  for (const j of judgesOf(st)) {
+    const J = mdl(st, j);
     r.split[j] = zero3();
-    if (!st.use[j]) { r.judges[j] = 0; continue; }
-    const [mi, mo] = st.mult[setup][j];
-    const c = cost3(st, j, writer, j, w, mi, mo);
+    if (!J.use) { r.judges[j] = 0; continue; }
+    const [mi, mo] = st.mult[setup][J.like];
+    const c = cost3(st, j, prof, J.like, w, mi, mo);
     r.judges[j] = c.total; r.judge += c.total; add3(r.split[j], c);
-    addTrust(r.trust, st, j, c, baseOf(st.mult[setup][j]), w);
+    addTrust(r.trust, st, j, c, baseOf(st.mult[setup][J.like]), it);
   }
   return r;
 }
 
 function compute(st) {
-  const items = CORPUS.filter(c => !st.corpusOff.includes(c[0]));
-  const writers = WRITERS.filter(w => st.use[w]);
-  const judges = JUDGES.filter(j => st.use[j]);
+  const items = itemsOf(st).filter(c => !st.corpusOff.includes(c[0]));
+  const allW = writersOf(st), all = modelsOf(st);
+  const writers = allW.filter(w => mdl(st, w).use);
+  const judges = judgesOf(st).filter(j => mdl(st, j).use);
   const out = {
     items: items.length, runs: 0, sec: 0,
-    byModel: Object.fromEntries([...WRITERS, ...JUDGES].map(m => [m, 0])),
-    split: Object.fromEntries([...WRITERS, ...JUDGES].map(m => [m, zero3()])),
+    byModel: Object.fromEntries(all.map(m => [m, 0])),
+    split: Object.fromEntries(all.map(m => [m, zero3()])),
     byPart: { writer: 0, judge: 0, psalmAnchor: 0, alignAnchor: 0, g2: 0 },
-    bySetup: {}, byStage: Object.fromEntries(WRITERS.map(w => [w, Object.fromEntries(STAGES.map(s => [s, 0]))])),
+    bySetup: {}, byStage: Object.fromEntries(allW.map(w => [w, Object.fromEntries(STAGES.map(s => [s, 0]))])),
     perItem: {}, g2Comparisons: 0, trust: zeroT()
   };
   for (const wr of writers) for (const su of SETUPS) {
@@ -528,10 +619,10 @@ function compute(st) {
     const row = out.bySetup[wr + "|" + su] = { runs: n * items.length, writer: 0, judge: 0 };
     if (!n) continue;
     for (const it of items) {
-      const r = oneRun(st, wr, su, it[3]);
+      const r = oneRun(st, wr, su, it);
       row.writer += r.writer * n; row.judge += r.judge * n;
       out.byModel[wr] += r.writer * n;
-      for (const j of JUDGES) out.byModel[j] += r.judges[j] * n;
+      for (const j in r.judges) out.byModel[j] += r.judges[j] * n;
       for (const m in r.split) add3(out.split[m], r.split[m], n);
       for (const s of STAGES) out.byStage[wr][s] += r.stages[s] * n;
       out.sec += r.sec * n;
@@ -540,18 +631,18 @@ function compute(st) {
     out.runs += row.runs; out.byPart.writer += row.writer; out.byPart.judge += row.judge;
   }
   // per-item cost of one full run (for the corpus table)
-  for (const it of CORPUS) out.perItem[it[0]] = Object.fromEntries(WRITERS.map(wr => { const r = oneRun(st, wr, "full", it[3]); return [wr, r.writer + r.judge]; }));
+  for (const it of itemsOf(st)) out.perItem[it[0]] = Object.fromEntries(allW.map(wr => { const r = oneRun(st, wr, "full", it); return [wr, r.writer + r.judge]; }));
 
   const ex = st.extras;
-  // PSALM lower anchor: one source-vs-source pair per item, judged by each judge; judge tokens averaged over the two writers' runs
+  // PSALM lower anchor: one source-vs-source pair per item, judged by each judge; judge tokens averaged over the two measured writers' runs
   if (ex.psalmAnchor) for (const it of items) for (const j of judges) for (const wr of WRITERS) {
-    const c = cost3(st, j, wr, j, it[3]); const n = ex.anchorShare / WRITERS.length;
-    out.byPart.psalmAnchor += c.total * n; out.byModel[j] += c.total * n; add3(out.split[j], c, n); addTrust(out.trust, st, j, c, "modelled", it[3], n);
+    const c = cost3(st, j, wr, mdl(st, j).like, it[3]); const n = ex.anchorShare / WRITERS.length;
+    out.byPart.psalmAnchor += c.total * n; out.byModel[j] += c.total * n; add3(out.split[j], c, n); addTrust(out.trust, st, j, c, "modelled", it, n);
   }
   // alignment lower anchor: one alignment per item and writer, priced as that writer's recover stage
   if (ex.alignAnchor) for (const it of items) for (const wr of writers) {
-    const c = cost3(st, wr, wr, "recover", it[3]);
-    out.byPart.alignAnchor += c.total; out.byModel[wr] += c.total; add3(out.split[wr], c); addTrust(out.trust, st, wr, c, "modelled", it[3]);
+    const c = cost3(st, wr, mdl(st, wr).like, "recover", it[3]);
+    out.byPart.alignAnchor += c.total; out.byModel[wr] += c.total; add3(out.split[wr], c); addTrust(out.trust, st, wr, c, "modelled", it);
   }
   // G2: each text of the other setups against the single call, same item, policy and writer, in both orders, by each judge
   if (ex.g2 && st.setups.single_call.on) {
@@ -560,8 +651,8 @@ function compute(st) {
     perItemWriter *= ex.orders;
     out.g2Comparisons = perItemWriter * items.length * writers.length;
     for (const it of items) for (const wr of writers) for (const j of judges) {
-      const c = cost3(st, j, wr, j, it[3]); const n = ex.pairShare * perItemWriter;
-      out.byPart.g2 += c.total * n; out.byModel[j] += c.total * n; add3(out.split[j], c, n); addTrust(out.trust, st, j, c, "modelled", it[3], n);
+      const c = cost3(st, j, mdl(st, wr).like, mdl(st, j).like, it[3]); const n = ex.pairShare * perItemWriter;
+      out.byPart.g2 += c.total * n; out.byModel[j] += c.total * n; add3(out.split[j], c, n); addTrust(out.trust, st, j, c, "modelled", it, n);
     }
   }
   out.base = Object.values(out.byPart).reduce((a, b) => a + b, 0);
@@ -608,8 +699,13 @@ function merge(base, inc) {
 }
 
 /* ---------- the shortlist ---------- */
-const DEFAULT_REASON = "It keeps what the research question needs: every setup, all three policy settings, three samples of the full procedure per item, all three judges and both lower anchors. The three samples show whether a story keeps its data properties when it is generated again, not only whether stories differ from each other. To fit the budget it drops Mistral and the G2 quality comparison, so it cannot show whether a second writer behaves the same. The two-writer options cover that, at the cost of policy settings or repeated samples.";
+const DEFAULT_REASON = "Proposed together with the Mistral check below it. The Gemma part keeps what the research question needs: three samples of the full procedure under all three policy settings, the single-call baseline, both ablations under preserve, all three judges and both lower anchors. The repeated samples show whether a story keeps its data properties when it is generated again. The Mistral check runs the full procedure three times under preserve on six items that span the length range, which shows whether a second writer is as consistent. To fit the budget the design drops paraphrase, G2, and the ablations under the other two policy settings. The Gemma part alone fits the budget even at the high end of its range.";
 
+// n corpus items evenly spread over the length range, shortest and longest included
+function spreadItems(n) {
+  const sorted = [...CORPUS].sort((a, b) => a[3] - b[3]);
+  return Array.from({ length: n }, (_, i) => sorted[Math.round(i * (sorted.length - 1) / (n - 1))][0]);
+}
 function variant(f) { const s = defaults(); f(s); return s; }
 function defaultEstimate() {
   const options = [
@@ -619,22 +715,36 @@ function defaultEstimate() {
     { id: "two-rsn-off", label: "Two writers, Mistral reasoning off", settings: variant(s => { s.effort.mistral = "none"; s.extras.g2 = false; s.setups.full.samples = 1; }) },
     { id: "two-preserve", label: "Two writers, full and single call", settings: variant(s => {
       for (const k of ["no_graph", "no_feedback", "paraphrase"]) s.setups[k].on = false;
-      s.setups.full.samples = 1; s.setups.full.policies = 1; s.setups.single_call.policies = 1; s.extras.g2 = false; }) }
+      s.setups.full.samples = 1; s.setups.full.policies = 1; s.setups.single_call.policies = 1; s.extras.g2 = false; }) },
+    { id: "gemma-core", label: "Gemma, core and ablations", settings: variant(s => {
+      s.use.mistral = false; s.extras.g2 = false; s.setups.paraphrase.on = false;
+      s.setups.no_graph.policies = 1; s.setups.no_feedback.policies = 1; }) },
+    { id: "mistral-check", label: "Mistral check, add-on to the Gemma core", settings: variant(s => {
+      // the PSALM anchor compares sources, not writers' texts, so the Gemma core already covers it
+      s.use.gemma = false; s.extras.g2 = false; s.extras.psalmAnchor = false;
+      for (const k of ["no_graph", "no_feedback", "paraphrase", "single_call"]) s.setups[k].on = false;
+      s.setups.full.policies = 1;
+      const keep = spreadItems(6);
+      s.corpusOff = CORPUS.map(c => c[0]).filter(id => !keep.includes(id)); }) }
   ];
   return { name: "Main experiment", note: "", version: 1, saved_at: "", budget: 400, bands: clone(DEFAULT_BANDS),
-    proposed: "gemma", reason: DEFAULT_REASON, options, data_version: DATA_VERSION };
+    proposed: "gemma-core", reason: DEFAULT_REASON, options, data_version: DATA_VERSION };
 }
 
 // what an option keeps and cuts, relative to the full design
 function describe(s) {
   const d = defaults(), bits = [];
-  const ws = WRITERS.filter(w => s.use[w]);
-  bits.push(ws.length === WRITERS.length ? "both writers" : ws.length ? ws.map(w => SHORT[w]).join(", ") + " only" : "no writer");
+  const name = m => SHORT[m] || mdl(s, m).label;
+  const ws = writersOf(s).filter(w => mdl(s, w).use);
+  bits.push(ws.length === WRITERS.length && WRITERS.every(w => ws.includes(w)) ? "both writers"
+    : ws.length === 1 ? name(ws[0]) + " only" : ws.length ? "writers " + ws.map(name).join(", ") : "no writer");
   const jo = JUDGES.filter(j => !s.use[j]);
   if (jo.length) bits.push("without " + jo.map(j => SHORT[j]).join(", ") + " as judge");
-  for (const m of [...WRITERS, ...JUDGES]) if (s.use[m]) {
-    if (s.effort[m] !== "medium") bits.push(`${SHORT[m]} reasoning ${s.effort[m] === "none" ? "off" : s.effort[m]}`);
-    if (s.rsnShare[m] !== null) bits.push(`${SHORT[m]} reasoning share ${s.rsnShare[m]}%`);
+  const jx = copiesOf(s).filter(c => c.role === "judge" && c.use);
+  if (jx.length) bits.push("+ " + jx.map(c => c.label).join(", ") + " as judge");
+  for (const m of modelsOf(s)) { const M = mdl(s, m); if (!M.use) continue;
+    if (M.effort !== "medium") bits.push(`${name(m)} reasoning ${M.effort === "none" ? "off" : M.effort}`);
+    if (M.share !== null) bits.push(`${name(m)} reasoning share ${M.share}%`);
   }
   const on = SETUPS.filter(k => s.setups[k].on), off = SETUPS.filter(k => !s.setups[k].on);
   if (off.length >= 3) bits.push("only " + on.map(k => SHORT[k]).join(" and "));
@@ -644,12 +754,14 @@ function describe(s) {
   if (pol.length) {
     const vals = [...new Set(pol.map(k => s.setups[k].policies))];
     bits.push(vals.length === 1 && pol.length === on.filter(k => d.setups[k].policies > 1).length
-      ? `${vals[0]} policy setting${vals[0] === 1 ? "" : "s"}` : pol.map(k => `${SHORT[k]} ${s.setups[k].policies} policies`).join(", "));
+      ? `${vals[0]} policy setting${vals[0] === 1 ? "" : "s"}` : vals.map(v => { const ks = pol.filter(k => s.setups[k].policies === v).map(k => SHORT[k]); return `${ks.join(" and ")} ${v} policy setting${v === 1 ? "" : "s"}`; }).join(", "));
   }
   if (!s.extras.g2 && d.extras.g2) bits.push("no G2");
   if (!s.extras.psalmAnchor) bits.push("no PSALM anchor");
   if (!s.extras.alignAnchor) bits.push("no alignment anchor");
-  if (s.corpusOff.length) bits.push(`${CORPUS.length - s.corpusOff.filter(id => CORPUS.some(c => c[0] === id)).length} of ${CORPUS.length} items`);
+  const all = itemsOf(s), used = all.filter(c => !s.corpusOff.includes(c[0])).length;
+  if (s.corpusAdd.length) bits.push(`${s.corpusAdd.length} added item${s.corpusAdd.length === 1 ? "" : "s"}`);
+  if (used !== all.length) bits.push(`${used} of ${all.length} items`);
   if (JSON.stringify(s.prices) !== JSON.stringify(d.prices)) bits.push("custom prices");
   if (JSON.stringify(s.mult) !== JSON.stringify(d.mult)) bits.push("custom setup factors");
   if (JSON.stringify(s.effortFactor) !== JSON.stringify(d.effortFactor)) bits.push("custom effort factors");
@@ -673,7 +785,7 @@ function parseEstimate(obj) {
   if (obj.version >= 2 && Array.isArray(obj.options)) {
     const options = obj.options.filter(o => o && o.settings).map((o, i) => ({
       id: str(o.id, "opt-" + i) || "opt-" + i, label: str(o.label, "Option " + letter(i)) || "Option " + letter(i),
-      settings: merge(defaults(), o.settings), snapshot: cleanSnap(o.snapshot) }));
+      settings: settingsFrom(o.settings), snapshot: cleanSnap(o.snapshot) }));
     if (!options.length) throw new Error("This estimate has no options.");
     return { est: {
       name: str(obj.name), note: str(obj.note), version: Number.isInteger(obj.estimate_version) && obj.estimate_version > 0 ? obj.estimate_version : 1,
@@ -684,7 +796,7 @@ function parseEstimate(obj) {
   }
   // file format 1: one set of settings and its total
   if (!obj.settings) throw new Error("This estimate has no settings.");
-  const s = merge(defaults(), obj.settings);
+  const s = settingsFrom(obj.settings);
   const t = obj.totals && typeof obj.totals.total_usd === "number" ? { likely: obj.totals.total_usd, runs: obj.totals.runs } : null;
   return { est: {
     name: str(obj.name, "Loaded estimate") || "Loaded estimate", note: str(obj.note), version: 1, saved_at: str(obj.saved_at),
@@ -700,7 +812,7 @@ function loadLocal() {
     const x = JSON.parse(localStorage.getItem(LS_KEY));
     if (!x || !x.est || !x.st) return null;
     const p = parseEstimate(Object.assign({}, x.est, { format: FORMAT, version: 2, estimate_version: x.est.version }));
-    return { est: p.est, st: merge(defaults(), x.st), activeOpt: x.activeOpt, dirty: !!x.dirty };
+    return { est: p.est, st: settingsFrom(x.st), activeOpt: x.activeOpt, dirty: !!x.dirty };
   } catch (e) { return null; }
 }
 function persist() { try { localStorage.setItem(LS_KEY, JSON.stringify({ est, st, activeOpt, dirty })); } catch (e) {} }
@@ -724,16 +836,18 @@ function numInput(id, val, step, onset, cls) {
 function buildInputs() {
   // prices
   let h = `<tr><th></th><th>Model</th><th>Role</th><th class="n">$ / M in</th><th class="n">$ / M out</th><th>Reasoning effort</th><th class="n">Reasoning share of output at medium</th></tr>`;
-  for (const m of [...WRITERS, ...JUDGES]) {
-    const role = WRITERS.includes(m) ? "writer" : (m === "claude" ? "primary judge" : "agreement judge");
-    const measured = 100 * measuredReasoningShare(m);
-    const custom = st.rsnShare[m] !== null;
-    const effortCell = `<select id="eff-${m}" data-effort="${m}" aria-label="Reasoning effort of ${LABEL[m]}">${EFFORTS.map(e => `<option value="${e}" ${st.effort[m] === e ? "selected" : ""}>${e}</option>`).join("")}</select>`;
-    const shareCell = `<input type="number" id="rs-${m}" class="sm" min="0" max="99" step="1" data-share="${m}" value="${custom ? st.rsnShare[m] : measured.toFixed(0)}" aria-label="Reasoning share of output for ${LABEL[m]}, percent"> %
+  for (const m of modelsOf(st)) {
+    const M = mdl(st, m);
+    const role = M.copy ? `${M.role}, copy of ${SHORT[M.like]} <span class="tag model">modelled</span> <button type="button" class="linkish" data-model-remove="${esc(m)}">remove</button>`
+      : M.role === "writer" ? "writer" : (m === "claude" ? "primary judge" : "agreement judge");
+    const measured = 100 * measuredReasoningShare(M.like);
+    const custom = M.share !== null;
+    const effortCell = `<select id="eff-${m}" data-effort="${m}" aria-label="Reasoning effort of ${esc(M.label)}">${EFFORTS.map(e => `<option value="${e}" ${M.effort === e ? "selected" : ""}>${e}</option>`).join("")}</select>`;
+    const shareCell = `<input type="number" id="rs-${m}" class="sm" min="0" max="99" step="1" data-share="${m}" value="${custom ? M.share : measured.toFixed(0)}" aria-label="Reasoning share of output for ${esc(M.label)}, percent"> %
       <span class="tag ${custom ? "model" : ""}" id="rs-tag-${m}">${custom ? "guessed" : "measured"}</span>
       <button type="button" class="linkish" data-share-reset="${m}" id="rs-reset-${m}" ${custom ? "" : "hidden"} title="Back to the measured ${measured.toFixed(0)}%">reset</button>`;
-    h += `<tr><td><input type="checkbox" id="use-${m}" data-use="${m}" ${st.use[m] ? "checked" : ""} aria-label="Use ${LABEL[m]}"></td><td>${LABEL[m]}</td><td class="muted">${role}</td>
-      <td class="n">${numInput("pin-" + m, st.prices[m][0], 0.01, "price:" + m + ":0")}</td><td class="n">${numInput("pout-" + m, st.prices[m][1], 0.01, "price:" + m + ":1")}</td>
+    h += `<tr><td><input type="checkbox" id="use-${m}" data-use="${m}" ${M.use ? "checked" : ""} aria-label="Use ${esc(M.label)}"></td><td>${esc(M.label)}</td><td class="muted">${role}</td>
+      <td class="n">${numInput("pin-" + m, M.price[0], 0.01, "price:" + m + ":0")}</td><td class="n">${numInput("pout-" + m, M.price[1], 0.01, "price:" + m + ":1")}</td>
       <td>${effortCell}</td><td class="n" style="white-space:nowrap">${shareCell}</td></tr>`;
   }
   $("t-prices").innerHTML = h;
@@ -772,7 +886,7 @@ function buildInputs() {
   $("t-mult").innerHTML = h;
 
   // range bands
-  const covers = { measured: "the full procedure as run, at medium effort", modelled: "other setups, the evaluation extras, changed stage factors", guessed: "other efforts, custom reasoning shares, lengths outside the measured range" };
+  const covers = { measured: "the full procedure as run, at medium effort", modelled: "other setups, the evaluation extras, changed stage factors, copied models, languages other than English and Dutch", guessed: "other efforts, custom reasoning shares, lengths outside the measured range" };
   $("t-bands").innerHTML = `<tr><th>Basis</th><th>Covers</th><th class="n">Low, −%</th><th class="n">High, +%</th></tr>` +
     TRUST.map(k => `<tr><td><i class="sw" style="background:var(--t-${k})"></i>${k}</td><td class="muted">${covers[k]}</td>
       <td class="n"><input type="number" class="sm" min="0" max="100" step="5" id="band-${k}-0" data-band="${k}:0" value="${est.bands[k][0]}"></td>
@@ -787,7 +901,7 @@ function buildInputs() {
   $("dv-label").textContent = DATA_VERSION;
 }
 
-// share of a model's output tokens that was reasoning, over all four runs
+// share of a measured model's output tokens that was reasoning, over all four runs (copies pass the model they copy)
 function measuredReasoningShare(m) {
   let out = 0, rsn = 0;
   for (const w of WRITERS) for (const p of ["short", "long"]) {
@@ -881,9 +995,9 @@ function render() {
   upd.hidden = !mod; if (mod) upd.textContent = `Update ${letter(ai)}`;
   $("btn-revert").hidden = !mod;
 
-  const models = [...WRITERS, ...JUDGES];
-  const mrows = models.map(m => ({ label: LABEL[m] + ((st.rsnShare[m] ?? 100 * measuredReasoningShare(m)) > 0 ? ` <span class="muted">· ${st.effort[m]}${st.rsnShare[m] !== null ? ", " + st.rsnShare[m] + "% custom" : ""}</span>` : ""), value: o.split[m].total,
-    parts: [[o.split[m].in, "var(--c3)"], [o.split[m].ans, "var(--c1)"], [o.split[m].rsn, "var(--c2)"]] }));
+  const models = modelsOf(st);
+  const mrows = models.map(m => { const M = mdl(st, m); return { label: esc(M.label) + ((M.share ?? 100 * measuredReasoningShare(M.like)) > 0 ? ` <span class="muted">· ${M.effort}${M.share !== null ? ", " + M.share + "% custom" : ""}</span>` : ""), value: o.split[m].total,
+    parts: [[o.split[m].in, "var(--c3)"], [o.split[m].ans, "var(--c1)"], [o.split[m].rsn, "var(--c2)"]] }; });
   bars($("by-model"), mrows, Math.max(...mrows.map(x => x.value), 1e-9));
   const p3 = o.parts3, k = 1 + st.contingency / 100;
   $("model-legend").innerHTML = `<span><i style="background:var(--c3)"></i>input ${usd(p3.in)}</span><span><i style="background:var(--c1)"></i>answer ${usd(p3.ans)}</span><span><i style="background:var(--c2)"></i>reasoning ${usd(p3.rsn)}</span>`;
@@ -900,11 +1014,11 @@ function render() {
 
   // setups table
   let h = `<tr><th>Writer</th><th>Setup</th><th class="n">Runs</th><th class="n">Writer</th><th class="n">Judges</th><th class="n">Per run</th><th class="n">Total</th></tr>`;
-  for (const wr of WRITERS) for (const su of SETUPS) {
+  for (const wr of writersOf(st)) for (const su of SETUPS) {
     const x = o.bySetup[wr + "|" + su];
-    if (!x) { h += `<tr class="off"><td>${LABEL[wr]}</td><td>${LABEL[su]}</td><td class="n">0</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>`; continue; }
+    if (!x) { h += `<tr class="off"><td>${esc(mdl(st, wr).label)}</td><td>${LABEL[su]}</td><td class="n">0</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td></tr>`; continue; }
     const t = x.writer + x.judge;
-    h += `<tr class="${x.runs ? "" : "off"}"><td>${LABEL[wr]}</td><td>${LABEL[su]}</td><td class="n">${fmt(x.runs)}</td><td class="n">${usd(x.writer)}</td><td class="n">${usd(x.judge)}</td><td class="n">${x.runs ? usd(t / x.runs) : "—"}</td><td class="n">${usd(t)}</td></tr>`;
+    h += `<tr class="${x.runs ? "" : "off"}"><td>${esc(mdl(st, wr).label)}</td><td>${LABEL[su]}</td><td class="n">${fmt(x.runs)}</td><td class="n">${usd(x.writer)}</td><td class="n">${usd(x.judge)}</td><td class="n">${x.runs ? usd(t / x.runs) : "—"}</td><td class="n">${usd(t)}</td></tr>`;
   }
   h += `<tr class="total"><td colspan="2">Main runs</td><td class="n">${fmt(o.runs)}</td><td class="n">${usd(o.byPart.writer)}</td><td class="n">${usd(o.byPart.judge)}</td><td class="n">${o.runs ? usd((o.byPart.writer + o.byPart.judge) / o.runs) : "—"}</td><td class="n">${usd(o.byPart.writer + o.byPart.judge)}</td></tr>`;
   $("t-setups").innerHTML = h;
@@ -912,22 +1026,26 @@ function render() {
 
   // stages
   $("stage-legend").innerHTML = STAGES.map((s, i) => `<span><i style="background:${COLORS[i]}"></i>${LABEL[s]}</span>`).join("");
-  const srows = WRITERS.map(wr => ({ label: LABEL[wr], value: STAGES.reduce((a, s) => a + o.byStage[wr][s], 0), parts: STAGES.map((s, i) => [o.byStage[wr][s], COLORS[i]]) }));
+  const srows = writersOf(st).map(wr => ({ label: esc(mdl(st, wr).label), value: STAGES.reduce((a, s) => a + o.byStage[wr][s], 0), parts: STAGES.map((s, i) => [o.byStage[wr][s], COLORS[i]]) }));
   bars($("by-stage"), srows, Math.max(...srows.map(x => x.value), 1e-9));
 
   // design runs per item
   for (const s of SETUPS) { const c = st.setups[s]; $("rpi-" + s).textContent = c.on ? c.samples * c.policies : 0; }
-  $("g2-size").textContent = st.setups.single_call.on ? `${fmt(o.g2Comparisons)} comparisons × ${JUDGES.filter(j => st.use[j]).length} judges` : "needs the single call setup";
+  $("g2-size").textContent = st.setups.single_call.on ? `${fmt(o.g2Comparisons)} comparisons × ${judgesOf(st).filter(j => mdl(st, j).use).length} judges` : "needs the single call setup";
 
   // corpus
-  const items = [...CORPUS].sort((a, b) => b[3] - a[3]);
-  h = `<tr><th></th><th>Item</th><th>Lang.</th><th class="n">Characters</th><th class="n">Words</th><th class="n">Gemma, 1 full run</th><th class="n">Mistral, 1 full run</th></tr>`;
+  const all = itemsOf(st), items = [...all].sort((a, b) => (b[5] - a[5]) || (b[3] - a[3]));
+  const ws = writersOf(st);
+  h = `<tr><th></th><th>Item</th><th>Lang.</th><th class="n">Characters</th><th class="n">Words</th>${ws.map(w => `<th class="n">${esc(mdl(st, w).label)}, 1 full run</th>`).join("")}</tr>`;
   for (const it of items) {
     const off = st.corpusOff.includes(it[0]);
-    h += `<tr class="${off ? "off" : ""}"><td><input type="checkbox" id="item-${it[0]}" data-item="${it[0]}" ${off ? "" : "checked"} aria-label="Include ${it[2]}"></td><td>${it[2]}</td><td>${it[1]}</td><td class="n">${fmt(it[3])}</td><td class="n muted">${fmt(it[4])}</td><td class="n">${usd(o.perItem[it[0]].gemma)}</td><td class="n">${usd(o.perItem[it[0]].mistral)}</td></tr>`;
+    const tags = (it[5] ? ` <span class="tag">added</span> <button type="button" class="linkish" data-item-remove="${esc(it[0])}">remove</button>` : "")
+      + (!inRange(it[3]) ? ' <span class="tag model">outside measured length · guessed</span>' : "")
+      + (!MEASURED_LANGS.includes(it[1]) ? ' <span class="tag model">language not measured · modelled</span>' : "");
+    h += `<tr class="${off ? "off" : ""}"><td><input type="checkbox" id="item-${esc(it[0])}" data-item="${esc(it[0])}" ${off ? "" : "checked"} aria-label="Include ${esc(it[2])}"></td><td>${esc(it[2])}${tags}</td><td>${esc(it[1])}</td><td class="n">${fmt(it[3])}</td><td class="n muted">${it[4] == null ? "—" : fmt(it[4])}</td>${ws.map(w => `<td class="n">${usd(o.perItem[it[0]][w])}</td>`).join("")}</tr>`;
   }
   $("t-corpus").innerHTML = h;
-  $("corpus-count").textContent = `${o.items} of ${CORPUS.length} items`;
+  $("corpus-count").textContent = `${o.items} of ${all.length} items` + (st.corpusAdd.length ? ` · ${st.corpusAdd.length} added` : "");
 
   renderShortlist();
   renderHeader();
@@ -936,7 +1054,7 @@ function render() {
 
 /* ---------- events ---------- */
 function markShare(m) {
-  const custom = st.rsnShare[m] !== null;
+  const custom = mdl(st, m).share !== null;
   const tag = $("rs-tag-" + m); tag.textContent = custom ? "guessed" : "measured"; tag.classList.toggle("model", custom);
   $("rs-reset-" + m).hidden = !custom;
 }
@@ -945,12 +1063,16 @@ document.addEventListener("click", e => {
   const r = t.closest("[data-share-reset]");
   if (r) {
     const m = r.dataset.shareReset;
-    st.rsnShare[m] = null;
-    $("rs-" + m).value = (100 * measuredReasoningShare(m)).toFixed(0);
+    setModel(st, m, "share", null);
+    $("rs-" + m).value = (100 * measuredReasoningShare(mdl(st, m).like)).toFixed(0);
     markShare(m); render(); return;
   }
   const o = t.closest("[data-open]");
   if (o) { openOption(o.dataset.open); return; }
+  const mr = t.closest("[data-model-remove]");
+  if (mr) { st.models = st.models.filter(c => c.id !== mr.dataset.modelRemove); buildInputs(); render(); return; }
+  const ir = t.closest("[data-item-remove]");
+  if (ir) { const id = ir.dataset.itemRemove; st.corpusAdd = st.corpusAdd.filter(a => a.id !== id); st.corpusOff = st.corpusOff.filter(x => x !== id); render(); return; }
   const rm = t.closest("[data-remove]");
   if (rm && est.options.length > 1) {
     const id = rm.dataset.remove;
@@ -963,7 +1085,7 @@ document.addEventListener("click", e => {
 $("btn-add-opt").addEventListener("click", () => {
   const base = opt(activeOpt);
   const id = "opt-" + Date.now().toString(36);
-  est.options.push({ id, label: base ? base.label + ", variation" : "New option", settings: (() => { const s = clone(st); delete s.budget; return merge(defaults(), s); })(), snapshot: null });
+  est.options.push({ id, label: base ? base.label + ", variation" : "New option", settings: (() => { const s = clone(st); delete s.budget; return settingsFrom(s); })(), snapshot: null });
   activeOpt = id; touch(); editMode = true; $("edit-mode").checked = true; render();
   const inp = document.querySelector(`[data-rename="${CSS.escape(id)}"]`); if (inp) { inp.focus(); inp.select(); inp.scrollIntoView({ block: "center" }); }
 });
@@ -989,19 +1111,19 @@ document.addEventListener("input", e => {
   // settings of the option being explored
   if (t.dataset.share) {
     const m = t.dataset.share;
-    st.rsnShare[m] = isNaN(v) ? null : Math.max(0, Math.min(99, v));
+    setModel(st, m, "share", isNaN(v) ? null : Math.max(0, Math.min(99, v)));
     markShare(m);
   } else if (t.dataset.bind) {
     const p = t.dataset.bind.split(":");
-    if (p[0] === "price") st.prices[p[1]][+p[2]] = val;
+    if (p[0] === "price") setModel(st, p[1], "price", [+p[2], val]);
     if (p[0] === "setup") st.setups[p[1]][p[2]] = Math.round(val);
     if (p[0] === "mult") st.mult[p[1]][p[2]][+p[3]] = val;
     if (p[0] === "extra") st.extras[p[1]] = val;
     if (p[0] === "effortFactor") st.effortFactor[p[1]] = val;
   } else if (t.id === "contingency") st.contingency = val;
   else if (t.id === "concurrency") st.concurrency = Math.max(1, Math.round(val));
-  else if (t.dataset.use) st.use[t.dataset.use] = t.checked;
-  else if (t.dataset.effort) st.effort[t.dataset.effort] = t.value;
+  else if (t.dataset.use) setModel(st, t.dataset.use, "use", t.checked);
+  else if (t.dataset.effort) setModel(st, t.dataset.effort, "effort", t.value);
   else if (t.dataset.setup) { st.setups[t.dataset.setup].on = t.checked; t.closest("tr").classList.toggle("off", !t.checked); }
   else if (t.dataset.extra) st.extras[t.dataset.extra] = t.checked;
   else if (t.dataset.item) { st.corpusOff = t.checked ? st.corpusOff.filter(x => x !== t.dataset.item) : [...st.corpusOff, t.dataset.item]; }
@@ -1017,6 +1139,87 @@ function render0() {
   $("reason-head").textContent = `Why ${letter(pi)}, ${est.options[pi].label}, is proposed`;
   persist();
 }
+
+/* ---------- add models and corpus items ---------- */
+const slug = s => String(s).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+const LANG_ALIAS = { english: "en", dutch: "nl", nederlands: "nl", german: "de", deutsch: "de", french: "fr", "français": "fr", spanish: "es", italian: "it" };
+const normLang = x => { const v = String(x || "").trim().toLowerCase(); return LANG_ALIAS[v] || v.slice(0, 12) || "?"; };
+function say(id, msg, kind) { const el = $(id); el.textContent = msg; el.className = "status " + (kind || ""); }
+
+function fillLike() {
+  const opts = $("am-role").value === "writer" ? WRITERS : JUDGES;
+  $("am-like").innerHTML = opts.map(m => `<option value="${m}">${LABEL[m]}</option>`).join("");
+  fillPrice();
+}
+function fillPrice() { const pr = defaults().prices[$("am-like").value]; $("am-pin").value = pr[0]; $("am-pout").value = pr[1]; }
+$("am-role").addEventListener("change", fillLike);
+$("am-like").addEventListener("change", fillPrice);
+$("am-add").addEventListener("click", () => {
+  const label = $("am-name").value.trim(), role = $("am-role").value, like = $("am-like").value;
+  const pin = parseFloat($("am-pin").value), pout = parseFloat($("am-pout").value);
+  if (!label) return say("am-status", "Give the model a name.", "err");
+  if (modelsOf(st).some(m => mdl(st, m).label.toLowerCase() === label.toLowerCase())) return say("am-status", `There is already a model called ${label}.`, "err");
+  if (!(pin >= 0) || !(pout >= 0)) return say("am-status", "Enter both prices.", "err");
+  const id = "m-" + (slug(label).slice(0, 24) || "model") + "-" + Date.now().toString(36).slice(-4);
+  st.models.push({ id, label, role, like, price: [pin, pout], use: true, effort: "medium", share: null });
+  $("am-name").value = "";
+  buildInputs(); render();
+  say("am-status", `Added ${label} as a ${role} priced like ${LABEL[like]}.`, "ok");
+});
+
+// add items: [{ id?, title, lang, chars, words }] -> how many were added, and why the others weren't
+function addItems(list) {
+  const known = new Set(itemsOf(st).map(c => c[0]));
+  const inCorpus = new Set(CORPUS.map(c => c[0]));
+  const titles = new Set(CORPUS.map(c => c[2].toLowerCase()));
+  let added = 0; const skipped = { dup: 0, chars: 0 };
+  for (const x of list) {
+    const chars = Math.round(Number(x.chars));
+    if (!(chars > 0)) { skipped.chars++; continue; }
+    let id = slug(x.id || x.title) || "item";
+    if (inCorpus.has(id) || titles.has(String(x.title || "").toLowerCase())) { skipped.dup++; continue; }
+    if (known.has(id)) { let k = 2; while (known.has(id + "_" + k)) k++; id = id + "_" + k; }
+    known.add(id);
+    const words = Math.round(Number(x.words));
+    st.corpusAdd.push({ id, title: String(x.title || x.id).trim().slice(0, 120), lang: normLang(x.lang), chars, words: words > 0 ? words : null });
+    added++;
+  }
+  const why = [skipped.dup && `${skipped.dup} already in the corpus`, skipped.chars && `${skipped.chars} without a character count`].filter(Boolean).join(", ");
+  return { added, msg: `Added ${added} item${added === 1 ? "" : "s"}.` + (why ? ` Skipped ${why}.` : "") };
+}
+$("ai-add").addEventListener("click", () => {
+  const title = $("ai-title").value.trim();
+  if (!title) return say("ai-status", "Give the item a title.", "err");
+  if (!(parseFloat($("ai-chars").value) > 0)) return say("ai-status", "Enter the item's length in characters.", "err");
+  const r = addItems([{ title, lang: $("ai-lang").value || "en", chars: $("ai-chars").value, words: $("ai-words").value }]);
+  if (r.added) { $("ai-title").value = ""; $("ai-chars").value = ""; $("ai-words").value = ""; render(); }
+  say("ai-status", r.msg, r.added ? "ok" : "err");
+});
+function parseCsv(text) {
+  const rows = []; let row = [], f = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === ",") { row.push(f); f = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(f); rows.push(row); row = []; f = ""; }
+    else f += ch;
+  }
+  if (f !== "" || row.length) { row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ""));
+}
+$("ai-csv-add").addEventListener("click", () => {
+  const rows = parseCsv($("ai-csv").value);
+  if (rows.length < 2) return say("ai-status", "Paste a header row and at least one item.", "err");
+  const head = rows[0].map(x => x.trim().toLowerCase());
+  const col = names => head.findIndex(x => names.includes(x));
+  const c = { id: col(["id"]), title: col(["title", "name"]), lang: col(["language", "lang"]), chars: col(["char_count", "characters", "chars"]), words: col(["word_count", "words"]) };
+  if (c.chars < 0 || (c.title < 0 && c.id < 0)) return say("ai-status", "The first row must name the columns: title or id, language, and char_count or characters.", "err");
+  const get = (r, i) => i >= 0 ? (r[i] || "").trim() : "";
+  const r = addItems(rows.slice(1).map(x => ({ id: get(x, c.id), title: get(x, c.title) || get(x, c.id), lang: get(x, c.lang), chars: get(x, c.chars), words: get(x, c.words) })));
+  if (r.added) { $("ai-csv").value = ""; render(); }
+  say("ai-status", r.msg, r.added ? "ok" : "err");
+});
 
 /* ---------- save, load, share ---------- */
 function status(msg, kind) { const el = $("save-status"); el.textContent = msg; el.className = "status " + (kind || ""); }
@@ -1117,6 +1320,7 @@ $("btn-reset").addEventListener("click", () => {
 
 /* ---------- start: built-in estimate, then ?estimate=, then this browser, then the defaults ---------- */
 (function start() {
+  fillLike();
   const embedded = readEmbedded();
   const local = embedded ? null : loadLocal();
   if (embedded) adopt(embedded);
