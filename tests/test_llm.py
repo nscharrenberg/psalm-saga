@@ -121,15 +121,44 @@ async def test_all_reasoning_no_answer_is_answered_from_the_models_own_notes():
     assert llm.export_behaviour()["fake/t"]["effort"] == "low"
 
 
-async def test_then_without_a_limit_of_our_own_then_a_clear_error():
+async def test_never_more_room_after_overthinking_but_a_clear_error():
     events = []
     llm = make(extra={"fake_overthink_below": 30000}, max_output_tokens=8000)
     llm.on_event = events.append
-    txt = await llm.text("x", "s", [Part("write")], hints={"target_words": 50})
-    assert txt and any("no output limit" in e.get("error", "") for e in events)
+    with pytest.raises(LLMError, match="kept reasoning without giving an answer"):
+        await llm.text("x", "s", [Part("write")], hints={"target_words": 50})
+    assert llm._fake.calls == 2                                          # the call, then "answer now": no third
+    sizes = [e["max_tokens"] for e in events if e["type"] == "llm_start"]
+    assert max(sizes) <= 8000 + 8000                                     # output cap + the configured headroom
+    assert not any("no output limit" in e.get("error", "") for e in events)
     stuck = make(extra={"fake_overthink": [None, "low"]})
     with pytest.raises(LLMError, match="kept reasoning without giving an answer"):
         await stuck.text("x", "s", [Part("write")], hints={"target_words": 50})
+
+
+async def test_a_stop_with_only_reasoning_is_answered_not_repaired():
+    events = []
+    llm = make(extra={"fake_overthink_unless_told": True, "fake_overthink_stop": True})
+    llm.on_event = events.append
+    out = await llm.json("x", "s", [Part("give")], Thing)
+    assert isinstance(out, Thing)
+    assert not any(e["type"] == "llm_repair" for e in events)            # no JSON repair of an empty string
+    retry = next(e for e in events if e["type"] == "llm_retry")
+    assert "stopped after" in retry["error"] and "from its own reasoning so far" in retry["error"]
+
+
+async def test_a_lowered_effort_never_raises_a_no_reasoning_setting():
+    llm = make(extra={"reasoning_effort": "none", "fake_overthink": ["low"]})
+    llm.load_behaviour({"fake/t": {"effort": "low"}})                   # learnt by a reasoning copy of the model
+    assert await llm.text("x", "s", [Part("write")], hints={"target_words": 30})   # sent at 'none', not 'low'
+
+
+def test_no_reasoning_gets_no_headroom():
+    llm = make(reasoning=True, reasoning_headroom=8000, max_output_tokens=4000, min_output_tokens=0)
+    mc = llm.config.models["default"]
+    assert llm.allowance(mc, 1000) == 9000
+    off = mc.model_copy(update={"extra": {"reasoning_effort": "none"}})
+    assert llm.allowance(off, 1000) == 1000
 
 
 async def test_an_empty_answer_is_never_continued_or_cached(tmp_path):
@@ -139,15 +168,16 @@ async def test_an_empty_answer_is_never_continued_or_cached(tmp_path):
     assert not list(tmp_path.rglob("*.json"))                 # nothing replayable was kept
 
 
-async def test_the_reasoning_a_model_needed_sets_the_room_for_later_calls():
-    llm = make(extra={"fake_reasoning_tokens": 20000}, reasoning=True, reasoning_headroom=8000)
+async def test_the_reasoning_room_is_a_hard_ceiling():
+    llm = make(extra={"fake_reasoning_tokens": 200000}, reasoning=True, reasoning_headroom=8000)
     await llm.text("x", "s", [Part("one")], hints={"target_words": 50})
     mc = llm.config.models["default"]
-    assert llm.headroom(mc) == 25000 and llm.allowance(mc, 1000) >= 26000
+    assert llm.headroom(mc) == 8000 and llm.allowance(mc, 1000) == 9000   # a long-winded call raises nothing
     b = llm.export_behaviour()
-    fresh = make()
-    fresh.load_behaviour(b)                                    # e.g. after resuming the run
-    assert fresh.headroom(fresh.config.models["default"]) == 25000
+    assert b["fake/t"]["observed"] == 200000                                # but it is reported
+    fresh = make(reasoning=True, reasoning_headroom=8000)
+    fresh.load_behaviour(b)                                                 # e.g. after resuming the run
+    assert fresh.allowance(fresh.config.models["default"], 1000) == 9000
 
 
 def test_no_limit_of_our_own_stays_within_the_budget():
@@ -177,3 +207,22 @@ def test_reasoning_settings_in_the_providers_form():
     kw = {"reasoning_effort": "high"}
     _reasoning_params(ModelConfig(name="openai/gpt-x"), kw)
     assert kw == {"reasoning_effort": "high"}
+
+
+def test_openrouter_provider_routing():
+    from psalm_saga.llm.client import _provider_params
+
+    kw = {"extra_body": {"reasoning": {"effort": "none"}}, "provider_order": "deepinfra, together ,",
+          "provider_sort": "throughput", "provider_fallbacks": "no"}
+    _provider_params(ModelConfig(name="openrouter/google/gemma-4-26b-a4b-it"), kw)
+    assert kw == {"extra_body": {"reasoning": {"effort": "none"}, "provider": {
+        "order": ["deepinfra", "together"], "sort": "throughput", "allow_fallbacks": False}}}
+    kw = {"provider": {"quantizations": ["bf16"]}, "provider_fallbacks": True}
+    _provider_params(ModelConfig(name="openrouter/x/y"), kw)
+    assert kw == {"extra_body": {"provider": {"quantizations": ["bf16"], "allow_fallbacks": True}}}
+    kw = {"provider_order": "deepinfra", "temperature": 0.2}
+    _provider_params(ModelConfig(name="openai/gpt-x"), kw)                   # not OpenRouter: dropped, not sent
+    assert kw == {"temperature": 0.2}
+    kw = {}
+    _provider_params(ModelConfig(name="openrouter/x/y"), kw)
+    assert kw == {}

@@ -175,8 +175,16 @@ def _with_request(messages: list[dict], text: str) -> list[dict]:
 
 
 def _empty(out: dict) -> bool:
-    """A call that ended at the output limit with nothing visible: all reasoning, no answer."""
-    return not (out.get("content") or "").strip() and out.get("finish_reason") == "length"
+    """A call with nothing visible: all reasoning, no answer. Either it ran into the output limit, or the
+    provider ended it ('stop') after the reasoning alone, as some do with a model stuck in a loop."""
+    return not (out.get("content") or "").strip()
+
+
+def _lower(effort: str | None, than: str | None) -> bool:
+    """Whether `effort` is less reasoning than `than` (None = not set: the provider's default)."""
+    if not effort or effort not in EFFORTS:
+        return False
+    return than is None or than not in EFFORTS or EFFORTS.index(effort) > EFFORTS.index(than)
 
 
 def _used(out: dict) -> int:
@@ -200,6 +208,33 @@ def _reasoning_params(mc, kwargs: dict) -> None:
     elif mc.name.startswith("anthropic/") and budget and effort != "none":
         kwargs.pop("reasoning_effort", None)
         kwargs["thinking"] = {"type": "enabled", "budget_tokens": int(budget)}
+
+
+PROVIDER_FIELDS = ("provider", "provider_order", "provider_sort", "provider_fallbacks")
+
+
+def _provider_params(mc, kwargs: dict) -> None:
+    """OpenRouter's provider routing: which hosts may serve the model, in what order, sorted by what, and
+    whether it may fall back to others. Set as `extra.provider` (OpenRouter's own object) and/or the
+    flat fields the model settings show; the flat fields win. Other providers ignore these settings."""
+    raw = {k: kwargs.pop(k, None) for k in PROVIDER_FIELDS}
+    if not mc.name.startswith("openrouter/"):
+        return
+    prov = dict(raw["provider"] or {})
+    order = raw["provider_order"]
+    if isinstance(order, str):
+        order = [p.strip() for p in order.split(",") if p.strip()]
+    if order:
+        prov["order"] = list(order)
+    if raw["provider_sort"]:
+        prov["sort"] = raw["provider_sort"]
+    fb = raw["provider_fallbacks"]
+    if isinstance(fb, str):
+        fb = {"yes": True, "true": True, "no": False, "false": False}.get(fb.strip().lower())
+    if fb is not None:
+        prov["allow_fallbacks"] = bool(fb)
+    if prov:
+        kwargs["extra_body"] = {**(kwargs.get("extra_body") or {}), "provider": prov}
 
 
 def _join(a: str, b: str) -> str:
@@ -230,7 +265,8 @@ class LLM:
         self.call_log = call_log
         self._reasoning: dict[str, bool] = {}  # model name -> reasons before answering
         # What this run has learnt about each model (kept in run.json across resumes): the most reasoning
-        # seen in one call, and a reasoning effort it had to be lowered to.
+        # seen in one call (reported only; it never raises the room a call gets), and a reasoning effort
+        # it had to be lowered to.
         self._observed: dict[str, int] = {}
         self._lowered: dict[str, str] = {}
         self.limiters = limiters
@@ -388,7 +424,7 @@ class LLM:
         unlimited = not mc.max_output_tokens  # 0 = no limit of our own
         want = visible or (mc.max_output_tokens or 8000)
         cap = mc.max_output_tokens or 10**9
-        if self.is_reasoning(mc):
+        if self.is_reasoning(mc) and (mc.extra or {}).get("reasoning_effort") != "none":
             want += mc.reasoning_max_tokens or self.headroom(mc)
             cap = max(cap, want)
         prov = self.provider_max(mc)
@@ -403,9 +439,12 @@ class LLM:
             return min(cap, budget)
         return min(max(want, mc.min_output_tokens), cap, budget)
 
-    def headroom(self, mc: ModelConfig) -> int:
-        """Room for hidden reasoning: the model's setting, or more once this run has seen it reason more."""
-        return max(mc.reasoning_headroom, int(self._observed.get(mc.name, 0) * 1.25))
+    @staticmethod
+    def headroom(mc: ModelConfig) -> int:
+        """Room for hidden reasoning: the model's setting, a hard ceiling. It does not grow with the
+        reasoning seen in earlier calls: a model stuck in a loop uses whatever room it is given, so
+        learning from it made one bad call set the size (and duration) of every later one."""
+        return mc.reasoning_headroom
 
     @staticmethod
     def provider_max(mc: ModelConfig) -> int | None:
@@ -447,63 +486,60 @@ class LLM:
     async def _complete(self, role, messages, schema, max_tokens, temperature, hints, tag, use_cache=True) -> dict:
         """One call that always ends with an answer or a clear error.
 
-        A reasoning model can spend the whole allowance on hidden reasoning and return nothing visible.
-        Then, in turn: (1) it is given its own reasoning so far as notes and told to write the final
-        answer now, at a lower reasoning effort, so the thinking already paid for is used; (2) it is
-        asked again with no limit of our own (the provider's maximum, within the run's budget); (3) the
-        call fails with a message that says what to change. Each step is reported as a retry, and the
-        reasoning the model needed is remembered, so later calls get enough room from the start."""
+        A reasoning model can spend its whole allowance on hidden reasoning, or be stopped after the
+        reasoning alone, and return nothing visible. Then it is given its own reasoning so far as notes
+        and told to write the final answer now, at a lower reasoning effort, so the thinking already paid
+        for is used. If that too gives nothing, the call fails with a message that says what to change.
+        It is never given more room: a model that loops uses whatever room it gets."""
         mc = self.config.model_for(role)
+        configured = (mc.extra or {}).get("reasoning_effort")
+        # An effort this run had to lower the model to applies only where it is less than the configured
+        # one (a no-reasoning copy of the same model, at effort 'none', is never raised to it).
         lowered = self._lowered.get(mc.name)
+        lowered = lowered if _lower(lowered, configured) else None
         out = await self._call(role, messages, schema, max_tokens, temperature, hints, tag, use_cache=use_cache,
                                effort=lowered)
         if not _empty(out):
             return out
-        cur = lowered or (mc.extra or {}).get("reasoning_effort")
-        low = "low" if (cur is None or EFFORTS.index(cur) < EFFORTS.index("low")) else cur
+        cur = lowered or configured
+        low = cur if (cur and not _lower("low", cur)) else "low"
         spent = _used(out)
+        why = (f"the model spent its whole allowance ({spent} tokens) on reasoning" if out.get("finish_reason") == "length"
+               else f"the model stopped after {spent} tokens of reasoning without an answer")
         notes = (out.get("reasoning") or "").strip()
-        ask = {"role": "user", "content": (
-            ("Your reasoning so far (your own notes; they may be cut off):\n<notes>\n" + notes[-8000:] + "\n</notes>\n\n")
-            if notes else "") + "You have thought enough. Do not deliberate further: write the final answer now, "
-            "complete and in exactly the form asked for above, with no preamble."}
-        steps = [("answer", low, None, "write the final answer from its own reasoning so far"),
-                 ("unlimited", low, "unlimited", "answer with no output limit of our own")]
-        for name, effort, room, what in steps:
-            self.on_event({"type": "llm_retry", "tag": tag, "model": mc.name, "attempt": 1, "wait_s": 0,
-                           "error": f"no answer: the model spent its whole allowance ({spent} tokens) on reasoning; "
-                                    f"asking it to {what}" + (f" (reasoning effort '{effort}')" if effort else "")})
-            msgs = _with_request(messages, ask["content"]) if name == "answer" else messages
-            try:
-                out = await self._call(role, msgs, schema, max_tokens, temperature, hints, f"{tag}:{name}",
-                                       effort=effort, room=room)
-            except LLMError as exc:
-                if "reasoning" in str(exc).lower() and effort:  # this effort is not accepted: try without setting one
-                    out = await self._call(role, msgs, schema, max_tokens, temperature, hints, f"{tag}:{name}", room=room)
-                else:
-                    raise
-            if not _empty(out):
-                if effort and effort != cur:
-                    self._lowered[mc.name] = effort
-                    self.on_event({"type": "warning", "message": f"{mc.name} answered with reasoning effort '{effort}'; "
-                                   f"the rest of this run uses that effort for it (set it in the model's settings to "
-                                   f"start there next time)"})
-                return out
-            spent = max(spent, _used(out))
+        ask = (("Your reasoning so far (your own notes; they may be cut off):\n<notes>\n" + notes[-8000:] + "\n</notes>\n\n")
+               if notes else "") + ("You have thought enough. Do not deliberate further: write the final answer now, "
+                                    "complete and in exactly the form asked for above, with no preamble.")
+        self.on_event({"type": "llm_retry", "tag": tag, "model": mc.name, "attempt": 1, "wait_s": 0,
+                       "error": f"no answer: {why}; asking it to write the final answer from its own reasoning so far "
+                                f"(reasoning effort '{low}')"})
+        msgs = _with_request(messages, ask)
+        try:
+            out = await self._call(role, msgs, schema, max_tokens, temperature, hints, f"{tag}:answer", effort=low)
+        except LLMError as exc:
+            if "reasoning" not in str(exc).lower():
+                raise
+            # this effort is not accepted: try without setting one
+            out = await self._call(role, msgs, schema, max_tokens, temperature, hints, f"{tag}:answer")
+        if not _empty(out):
+            if low != cur:
+                self._lowered[mc.name] = low
+                self.on_event({"type": "warning", "message": f"{mc.name} answered with reasoning effort '{low}'; "
+                               f"the rest of this run uses that effort for it (set it in the model's settings to "
+                               f"start there next time)"})
+            return out
+        spent = max(spent, _used(out))
         raise LLMError(f"{tag or role}: {mc.name} kept reasoning without giving an answer (up to {spent} tokens of "
-                       f"reasoning per attempt, 3 attempts). Lower its reasoning effort or set 'Most reasoning per call' "
-                       f"in the model's settings, or choose another model for this step.")
+                       f"reasoning per attempt, 2 attempts). Lower its reasoning effort (or set it to 'none'), set "
+                       f"'Most reasoning per call' in the model's settings, or choose another model for this step.")
 
     async def _call(self, role, messages, schema, max_tokens, temperature, hints, tag, use_cache=True,
-                    effort: str | None = None, room: str | None = None) -> dict:
+                    effort: str | None = None) -> dict:
         if self.gate is not None:
             await self.gate()
         mc = self.config.model_for(role)
         if effort is not None:
             mc = mc.model_copy(update={"extra": {**(mc.extra or {}), "reasoning_effort": effort}})
-        if room == "unlimited":
-            mc = mc.model_copy(update={"max_output_tokens": 0})
-            max_tokens = None
         max_tokens = self.allowance(mc, max_tokens)
         temperature = mc.temperature if temperature is None else temperature
         key = self._cache_key(mc, messages, schema, max_tokens, temperature, hints)
@@ -575,8 +611,6 @@ class LLM:
             cost = self._cost(mc, p, c, cache_read)
             self.usage.add(tag, p, c, cost, secs, cache_read=cache_read)
             rt = int(u.get("reasoning_tokens", 0) or 0)
-            if rt and not out.get("content", "").strip() and out.get("finish_reason") == "length" and rt >= c - 2:
-                rt = int(rt * 1.6)  # cut off mid-reasoning: it needed more than it was given
             if rt > self._observed.get(mc.name, 0):
                 self._observed[mc.name] = rt
             if rt and mc.reasoning is None and not self._reasoning.get(mc.name):
@@ -629,6 +663,7 @@ class LLM:
                                   "timeout": mc.timeout_s, "num_retries": 0,
                                   **{k: v for k, v in mc.extra.items() if v is not None}}
         _reasoning_params(mc, kwargs)
+        _provider_params(mc, kwargs)
         if temperature is not None:
             kwargs["temperature"] = temperature
         if self.config.seed is not None:

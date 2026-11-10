@@ -103,7 +103,13 @@ MODEL_FIELDS: dict[str, dict] = {
     "name": _p("str", "anthropic/claude-sonnet-5-5", "LiteLLM model id (provider/model)."),
     "temperature": _p("float", 0.8, "Sampling temperature (empty = provider default)."),
     "extra.reasoning_effort": _p("choice", None, "How much a reasoning model thinks before answering.",
-                                 [None, "low", "medium", "high"]),
+                                 [None, "none", "minimal", "low", "medium", "high"]),
+    "extra.provider_order": _p("str", None, "OpenRouter: hosts to use, in order, comma-separated (e.g. 'deepinfra, "
+                               "together'); empty = OpenRouter chooses."),
+    "extra.provider_sort": _p("choice", None, "OpenRouter: prefer the host with the best of this (empty = OpenRouter's "
+                              "default balance).", [None, "throughput", "latency", "price"]),
+    "extra.provider_fallbacks": _p("choice", None, "OpenRouter: may other hosts serve the call when the listed ones "
+                                   "cannot (empty = yes)?", [None, True, False]),
     "extra.api_base": _p("str", None, "Endpoint of a self-hosted model (vLLM, Ollama)."),
     "max_output_tokens": _p("int", 8000, "Largest answer per call; 0 = no limit of our own (the provider's maximum, "
                             "within the run's budget)."),

@@ -70,7 +70,7 @@ async function showModels(){
   await loadModels();
   const rows = MODELS.map(m=>`<tr><td><b>${esc(m.label)}</b><div class="muted small mono">${esc(m.alias)}</div></td>
       <td class="small mono">${esc(m.name)}${m.api_base?`<div class="muted">${esc(m.api_base)}</div>`:""}</td>
-      <td class="small">${[m.reasoning_effort?`reasoning ${m.reasoning_effort}`:"", m.context_window?`${Math.round(m.context_window/1000)}k context`:"", m.max_output_tokens?`${m.max_output_tokens} out`:"", m.max_concurrency?`${m.max_concurrency} at once`:""].filter(Boolean).map(esc).join("<br>")}</td>
+      <td class="small">${[m.reasoning_effort?`reasoning ${m.reasoning_effort}`:"", m.provider_order?`hosts: ${m.provider_order}${m.provider_fallbacks==="no"?" only":""}`:"", m.provider_sort?`fastest by ${m.provider_sort}`:"", m.context_window?`${Math.round(m.context_window/1000)}k context`:"", m.max_output_tokens?`${m.max_output_tokens} out`:"", m.max_concurrency?`${m.max_concurrency} at once`:""].filter(Boolean).map(esc).join("<br>")}</td>
       <td class="small">${m.key_ready?'<span class="good">ready</span>':`<a href="#" class="warn" onclick="showKeys();return false">set ${esc(m.provider)} key</a>`}<div class="muted">${esc(m.source)}</div></td>
       <td style="white-space:nowrap"><button class="small" onclick="testModel('${esc(m.alias)}', this)">Test</button> <button class="small" onclick="editModel('${esc(m.alias)}')">Edit</button>
         ${m.source!=="built-in"?`<button class="small" onclick="deleteModel('${esc(m.alias)}')">${m.source==="yours"?"Delete":"Reset"}</button>`:""}</td></tr>`).join("");
@@ -84,13 +84,16 @@ const MFIELDS = [
   ["name","LiteLLM model id","text","provider/model, e.g. mistral/mistral-large-4-0, ollama_chat/gemma4:e4b, hosted_vllm/<model>"],
   ["kind","Where it runs","choice",["api","local"]],
   ["api_base","Address of a self-hosted server","text","e.g. http://localhost:11434 (Ollama) or http://host:8000/v1 (vLLM); empty for an API"],
-  ["reasoning_effort","Reasoning effort (reasoning models)","choice",["","low","medium","high"]],
+  ["reasoning_effort","Reasoning effort (reasoning models; none = off)","choice",["","none","minimal","low","medium","high"]],
   ["reasoning_max_tokens","Most reasoning per call (tokens; OpenRouter, Anthropic)","int","empty = provider default; e.g. 4000"],
   ["context_window","Context window (tokens)","int","200000"],
   ["max_output_tokens","Longest answer (tokens; 0 = no limit of our own, within the run's budget)","int","8000"],
   ["max_concurrency","Calls at the same time","int","4"],
   ["timeout_s","Seconds before a call is abandoned","int","600"],
   ["rpm","Requests per minute (empty = no limit)","int",""],
+  ["provider_order","OpenRouter: hosts to use, in order","text","comma-separated, e.g. deepinfra, together; empty = OpenRouter chooses"],
+  ["provider_sort","OpenRouter: prefer the host with the best","choice",["","throughput","latency","price"]],
+  ["provider_fallbacks","OpenRouter: other hosts may step in","choice",["","yes","no"]],
   ["input_cost_per_mtok","Price per million input tokens (USD; empty = LiteLLM's table, 0 for local)","float",""],
   ["output_cost_per_mtok","Price per million output tokens (USD)","float",""],
   ["notes","Notes","text",""],

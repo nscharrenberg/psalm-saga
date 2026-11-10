@@ -26,12 +26,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-# Fields of a library entry that become ModelConfig fields; api_base and reasoning_effort go to `extra`.
+# Fields of a library entry that become ModelConfig fields; api_base, reasoning_effort and OpenRouter's
+# provider routing go to `extra`.
 MODEL_FIELDS = ("name", "context_window", "max_output_tokens", "min_output_tokens", "reasoning", "reasoning_headroom",
                 "reasoning_max_tokens",
                 "timeout_s", "timeout_retries", "max_retries", "max_concurrency", "rpm", "tpm", "stream", "prompt_cache",
                 "input_cost_per_mtok", "output_cost_per_mtok", "cached_input_cost_per_mtok")
-EXTRA_FIELDS = ("api_base", "reasoning_effort")
+EXTRA_FIELDS = ("api_base", "reasoning_effort", "provider_order", "provider_sort", "provider_fallbacks")
 ENTRY_FIELDS = ("label", "kind", "notes", *MODEL_FIELDS, *EXTRA_FIELDS, "extra")
 
 BUILTIN: dict[str, dict[str, Any]] = {

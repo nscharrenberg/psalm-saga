@@ -38,9 +38,12 @@ class ModelConfig(_Base):
     min_output_tokens: int = 2048
     # Reasoning models think before they answer, and the thinking counts against the output
     # allowance. For them, `reasoning_headroom` tokens are added on top of what the visible answer
-    # needs (the cap rises with it). None = auto: LiteLLM's model table, or reasoning tokens seen in
-    # an answer. How much a model reasons is set by the provider's own knob, e.g.
-    # extra.reasoning_effort = low | medium | high; the headroom only keeps that from being cut off.
+    # needs (the cap rises with it); it is a fixed ceiling, never raised by what earlier calls used.
+    # None = auto: LiteLLM's model table, or reasoning tokens seen in an answer. How much a model
+    # reasons is set by the provider's own knob, e.g. extra.reasoning_effort = none | minimal | low |
+    # medium | high (none: no headroom is added); the headroom only keeps that from being cut off.
+    # OpenRouter's provider routing goes in extra too: provider_order ("a, b"), provider_sort
+    # (price | throughput | latency), provider_fallbacks (bool), or OpenRouter's own extra.provider object.
     reasoning: bool | None = None
     reasoning_headroom: int = 8000
     # Upper limit on a reasoning model's hidden reasoning per call, where the provider takes one (OpenRouter,

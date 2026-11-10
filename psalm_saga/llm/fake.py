@@ -172,6 +172,7 @@ class FakeBackend:
         #   fake_overthink: [efforts]          at these reasoning efforts (null = effort not set)
         #   fake_overthink_below: N            whenever the allowance is below N tokens
         #   fake_overthink_unless_told: true   unless told to stop deliberating and answer
+        #   fake_overthink_stop: true          the provider ends it with 'stop' (not 'length') after the reasoning
         told = "You have thought enough" in str((messages[-1] or {}).get("content", ""))
         over = (("fake_overthink" in extra and extra.get("reasoning_effort") in (extra["fake_overthink"] or []))
                 or (extra.get("fake_overthink_below") and (max_tokens or 10**9) < int(extra["fake_overthink_below"])))
@@ -179,7 +180,7 @@ class FakeBackend:
             over = (over or True) and not told
         if over:
             used = int(max_tokens or 16000)
-            return {"content": "", "finish_reason": "length", "reasoning": "(simulated) counting syllables… " * 20,
+            return {"content": "", "finish_reason": "stop" if extra.get("fake_overthink_stop") else "length", "reasoning": "(simulated) counting syllables… " * 20,
                     "usage": {"prompt_tokens": prompt_chars // 4, "completion_tokens": used, "cached_tokens": 0,
                               "reasoning_tokens": used - 1}}
         return {
