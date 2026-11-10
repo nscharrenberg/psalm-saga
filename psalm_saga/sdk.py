@@ -334,6 +334,7 @@ class Saga:
             except (OSError, json.JSONDecodeError):
                 continue
             out.append({k: m.get(k) for k in ("id", "preset", "status", "mode", "language", "created", "finished", "error",
-                                              "parent", "root", "version", "fixes", "fix_titles")}
+                                              "parent", "root", "version", "fixes", "fix_titles", "batch",
+                                              "input_name")}
                        | {"cost_usd": (m.get("usage") or {}).get("cost_usd", 0), "path": str(p.parent)})
         return out

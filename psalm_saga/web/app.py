@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +55,10 @@ class ControlRequest(BaseModel):
 
 class ConfigRequest(BaseModel):
     overrides: dict[str, Any] = {}
+
+
+class QueueSettings(BaseModel):
+    max_parallel: int
 
 
 class CheckRequest(BaseModel):
@@ -122,6 +127,7 @@ def create_app(runs_dir: str | Path = "runs", experiments_dir: str | Path = "exp
     def _start(run: Run, **kw) -> None:
         if run.id in tasks and not tasks[run.id].done():
             raise HTTPException(409, "run is already executing")
+        _dequeue(run.id)
 
         async def go():
             try:
@@ -131,8 +137,70 @@ def create_app(runs_dir: str | Path = "runs", experiments_dir: str | Path = "exp
                 run.store.emit({"type": "run_failed", "status": "cancelled", "error": "cancelled by user"})
             except Exception:
                 pass  # recorded in run.json / events by the pipeline
+            finally:
+                asyncio.get_running_loop().call_soon(_pump)  # a slot is free: start the next queued run
 
         tasks[run.id] = asyncio.create_task(go())
+
+    # ---------------------------------------------------------------- the run queue
+    # New runs (one, or a batch from several files) start while fewer than `max_parallel` runs are
+    # executing; the rest wait here, in order, and start as earlier ones end. A paused run still holds
+    # its slot. "Continue" on a run starts it at once. The setting is kept in runs/queue.json; the queue
+    # itself lives in memory: after a restart, runs still marked queued are shown as not started and are
+    # started by hand (they never start spending on their own when the server comes up).
+    queue: list[tuple[str, dict]] = []
+    queue_file = runs_dir / "queue.json"
+
+    def _max_parallel() -> int:
+        try:
+            return max(1, int(json.loads(queue_file.read_text(encoding="utf-8")).get("max_parallel", 1)))
+        except (OSError, ValueError, TypeError, AttributeError):
+            return 1
+
+    def _executing() -> int:
+        return sum(not t.done() for t in tasks.values())
+
+    def _dequeue(run_id: str) -> bool:
+        before = len(queue)
+        queue[:] = [q for q in queue if q[0] != run_id]
+        return len(queue) != before
+
+    def _pump() -> None:
+        while queue and _executing() < _max_parallel():
+            run_id, kw = queue.pop(0)
+            try:
+                _start(_open(run_id), **kw)
+            except HTTPException:
+                continue  # deleted or already executing: next one
+
+    def _enqueue(run: Run, **kw) -> None:
+        queue.append((run.id, kw))
+        _pump()
+        if any(q[0] == run.id for q in queue):
+            run.store.update_meta(status="queued")
+            run.store.emit({"type": "run_queued", "position": len(queue)})
+
+    from psalm_saga.store import RunStore
+
+    for p in runs_dir.glob("*/run.json"):  # left queued by an earlier server: not started
+        try:
+            store = RunStore(p.parent)
+            if store.meta().get("status") == "queued":
+                store.update_meta(status="created")
+        except (OSError, ValueError):
+            continue
+
+    @app.get("/api/queue")
+    def get_queue():
+        return {"max_parallel": _max_parallel(), "executing": _executing(), "queued": [q[0] for q in queue]}
+
+    @app.put("/api/queue")
+    async def put_queue(req: QueueSettings):  # async: starting runs needs the event loop
+        if req.max_parallel < 1:
+            raise HTTPException(400, "at least one run must be able to execute")
+        queue_file.write_text(json.dumps({"max_parallel": req.max_parallel}), encoding="utf-8")
+        _pump()  # a higher limit starts waiting runs now
+        return get_queue()
 
     # ---------------------------------------------------------------- meta
 
@@ -166,6 +234,8 @@ def create_app(runs_dir: str | Path = "runs", experiments_dir: str | Path = "exp
             if r.get("path"):
                 r["id"] = Path(r["path"]).name
             r["executing"] = r["id"] in tasks and not tasks[r["id"]].done()
+            pos = next((i for i, q in enumerate(queue) if q[0] == r["id"]), None)
+            r["queue_position"] = None if pos is None else pos + 1
         return sorted(out, key=lambda r: r.get("created") or "", reverse=True)
 
     @app.post("/api/runs")
@@ -177,32 +247,51 @@ def create_app(runs_dir: str | Path = "runs", experiments_dir: str | Path = "exp
         until: str = Form(""),
         start: bool = Form(True),
         file: UploadFile | None = File(None),
+        files: list[UploadFile] | None = File(None),
     ):
-        if file is not None and file.filename:
-            raw = await file.read()
-            text = raw.decode("utf-8", errors="replace")
-            if kind == "auto" and file.filename.endswith(".json"):
-                kind = "spec"
-        if not text.strip():
-            raise HTTPException(400, "empty input")
-        if kind == "auto":
-            kind = "premise" if len(text.split()) < 400 else "source"
+        """One run, or a batch: with several files, one run per file, all with exactly the same
+        settings. Runs start through the queue (see /api/queue)."""
+        uploads = [f for f in [file, *(files or [])] if f is not None and f.filename]
+        inputs: list[tuple[str | None, str, str]] = []  # (file name, kind, text)
+        for f in uploads:
+            body = (await f.read()).decode("utf-8", errors="replace")
+            k = "spec" if kind == "auto" and f.filename.endswith(".json") else kind
+            inputs.append((f.filename, k, body))
+        if not uploads:
+            inputs.append((None, kind, text))
+        for name, k, body in inputs:  # check every input before creating any run
+            if not body.strip():
+                raise HTTPException(400, f"empty input{f': {name}' if name else ''}")
+            if k == "spec":
+                try:
+                    json.loads(body)
+                except ValueError as exc:
+                    raise HTTPException(400, f"{name or 'the specification'} is not valid JSON: {exc}") from exc
         try:
             ov = json.loads(overrides or "{}")
             saga = Saga(preset, overrides=ov, runs_dir=runs_dir)
         except Exception as exc:
             raise HTTPException(400, f"invalid configuration: {exc}") from exc
-        payload = {"spec": json.loads(text)} if kind == "spec" else {kind: text}
-        run = saga.create(**payload)
-        if start:
-            _start(run, until=until or None)
-        return {"id": run.id}
+        batch = f"batch-{uuid.uuid4().hex[:8]}" if len(inputs) > 1 else None
+        ids = []
+        for name, k, body in inputs:
+            if k == "auto":
+                k = "premise" if len(body.split()) < 400 else "source"
+            run = saga.create(**({"spec": json.loads(body)} if k == "spec" else {k: body}))
+            if name or batch:
+                run.store.update_meta(**({"input_name": name} if name else {}), **({"batch": batch} if batch else {}))
+            ids.append(run.id)
+            if start:
+                _enqueue(run, until=until or None)
+        return {"id": ids[0], "ids": ids, "batch": batch, "queued": [q[0] for q in queue if q[0] in ids]}
 
     @app.get("/api/runs/{run_id}")
     def get_run(run_id: str):
         run = _open(run_id)
         st = run.status()
         st["executing"] = run_id in tasks and not tasks[run_id].done()
+        pos = next((i for i, q in enumerate(queue) if q[0] == run_id), None)
+        st["queue_position"] = None if pos is None else pos + 1
         st["meta"] = run.store.meta()
         st["missing_stages"] = run.pipeline.missing_stages()
         st["artifacts"] = sorted(a for a in (p.relative_to(run.path).as_posix() for p in run.path.rglob("*")
@@ -278,6 +367,10 @@ def create_app(runs_dir: str | Path = "runs", experiments_dir: str | Path = "exp
 
     @app.post("/api/runs/{run_id}/cancel")
     async def cancel(run_id: str):
+        if _dequeue(run_id):  # waiting in the queue: it simply does not start
+            store = RunStore(_run_dir(run_id))
+            store.update_meta(status="created")
+            store.emit({"type": "run_dequeued"})
         t = tasks.get(run_id)
         if t and not t.done():
             t.cancel()
@@ -287,6 +380,7 @@ def create_app(runs_dir: str | Path = "runs", experiments_dir: str | Path = "exp
     async def delete(run_id: str):
         import shutil
 
+        _dequeue(run_id)
         await cancel(run_id)
         shutil.rmtree(_run_dir(run_id))
         return {"ok": True}
@@ -320,7 +414,8 @@ def create_app(runs_dir: str | Path = "runs", experiments_dir: str | Path = "exp
                     yield f"data: {line}\n\n"
                 if fresh:
                     idle = 0
-                executing = run_id in tasks and not tasks[run_id].done()
+                # a queued run counts as executing: the page follows it when it starts
+                executing = (run_id in tasks and not tasks[run_id].done()) or any(q[0] == run_id for q in queue)
                 idle += 1
                 if not executing and idle > 20:
                     yield "event: idle\ndata: {}\n\n"

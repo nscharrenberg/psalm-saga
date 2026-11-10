@@ -35,7 +35,7 @@ textarea{font-family:var(--sans);resize:vertical} label{font-size:12px;color:var
 .runs .item:hover{background:var(--soft)} .runs .item.active{border-color:var(--accent);background:var(--soft)}
 .runs .t{font-weight:500;font-size:13px;display:flex;gap:6px;align-items:center} .runs .s{font-size:11px;color:var(--muted);font-family:var(--mono)}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--muted);flex:none}
-.dot.done{background:var(--ok)} .dot.running{background:var(--warn);animation:pulse 1s infinite} .dot.failed,.dot.budget_exceeded,.dot.cancelled{background:var(--bad)} .dot.partial,.dot.paused{background:var(--accent)} .dot.stopped{background:var(--muted)} .dot.needs_attention{background:var(--warn)}
+.dot.done{background:var(--ok)} .dot.running{background:var(--warn);animation:pulse 1s infinite} .dot.failed,.dot.budget_exceeded,.dot.cancelled{background:var(--bad)} .dot.partial,.dot.paused{background:var(--accent)} .dot.stopped{background:var(--muted)} .dot.queued{background:transparent;border:1.5px solid var(--accent)} .dot.needs_attention{background:var(--warn)}
 .ctl{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .ctl .sep{width:1px;height:22px;background:var(--line);margin:0 2px}
 .statecard{display:flex;gap:12px;align-items:flex-start} .statecard .grow p{margin:4px 0}
 .pf{margin:6px 0;padding:8px 10px;border-radius:6px;background:var(--soft);font-size:13px} .pf.error{border-left:3px solid var(--bad)} .pf.warning{border-left:3px solid var(--warn)} .pf.ok{border-left:3px solid var(--ok)}
@@ -365,7 +365,7 @@ async function loadRuns(){
   const kids = {}; runs.filter(r=>r.parent).forEach(r=>{ const root=r.root||r.parent; (kids[root]=kids[root]||[]).push(r); });
   const item = (r, child) => `<div class="item ${CUR===r.id?"active":""}" ${child?'style="margin-left:14px;border-left:2px solid var(--line)"':""} onclick="openRun('${r.id}')">
     <div class="t"><span class="dot ${r.executing?"running":r.status}"></span>${child?`version ${r.version}`:esc(presetTitle(r.preset))} · ${esc(r.language||"")}</div>
-    <div class="s">${child?esc((r.fix_titles||r.fixes||[]).join(", ")):esc(r.id)}${r.cost_usd?` · $${r.cost_usd.toFixed(3)}`:""}</div></div>`;
+    <div class="s">${child?esc((r.fix_titles||r.fixes||[]).join(", ")):esc(r.input_name||r.id)}${r.queue_position?` · <span title="waits for a free slot (see Options → Runs at the same time)">queued #${r.queue_position}</span>`:""}${r.cost_usd?` · $${r.cost_usd.toFixed(3)}`:""}</div></div>`;
   const roots = runs.filter(r=>!r.parent);
   $("#runs").innerHTML = runs.length ? roots.map(r=>item(r,false) + (kids[r.id]||[]).sort((a,b)=>(a.version||0)-(b.version||0)).map(k=>item(k,true)).join("")).join("")
     + runs.filter(r=>r.parent && !roots.some(x=>x.id===(r.root||r.parent))).map(r=>item(r,true)).join("") : `<p class="muted">No runs yet.</p>`;
@@ -435,10 +435,15 @@ async function cancelRun(){ if(!confirm("Abort now? Model calls in flight are dr
 // ------------------------------------------------------------------ run control and settings
 const STATE_WORD = {running:"running", paused:"paused", done:"finished", partial:"paused at the chosen point", failed:"failed",
   cancelled:"aborted", budget_exceeded:"stopped: budget spent", created:"not started", stopped:"stopped — work kept",
-  needs_attention:"settings need attention"};
+  needs_attention:"settings need attention", queued:"queued — starts when a slot is free"};
 function runState(st){ if(st.executing) return st.status==="paused" ? "paused" : "running"; return st.status||"created"; }
+async function dequeueRun(){ await api(`/api/runs/${CUR}/cancel`, {method:"POST"}); toast("removed from the queue — start it any time"); renderRun(true); loadRuns(); }
 function controlsHTML(st){
-  const s = runState(st), redo = `<select id="rerun" style="width:auto" title="Redo the run from a chosen stage onwards (that stage and everything after it are recomputed)"><option value="">Redo from…</option>${st.stages.filter(x=>x.applies).map(x=>`<option value="${x.name}">${esc(stageTitle(x.name))}</option>`).join("")}</select>`;
+  const s = runState(st);
+  if(s==="queued") return `<div class="ctl"><span class="muted small">${st.queue_position?`#${st.queue_position} in the queue`:"in the queue"}</span>
+      <button class="primary" onclick="runAgain()" title="Start now, without waiting for a free slot">Start now</button>
+      <button onclick="dequeueRun()" title="Take it out of the queue; it stays here, not started">Remove from queue</button></div>`;
+  const redo = `<select id="rerun" style="width:auto" title="Redo the run from a chosen stage onwards (that stage and everything after it are recomputed)"><option value="">Redo from…</option>${st.stages.filter(x=>x.applies).map(x=>`<option value="${x.name}">${esc(stageTitle(x.name))}</option>`).join("")}</select>`;
   if(s==="running") return `<div class="ctl">
       <button onclick="ctl('pause')" title="Let the model calls in flight finish, then hold every new call until you resume. Nothing is lost.">Pause</button>
       <button onclick="ctl('pause_after_stage')" title="Finish the current stage (${esc(stageTitle(st.meta.current_stage||""))}), then pause before the next one — a clean point to inspect or edit its output.">Pause after this stage</button>

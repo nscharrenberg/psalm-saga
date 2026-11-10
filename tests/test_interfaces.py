@@ -103,6 +103,44 @@ judge: {{model: fake/judge, instruments: [spec_recovery, dimension_fidelity, qua
     assert summary["summary"]["full / fake"]["stages"]["draft"]["wall_seconds"] >= 0
 
 
+def test_web_batch_of_files_runs_through_the_queue(tmp_path):
+    names = ["en_harbour.txt", "en_ledger.txt", "nl_storm.txt"]
+    files = [("files", (n, (DATA / n).read_bytes(), "text/plain")) for n in names]
+    with TestClient(create_app(tmp_path)) as c:
+        assert c.get("/api/queue").json()["max_parallel"] == 1                     # the default
+        assert c.put("/api/queue", json={"max_parallel": 0}).status_code == 400
+        r = c.post("/api/runs", files=files, data={"preset": "full", "until": "spec",
+                                                    "overrides": json.dumps({"models.default.name": "fake/w"})}).json()
+        ids = r["ids"]
+        assert len(ids) == 3 and r["batch"] and r["queued"] == ids[1:]          # one starts, two wait, in order
+        listed = {x["id"]: x for x in c.get("/api/runs").json()}
+        assert [listed[i]["queue_position"] for i in ids] == [None, 1, 2]
+        assert {listed[i]["batch"] for i in ids} == {r["batch"]}
+        assert [listed[i]["input_name"] for i in ids] == names
+        assert listed[ids[2]]["status"] == "queued"
+        c.post(f"/api/runs/{ids[2]}/cancel")                                       # take the last one out
+        assert c.get(f"/api/runs/{ids[2]}").json()["status"] == "created"
+        t0 = time.time()
+        while time.time() - t0 < 60:
+            st = [c.get(f"/api/runs/{i}").json() for i in ids[:2]]
+            if all(not s["executing"] and s["status"] in ("done", "partial") for s in st):
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("the batch did not finish")
+        assert c.get(f"/api/runs/{ids[2]}").json()["status"] == "created"         # never started
+        assert c.get("/api/queue").json()["queued"] == []
+        bad = c.post("/api/runs", files=[("files", ("a.txt", b"text", "text/plain")), ("files", ("b.txt", b" ", "text/plain"))],
+                     data={"preset": "full"})
+        assert bad.status_code == 400 and "b.txt" in bad.json()["detail"]
+        assert len(c.get("/api/runs").json()) == 3                                 # nothing created for a bad batch
+    from psalm_saga.store import RunStore
+
+    RunStore(tmp_path / ids[2]).update_meta(status="queued")                       # as left by a server that stopped
+    with TestClient(create_app(tmp_path)) as c:
+        assert c.get(f"/api/runs/{ids[2]}").json()["status"] == "created"         # shown as not started
+
+
 def test_web_preflight_settings_and_control(tmp_path):
     book = (DATA / "en_harbour.txt").read_text(encoding="utf-8")
     with TestClient(create_app(tmp_path)) as c:

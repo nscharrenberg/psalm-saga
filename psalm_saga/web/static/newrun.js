@@ -119,8 +119,8 @@ async function showNew(){
   <p class="lead">Four choices: the text, what carries over from it, which models write and judge, and how. Everything else has a sensible default and can be changed under <i>Options</i> and <i>All settings</i>. To compare methods across many texts, set up an <a href="#" onclick="showBuilder();return false">experiment</a> instead.</p>
   <div class="card"><h3>1 · Text</h3>
     <div class="drop" id="drop" onclick="$('#file').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="dropFile(event)">
-      <b>Drop a text file here</b> or click to choose one <span class="muted">(.txt, .md; .json for a specification)</span><div id="fname" class="small"></div></div>
-    <input type="file" id="file" accept=".txt,.md,.json" style="display:none" onchange="$('#fname').textContent=this.files[0]?this.files[0].name:'';updateSummary()">
+      <b>Drop text files here</b> or click to choose <span class="muted">(.txt, .md; .json for a specification). Several files make a batch: one run per file, all with the same settings.</span><div id="fname" class="small"></div></div>
+    <input type="file" id="file" accept=".txt,.md,.json" multiple style="display:none" onchange="showFileNames();updateSummary()">
     <label>…or paste it</label><textarea id="text" rows="5" placeholder="A book, a chapter, a story — or a premise for a new story." oninput="updateSummary()"></textarea>
     <div class="row small"><label style="margin:0">This is</label><select id="kind" style="max-width:300px" onchange="updateSummary()"><option value="auto">decided automatically</option><option value="source">a source text to make a counterpart of</option><option value="premise">a premise for a new story</option><option value="spec">a specification (JSON)</option></select>${info("mode")}
       <span class="muted">Any language: the synthetic text is written in the language of the input.</span></div>
@@ -142,6 +142,8 @@ async function showNew(){
       <div><label>Time limit in minutes <span class="muted" style="font-weight:400">(stops, keeps everything, can be continued)</span></label><input id="minutes" type="number" step="5" placeholder="no limit"></div></div>
     <label>Priorities <span class="muted" style="font-weight:400">— measures that matter most for your study (the generation works harder on them)</span></label>${priorityPicker("nr", [])}
     <label>Pause after <span class="muted" style="font-weight:400">(to inspect or edit before going on)</span></label><select id="until"><option value="">run to the end</option><option value="spec">the specification</option><option value="transform">the design (names and transformed story)</option><option value="plan">the plan</option></select>
+    <label>Runs at the same time <span class="muted" style="font-weight:400">— for all runs on this server; further runs wait in a queue and start as earlier ones end (a paused run keeps its place). Calls to one model are limited per model anyway (its "calls at the same time").</span></label>
+    <input id="maxpar" type="number" min="1" step="1" style="max-width:120px" onchange="saveMaxParallel()">
     <label style="color:var(--ink);font-size:13px" title="Every model answer is kept on disk. By default a run only replays its own answers (resuming is free), so running the same text again gives a new sample."><input type="checkbox" id="sharedCache" style="width:auto"> reuse answers from earlier identical runs (free, but not a new sample)</label>
   </details>
   <details class="card" id="allNew"><summary><b>All settings</b> <span class="muted small">— every setting of the run: models per step, every step's parameters, judges, limits</span></summary>
@@ -152,13 +154,25 @@ async function showNew(){
   <div class="actionbar"><div id="summary" class="small"></div><div class="row"><button onclick="checkNew()" title="Check the models, API keys and settings without starting">Check settings</button><button class="primary" onclick="createRun()" title="The settings are checked first; a run with a problem waits for you to fix it">Start</button></div></div>`;
   presetChanged(PRESET); prioWire("nr"); familyWarning();
   $("#main").addEventListener("change", updateSummary);
+  api("/api/queue").then(q=>{ const m=$("#maxpar"); if(m) m.value = q.max_parallel; }).catch(()=>{});
 }
-function dropFile(ev){ ev.preventDefault(); $("#drop").classList.remove("over"); const f = ev.dataTransfer.files[0]; if(!f) return;
-  const dt = new DataTransfer(); dt.items.add(f); $("#file").files = dt.files; $("#fname").textContent = f.name; updateSummary(); }
+async function saveMaxParallel(){
+  const v = Math.max(1, Math.round(+$("#maxpar").value||1)); $("#maxpar").value = v;
+  try{ const q = await api("/api/queue", {method:"PUT", headers:{"content-type":"application/json"}, body:JSON.stringify({max_parallel:v})});
+    toast(`up to ${q.max_parallel} run${q.max_parallel>1?"s":""} at the same time${q.queued.length?` · ${q.queued.length} waiting`:""}`); loadRuns(); }
+  catch(e){ toast(e.message); }
+}
+function fileList(){ return $("#file") ? [...$("#file").files] : []; }
+function showFileNames(){
+  const fs = fileList(), box = $("#fname"); if(!box) return;
+  box.innerHTML = fs.length>1 ? `<b>${fs.length} files — a batch of ${fs.length} runs:</b> ${fs.map(f=>esc(f.name)).join(", ")}` : fs.length ? esc(fs[0].name) : "";
+}
+function dropFile(ev){ ev.preventDefault(); $("#drop").classList.remove("over"); const fs = [...ev.dataTransfer.files]; if(!fs.length) return;
+  const dt = new DataTransfer(); fs.forEach(f=>dt.items.add(f)); $("#file").files = dt.files; showFileNames(); updateSummary(); }
 function updateSummary(){
   const box = $("#summary"); if(!box) return;
-  const f = $("#file") && $("#file").files[0], t = ($("#text")||{}).value||"";
-  const text = f ? f.name : t.trim() ? `${t.trim().split(/\s+/).length.toLocaleString()} words pasted` : `<span class="warn">no text yet</span>`;
+  const fs = fileList(), t = ($("#text")||{}).value||"";
+  const text = fs.length>1 ? `<b>${fs.length} runs</b> (one per file)` : fs.length ? esc(fs[0].name) : t.trim() ? `${t.trim().split(/\s+/).length.toLocaleString()} words pasted` : `<span class="warn">no text yet</span>`;
   const p = META.presets.find(x=>x.name===PRESET);
   const fixed = (p.config.stages.draft||{}).impl==="paraphrase";
   const lvl = fixed ? "keep everything" : (((H().levels||[]).find(l=>l.key===levelOf(getPol("nr")))||{}).title||"your own choice");
@@ -199,12 +213,17 @@ async function checkNew(){
 }
 async function createRun(){
   const p = META.presets.find(x=>x.name===PRESET);
-  if(!$("#text").value.trim() && !$("#file").files[0]){ toast("Add a text first: drop a file or paste it."); return; }
+  const fs = fileList();
+  if(!$("#text").value.trim() && !fs.length){ toast("Add a text first: drop a file or paste it."); return; }
   const fd = new FormData();
   fd.append("text", $("#text").value); fd.append("kind", $("#kind").value); fd.append("preset", p.name);
   fd.append("overrides", JSON.stringify(newOverrides())); fd.append("until", $("#until").value);
-  if($("#file").files[0]) fd.append("file", $("#file").files[0]);
-  try{ const r = await api("/api/runs", {method:"POST", body:fd}); toast("Run created — starting. Follow it in the activity tab."); TAB="activity"; await openRun(r.id); }catch(e){ toast(e.message); }
+  fs.forEach(f=>fd.append("files", f));
+  try{ const r = await api("/api/runs", {method:"POST", body:fd});
+    const waiting = r.queued.length, n = r.ids.length;
+    toast(n>1 ? `${n} runs created — ${n-waiting} starting, ${waiting} waiting in the queue.`
+              : waiting ? "Run created — it waits in the queue until a running one ends." : "Run created — starting. Follow it in the activity tab.");
+    TAB="activity"; await openRun(r.id); }catch(e){ toast(e.message); }
 }
 function setPolicies(kind){ const map = {all:"keep_all", surface:"new_people", structure:"structure_only"}; setLevel("nr", map[kind]||kind); }
 
