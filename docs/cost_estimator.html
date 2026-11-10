@@ -158,6 +158,15 @@ button.opt-open:hover { text-decoration-color: var(--accent); }
 .reason { border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; display: grid; gap: 6px; }
 .reason p { max-width: 90ch; }
 [hidden] { display: none !important; }
+/* compare */
+.chips { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+label.chip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 0.84rem; cursor: pointer; }
+label.chip:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+table.cmp th, table.cmp td { vertical-align: top; }
+table.cmp th { text-transform: none; letter-spacing: 0; font: 600 0.86rem/1.3 var(--f-body); color: var(--ink); min-width: 150px; }
+table.cmp td:first-child { color: var(--muted); min-width: 170px; }
+table.cmp tr.grp td { font: 500 0.72rem var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding-top: 16px; }
+table.cmp tr.diff td:not(:first-child) { background: var(--accent-soft); }
 code { overflow-wrap: anywhere; }
 .addbox { border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 10px; }
 .form-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
@@ -193,6 +202,8 @@ details.sub[open] { display: grid; gap: 8px; }
     <h1 id="est-title">Cost estimate</h1>
     <p class="muted num" id="est-meta"></p>
     <div class="banner warn" id="dv-banner" role="status" hidden></div>
+    <div class="banner" id="upd-banner" role="status" hidden>This page has a newer default shortlist. The shortlist stored in this browser has your own edits, so it was kept.
+      <button type="button" id="btn-new-defaults" style="margin-left:8px">Load the new shortlist</button></div>
     <p id="est-note" hidden></p>
   </header>
 
@@ -200,6 +211,7 @@ details.sub[open] { display: grid; gap: 8px; }
   <section class="panel" aria-labelledby="h-options">
     <div class="head-row">
       <h2 id="h-options">Options</h2>
+      <button type="button" class="linkish" id="btn-compare">Compare options</button>
       <span class="num">Budget <b id="budget-label"></b></span>
       <label class="inline note"><input type="checkbox" id="edit-mode"> Edit shortlist</label>
     </div>
@@ -214,11 +226,6 @@ details.sub[open] { display: grid; gap: 8px; }
       <span><i style="background:var(--t-guessed)"></i>guessed</span>
     </div>
     <div class="scroll"><table class="short" id="t-short"></table></div>
-    <div class="reason" id="reason-box">
-      <span class="eyebrow" id="reason-head"></span>
-      <p id="reason-text"></p>
-      <textarea id="reason-edit" hidden aria-label="Why the proposed option is proposed" style="min-height:96px"></textarea>
-    </div>
     <div class="save-grid" id="edit-fields" hidden>
       <label class="field" for="est-name">Estimate name
         <input type="text" id="est-name" placeholder="e.g. Main experiment, November proposal"></label>
@@ -226,6 +233,14 @@ details.sub[open] { display: grid; gap: 8px; }
         <textarea id="est-note-in" placeholder="Shown under the title"></textarea></label>
     </div>
   </section>
+
+  <details class="panel" id="compare-panel">
+    <summary><h3>Compare options</h3><span></span></summary>
+    <p class="note">Every setting of the options you tick, side by side, with the cost each one leads to. Highlighted rows are where the ticked options differ.</p>
+    <div class="chips" id="cmp-chips"></div>
+    <label class="inline note"><input type="checkbox" id="cmp-diff" checked> Only rows that differ</label>
+    <div class="scroll"><table class="cmp" id="t-cmp"></table></div>
+  </details>
 
   <details class="panel" id="save-panel">
     <summary><h3>Save, load and share</h3><span></span></summary>
@@ -330,6 +345,11 @@ details.sub[open] { display: grid; gap: 8px; }
         <label class="inline">Contingency % <input type="number" id="contingency" class="sm" min="0" step="5"></label>
         <label class="inline">Concurrent runs <input type="number" id="concurrency" class="sm" min="1" step="1"></label>
       </div>
+      <div class="row-flex">
+        <label class="inline">Design for <select id="design-target"></select></label>
+        <span class="note" id="design-target-note"></span>
+        <button type="button" id="btn-own-design" hidden></button>
+      </div>
       <div class="scroll"><table id="t-design"></table></div>
       <p class="note">Samples per item and policy setting. The paper's design runs the full procedure 3 times, every other setup once, and paraphrase only under <em>preserve</em>: 19 runs per item and writer.</p>
     </details>
@@ -374,6 +394,7 @@ details.sub[open] { display: grid; gap: 8px; }
         </details>
         <p class="status" id="ai-status" role="status"></p>
       </div>
+      <p class="note" id="corpus-target-note" hidden></p>
       <div class="scroll"><table id="t-corpus"></table></div>
     </details>
   </section>
@@ -487,7 +508,9 @@ function defaults() {
     // items added to the corpus: { id, title, lang, chars, words }
     corpusAdd: [],
     // copies of a measured model: { id, label, role, like, price: [in, out], use, effort, share }
-    models: []
+    models: [],
+    // writers with a design of their own: { writer: { setups, corpusOff } }; the others follow `setups` and `corpusOff`
+    perWriter: {}
   };
 }
 const EFFORTS = ["none", "low", "medium", "high"];
@@ -525,7 +548,7 @@ function setModel(st, m, field, value) {
 const itemsOf = st => [...CORPUS.map(c => [...c, false]), ...(st.corpusAdd || []).map(a => [a.id, a.lang, a.title, a.chars, a.words, true])];
 
 // keep only well-formed added items and model copies (they arrive from files)
-function cleanSettings(s) {
+function cleanSettings(s, raw) {
   const num = x => typeof x === "number" && isFinite(x);
   const seen = new Set(CORPUS.map(c => c[0]));
   s.corpusAdd = (Array.isArray(s.corpusAdd) ? s.corpusAdd : []).filter(a => a && typeof a.id === "string" && a.id && !seen.has(a.id) && seen.add(a.id) && num(a.chars) && a.chars > 0)
@@ -536,9 +559,19 @@ function cleanSettings(s) {
     .map(c => ({ id: c.id.slice(0, 40), label: String(c.label || c.id).slice(0, 60), role: c.role, like: c.like,
       price: Array.isArray(c.price) && c.price.length === 2 && c.price.every(num) ? c.price.map(x => Math.max(0, x)) : [...defaults().prices[c.like]],
       use: c.use !== false, effort: EFFORTS.includes(c.effort) ? c.effort : "medium", share: num(c.share) ? Math.max(0, Math.min(99, c.share)) : null }));
+  // per-writer designs: merge() only keeps keys the defaults have, so read them from the raw input
+  const pw = raw && raw.perWriter && typeof raw.perWriter === "object" ? raw.perWriter : {};
+  const ws = new Set(writersOf(s));
+  s.perWriter = {};
+  for (const w of Object.keys(pw)) if (ws.has(w) && pw[w] && typeof pw[w] === "object")
+    s.perWriter[w] = { setups: merge(defaults().setups, pw[w].setups || {}), corpusOff: Array.isArray(pw[w].corpusOff) ? pw[w].corpusOff.filter(x => typeof x === "string") : [] };
   return s;
 }
-const settingsFrom = x => cleanSettings(merge(defaults(), x));
+const settingsFrom = x => cleanSettings(merge(defaults(), x), x);
+// a writer's setups and corpus: its own design if it has one, else the shared one
+const setupsFor = (st, w) => st.perWriter?.[w]?.setups || st.setups;
+const offFor = (st, w) => st.perWriter?.[w]?.corpusOff || st.corpusOff;
+const itemsFor = (st, w) => itemsOf(st).filter(c => !offFor(st, w).includes(c[0]));
 
 const zeroT = () => ({ measured: 0, modelled: 0, guessed: 0 });
 // Where a stage's cost comes from. base: "measured" for the full procedure as run, else "modelled".
@@ -601,10 +634,13 @@ function oneRun(st, writer, setup, it) {
 }
 
 function compute(st) {
-  const items = itemsOf(st).filter(c => !st.corpusOff.includes(c[0]));
   const allW = writersOf(st), all = modelsOf(st);
   const writers = allW.filter(w => mdl(st, w).use);
   const judges = judgesOf(st).filter(j => mdl(st, j).use);
+  const itemsBy = Object.fromEntries(allW.map(w => [w, itemsFor(st, w)]));
+  // the items any writer runs on; the PSALM anchor compares sources, so it runs once per item in this set
+  const used = new Set(writers.flatMap(w => itemsBy[w].map(c => c[0])));
+  const items = writers.length ? itemsOf(st).filter(c => used.has(c[0])) : itemsOf(st).filter(c => !st.corpusOff.includes(c[0]));
   const out = {
     items: items.length, runs: 0, sec: 0,
     byModel: Object.fromEntries(all.map(m => [m, 0])),
@@ -614,11 +650,11 @@ function compute(st) {
     perItem: {}, g2Comparisons: 0, trust: zeroT()
   };
   for (const wr of writers) for (const su of SETUPS) {
-    const cfg = st.setups[su];
+    const cfg = setupsFor(st, wr)[su];
     const n = cfg.on ? cfg.samples * cfg.policies : 0;
-    const row = out.bySetup[wr + "|" + su] = { runs: n * items.length, writer: 0, judge: 0 };
+    const row = out.bySetup[wr + "|" + su] = { runs: n * itemsBy[wr].length, writer: 0, judge: 0 };
     if (!n) continue;
-    for (const it of items) {
+    for (const it of itemsBy[wr]) {
       const r = oneRun(st, wr, su, it);
       row.writer += r.writer * n; row.judge += r.judge * n;
       out.byModel[wr] += r.writer * n;
@@ -640,17 +676,19 @@ function compute(st) {
     out.byPart.psalmAnchor += c.total * n; out.byModel[j] += c.total * n; add3(out.split[j], c, n); addTrust(out.trust, st, j, c, "modelled", it, n);
   }
   // alignment lower anchor: one alignment per item and writer, priced as that writer's recover stage
-  if (ex.alignAnchor) for (const it of items) for (const wr of writers) {
+  if (ex.alignAnchor) for (const wr of writers) for (const it of itemsBy[wr]) {
     const c = cost3(st, wr, mdl(st, wr).like, "recover", it[3]);
     out.byPart.alignAnchor += c.total; out.byModel[wr] += c.total; add3(out.split[wr], c); addTrust(out.trust, st, wr, c, "modelled", it);
   }
   // G2: each text of the other setups against the single call, same item, policy and writer, in both orders, by each judge
-  if (ex.g2 && st.setups.single_call.on) {
+  if (ex.g2) for (const wr of writers) {
+    const ws = setupsFor(st, wr);
+    if (!ws.single_call.on) continue;
     let perItemWriter = 0;
-    for (const su of ["full", "no_graph", "no_feedback", "paraphrase"]) { const c = st.setups[su]; if (c.on) perItemWriter += c.samples * c.policies; }
+    for (const su of ["full", "no_graph", "no_feedback", "paraphrase"]) { const c = ws[su]; if (c.on) perItemWriter += c.samples * c.policies; }
     perItemWriter *= ex.orders;
-    out.g2Comparisons = perItemWriter * items.length * writers.length;
-    for (const it of items) for (const wr of writers) for (const j of judges) {
+    out.g2Comparisons += perItemWriter * itemsBy[wr].length;
+    for (const it of itemsBy[wr]) for (const j of judges) {
       const c = cost3(st, j, mdl(st, wr).like, mdl(st, j).like, it[3]); const n = ex.pairShare * perItemWriter;
       out.byPart.g2 += c.total * n; out.byModel[j] += c.total * n; add3(out.split[j], c, n); addTrust(out.trust, st, j, c, "modelled", it, n);
     }
@@ -699,12 +737,21 @@ function merge(base, inc) {
 }
 
 /* ---------- the shortlist ---------- */
-const DEFAULT_REASON = "Proposed together with the Mistral check below it. The Gemma part keeps what the research question needs: three samples of the full procedure under all three policy settings, the single-call baseline, both ablations under preserve, all three judges and both lower anchors. The repeated samples show whether a story keeps its data properties when it is generated again. The Mistral check runs the full procedure three times under preserve on six items that span the length range, which shows whether a second writer is as consistent. To fit the budget the design drops paraphrase, G2, and the ablations under the other two policy settings. The Gemma part alone fits the budget even at the high end of its range.";
+const DEFAULT_REASON = "It keeps what the research question needs. Gemma runs the full procedure three times per item under two policy settings, preserve and one other, with the single-call baseline and both ablations under both, and paraphrase under preserve; all three judges rate every run, and both lower anchors are in. Paraphrase is also the upper anchor, without which the judge-based measures cannot decide a hypothesis. The three samples show whether a story keeps its data properties when it is generated again. Mistral runs the full procedure three times under preserve on six items that span the length range, which shows whether a second writer is as consistent. To fit the budget the design drops the third policy setting and G2. Its likely cost fits the budget; its high end does not. Without Mistral, as Gemma, core and ablations, it fits even at the high end.";
 
 // n corpus items evenly spread over the length range, shortest and longest included
 function spreadItems(n) {
   const sorted = [...CORPUS].sort((a, b) => a[3] - b[3]);
   return Array.from({ length: n }, (_, i) => sorted[Math.round(i * (sorted.length - 1) / (n - 1))][0]);
+}
+// Bump SHORTLIST_VERSION whenever the default shortlist changes. A browser that stored an older default shortlist
+// gets the new one on its next visit; if it was edited, the page keeps it and offers the new one.
+const SHORTLIST_VERSION = 4;
+// Gemma, two policy settings (preserve and one other), every setup: full procedure ×3, single call and both ablations
+// under both settings, paraphrase under preserve (it is also the upper anchor of the judge-based measures); no G2
+function gemmaCore(s) {
+  s.use.mistral = false; s.extras.g2 = false;
+  for (const k of ["full", "no_graph", "no_feedback", "single_call"]) s.setups[k].policies = 2;
 }
 function variant(f) { const s = defaults(); f(s); return s; }
 function defaultEstimate() {
@@ -716,22 +763,38 @@ function defaultEstimate() {
     { id: "two-preserve", label: "Two writers, full and single call", settings: variant(s => {
       for (const k of ["no_graph", "no_feedback", "paraphrase"]) s.setups[k].on = false;
       s.setups.full.samples = 1; s.setups.full.policies = 1; s.setups.single_call.policies = 1; s.extras.g2 = false; }) },
-    { id: "gemma-core", label: "Gemma, core and ablations", settings: variant(s => {
-      s.use.mistral = false; s.extras.g2 = false; s.setups.paraphrase.on = false;
-      s.setups.no_graph.policies = 1; s.setups.no_feedback.policies = 1; }) },
-    { id: "mistral-check", label: "Mistral check, add-on to the Gemma core", settings: variant(s => {
-      // the PSALM anchor compares sources, not writers' texts, so the Gemma core already covers it
-      s.use.gemma = false; s.extras.g2 = false; s.extras.psalmAnchor = false;
-      for (const k of ["no_graph", "no_feedback", "paraphrase", "single_call"]) s.setups[k].on = false;
-      s.setups.full.policies = 1;
+    { id: "gemma-core", label: "Gemma, core and ablations", settings: variant(gemmaCore) },
+    { id: "gemma-core-mistral", label: "Gemma core plus a Mistral check", settings: variant(s => {
+      gemmaCore(s); s.use.mistral = true;
+      // Mistral: only the full procedure, 3 samples under preserve, on six items spread over the length range
+      const m = defaults().setups;
+      for (const k of ["no_graph", "no_feedback", "paraphrase", "single_call"]) m[k].on = false;
+      m.full.policies = 1;
       const keep = spreadItems(6);
-      s.corpusOff = CORPUS.map(c => c[0]).filter(id => !keep.includes(id)); }) }
+      s.perWriter.mistral = { setups: m, corpusOff: CORPUS.map(c => c[0]).filter(id => !keep.includes(id)) }; }) }
   ];
   return { name: "Main experiment", note: "", version: 1, saved_at: "", budget: 400, bands: clone(DEFAULT_BANDS),
-    proposed: "gemma-core", reason: DEFAULT_REASON, options, data_version: DATA_VERSION };
+    proposed: "gemma-core-mistral", reason: DEFAULT_REASON, options, data_version: DATA_VERSION, base_version: SHORTLIST_VERSION };
 }
 
 // what an option keeps and cuts, relative to the full design
+// what a design (setups and corpus) keeps and cuts, relative to the paper's design
+function designBits(s, setups, corpusOff) {
+  const d = defaults(), bits = [];
+  const on = SETUPS.filter(k => setups[k].on), off = SETUPS.filter(k => !setups[k].on);
+  if (off.length >= 3) bits.push("only " + on.map(k => SHORT[k]).join(" and "));
+  else for (const k of off) bits.push(OFF[k]);
+  for (const k of on) if (setups[k].samples !== d.setups[k].samples) bits.push(`${SHORT[k]} ×${setups[k].samples}`);
+  const pol = on.filter(k => setups[k].policies !== d.setups[k].policies);
+  if (pol.length) {
+    const vals = [...new Set(pol.map(k => setups[k].policies))];
+    bits.push(vals.length === 1 && pol.length === on.filter(k => d.setups[k].policies > 1).length
+      ? `${vals[0]} policy setting${vals[0] === 1 ? "" : "s"}` : vals.map(v => { const ks = pol.filter(k => setups[k].policies === v).map(k => SHORT[k]); return `${ks.join(" and ")} ${v} policy setting${v === 1 ? "" : "s"}`; }).join(", "));
+  }
+  const all = itemsOf(s), used = all.filter(c => !corpusOff.includes(c[0])).length;
+  if (used !== all.length) bits.push(`${used} of ${all.length} items`);
+  return bits;
+}
 function describe(s) {
   const d = defaults(), bits = [];
   const name = m => SHORT[m] || mdl(s, m).label;
@@ -746,22 +809,13 @@ function describe(s) {
     if (M.effort !== "medium") bits.push(`${name(m)} reasoning ${M.effort === "none" ? "off" : M.effort}`);
     if (M.share !== null) bits.push(`${name(m)} reasoning share ${M.share}%`);
   }
-  const on = SETUPS.filter(k => s.setups[k].on), off = SETUPS.filter(k => !s.setups[k].on);
-  if (off.length >= 3) bits.push("only " + on.map(k => SHORT[k]).join(" and "));
-  else for (const k of off) bits.push(OFF[k]);
-  for (const k of on) if (s.setups[k].samples !== d.setups[k].samples) bits.push(`${SHORT[k]} ×${s.setups[k].samples}`);
-  const pol = on.filter(k => s.setups[k].policies !== d.setups[k].policies);
-  if (pol.length) {
-    const vals = [...new Set(pol.map(k => s.setups[k].policies))];
-    bits.push(vals.length === 1 && pol.length === on.filter(k => d.setups[k].policies > 1).length
-      ? `${vals[0]} policy setting${vals[0] === 1 ? "" : "s"}` : vals.map(v => { const ks = pol.filter(k => s.setups[k].policies === v).map(k => SHORT[k]); return `${ks.join(" and ")} ${v} policy setting${v === 1 ? "" : "s"}`; }).join(", "));
-  }
+  const own = writersOf(s).filter(w => s.perWriter[w] && mdl(s, w).use);
+  bits.push(...designBits(s, s.setups, s.corpusOff));
   if (!s.extras.g2 && d.extras.g2) bits.push("no G2");
   if (!s.extras.psalmAnchor) bits.push("no PSALM anchor");
   if (!s.extras.alignAnchor) bits.push("no alignment anchor");
-  const all = itemsOf(s), used = all.filter(c => !s.corpusOff.includes(c[0])).length;
   if (s.corpusAdd.length) bits.push(`${s.corpusAdd.length} added item${s.corpusAdd.length === 1 ? "" : "s"}`);
-  if (used !== all.length) bits.push(`${used} of ${all.length} items`);
+  for (const w of own) bits.push(`${name(w)}: ${designBits(s, s.perWriter[w].setups, s.perWriter[w].corpusOff).join(" · ") || "the paper's design"}`);
   if (JSON.stringify(s.prices) !== JSON.stringify(d.prices)) bits.push("custom prices");
   if (JSON.stringify(s.mult) !== JSON.stringify(d.mult)) bits.push("custom setup factors");
   if (JSON.stringify(s.effortFactor) !== JSON.stringify(d.effortFactor)) bits.push("custom effort factors");
@@ -771,6 +825,11 @@ function describe(s) {
 
 /* ---------- state ---------- */
 let est, st, activeOpt = null, dirty = false, editMode = false;
+let designTarget = ""; // "" = the shared design, else the writer whose own design the Design and Corpus panels edit
+const ownDesign = () => designTarget && st.perWriter[designTarget];
+const curSetups = () => ownDesign() ? st.perWriter[designTarget].setups : st.setups;
+const curOff = () => ownDesign() ? st.perWriter[designTarget].corpusOff : st.corpusOff;
+function setOff(list) { if (ownDesign()) st.perWriter[designTarget].corpusOff = list; else st.corpusOff = list; }
 const opt = id => est.options.find(o => o.id === id);
 const withBudget = s => { const c = clone(s); c.budget = est.budget; return c; };
 const comparable = s => JSON.stringify(Object.assign(clone(s), { budget: 0 }));
@@ -812,6 +871,8 @@ function loadLocal() {
     const x = JSON.parse(localStorage.getItem(LS_KEY));
     if (!x || !x.est || !x.st) return null;
     const p = parseEstimate(Object.assign({}, x.est, { format: FORMAT, version: 2, estimate_version: x.est.version }));
+    // which default shortlist this one started from: 0 = a page before versioning; null = loaded from a file
+    p.est.base_version = typeof x.est.base_version === "number" ? x.est.base_version : (x.est.saved_at ? null : 0);
     return { est: p.est, st: settingsFrom(x.st), activeOpt: x.activeOpt, dirty: !!x.dirty };
   } catch (e) { return null; }
 }
@@ -820,7 +881,7 @@ function touch() { dirty = true; }
 
 function openOption(id) {
   const o = opt(id); if (!o) return;
-  activeOpt = id; st = withBudget(o.settings);
+  activeOpt = id; st = withBudget(o.settings); designTarget = "";
   buildInputs(); render();
 }
 function adopt(parsed) {
@@ -854,15 +915,28 @@ function buildInputs() {
   $("t-effort").innerHTML = `<tr><th>Effort</th>${EFFORTS.map(e => `<th class="n">${e}</th>`).join("")}</tr>
     <tr><td>Reasoning tokens × </td>${EFFORTS.map(e => `<td class="n">${e === "medium" ? '1 <span class="tag">measured</span>' : numInput("ef-" + e, st.effortFactor[e], 0.1, "effortFactor:" + e, "sm") + (e === "none" ? "" : ' <span class="tag model">guessed</span>')}</td>`).join("")}</tr>`;
 
-  // design
+  // design: shared, or one writer's own
+  const dws = writersOf(st);
+  if (designTarget && !dws.includes(designTarget)) designTarget = "";
+  $("design-target").innerHTML = `<option value="">All writers</option>` + dws.map(w => `<option value="${esc(w)}" ${w === designTarget ? "selected" : ""}>${esc(mdl(st, w).label)}${st.perWriter[w] ? " (own design)" : ""}</option>`).join("");
+  const ownW = dws.filter(w => st.perWriter[w]);
+  const tl = designTarget ? mdl(st, designTarget).label : "";
+  const locked = !!designTarget && !st.perWriter[designTarget];
+  $("design-target-note").textContent = !designTarget
+    ? (ownW.length ? `${ownW.map(w => mdl(st, w).label).join(", ")} ${ownW.length === 1 ? "has its" : "have their"} own design; every other writer follows this one.` : "Every writer follows this design.")
+    : locked ? `${tl} follows the shared design.` : `${tl} has its own setups and corpus.`;
+  const ob = $("btn-own-design"); ob.hidden = !designTarget;
+  ob.textContent = locked ? `Give ${tl} its own design` : `Use the shared design for ${tl}`;
+  const dis = html => locked ? html.replace(/<input /g, "<input disabled ") : html;
+  const S0 = curSetups();
   h = `<tr><th></th><th>Setup</th><th class="n">Samples</th><th class="n">Policy settings</th><th class="n">Runs per item and writer</th><th>Basis</th></tr>`;
   for (const s of SETUPS) {
-    const c = st.setups[s];
-    h += `<tr class="${c.on ? "" : "off"}"><td><input type="checkbox" id="on-${s}" data-setup="${s}" ${c.on ? "checked" : ""} aria-label="Run ${LABEL[s]}"></td><td>${LABEL[s]}</td>
+    const c = S0[s];
+    h += dis(`<tr class="${c.on ? "" : "off"}"><td><input type="checkbox" id="on-${s}" data-setup="${s}" ${c.on ? "checked" : ""} aria-label="Run ${LABEL[s]}"></td><td>${LABEL[s]}</td>
       <td class="n">${numInput("smp-" + s, c.samples, 1, "setup:" + s + ":samples", "sm")}</td>
       <td class="n">${numInput("pol-" + s, c.policies, 1, "setup:" + s + ":policies", "sm")}</td>
       <td class="n" id="rpi-${s}">${c.on ? c.samples * c.policies : 0}</td>
-      <td>${s === "full" ? '<span class="tag">measured</span>' : '<span class="tag model">modelled</span>'}</td></tr>`;
+      <td>${s === "full" ? '<span class="tag">measured</span>' : '<span class="tag model">modelled</span>'}</td></tr>`);
   }
   $("t-design").innerHTML = h;
   $("budget").value = est.budget; $("contingency").value = st.contingency; $("concurrency").value = st.concurrency;
@@ -966,12 +1040,6 @@ function renderShortlist() {
   $("t-short").innerHTML = h;
   $("cont-label").textContent = (opt(est.proposed)?.settings.contingency ?? st.contingency) + "%";
 
-  const pi = est.options.findIndex(o => o.id === est.proposed);
-  $("reason-head").textContent = `Why ${letter(pi)}, ${est.options[pi].label}, is proposed`;
-  $("reason-text").textContent = est.reason || "No reason written yet.";
-  $("reason-text").classList.toggle("muted", !est.reason);
-  $("reason-text").hidden = editMode;
-  const re = $("reason-edit"); re.hidden = !editMode; if (document.activeElement !== re) re.value = est.reason;
   $("edit-fields").hidden = !editMode;
 }
 
@@ -1030,7 +1098,7 @@ function render() {
   bars($("by-stage"), srows, Math.max(...srows.map(x => x.value), 1e-9));
 
   // design runs per item
-  for (const s of SETUPS) { const c = st.setups[s]; $("rpi-" + s).textContent = c.on ? c.samples * c.policies : 0; }
+  for (const s of SETUPS) { const c = curSetups()[s]; $("rpi-" + s).textContent = c.on ? c.samples * c.policies : 0; }
   $("g2-size").textContent = st.setups.single_call.on ? `${fmt(o.g2Comparisons)} comparisons × ${judgesOf(st).filter(j => mdl(st, j).use).length} judges` : "needs the single call setup";
 
   // corpus
@@ -1038,19 +1106,98 @@ function render() {
   const ws = writersOf(st);
   h = `<tr><th></th><th>Item</th><th>Lang.</th><th class="n">Characters</th><th class="n">Words</th>${ws.map(w => `<th class="n">${esc(mdl(st, w).label)}, 1 full run</th>`).join("")}</tr>`;
   for (const it of items) {
-    const off = st.corpusOff.includes(it[0]);
+    const off = curOff().includes(it[0]);
     const tags = (it[5] ? ` <span class="tag">added</span> <button type="button" class="linkish" data-item-remove="${esc(it[0])}">remove</button>` : "")
       + (!inRange(it[3]) ? ' <span class="tag model">outside measured length · guessed</span>' : "")
       + (!MEASURED_LANGS.includes(it[1]) ? ' <span class="tag model">language not measured · modelled</span>' : "");
-    h += `<tr class="${off ? "off" : ""}"><td><input type="checkbox" id="item-${esc(it[0])}" data-item="${esc(it[0])}" ${off ? "" : "checked"} aria-label="Include ${esc(it[2])}"></td><td>${esc(it[2])}${tags}</td><td>${esc(it[1])}</td><td class="n">${fmt(it[3])}</td><td class="n muted">${it[4] == null ? "—" : fmt(it[4])}</td>${ws.map(w => `<td class="n">${usd(o.perItem[it[0]][w])}</td>`).join("")}</tr>`;
+    h += `<tr class="${off ? "off" : ""}"><td><input type="checkbox" id="item-${esc(it[0])}" data-item="${esc(it[0])}" ${off ? "" : "checked"} ${designTarget && !ownDesign() ? "disabled" : ""} aria-label="Include ${esc(it[2])}"></td><td>${esc(it[2])}${tags}</td><td>${esc(it[1])}</td><td class="n">${fmt(it[3])}</td><td class="n muted">${it[4] == null ? "—" : fmt(it[4])}</td>${ws.map(w => `<td class="n">${usd(o.perItem[it[0]][w])}</td>`).join("")}</tr>`;
   }
   $("t-corpus").innerHTML = h;
-  $("corpus-count").textContent = `${o.items} of ${all.length} items` + (st.corpusAdd.length ? ` · ${st.corpusAdd.length} added` : "");
+  const nOn = all.filter(c => !curOff().includes(c[0])).length;
+  $("corpus-count").textContent = (designTarget ? mdl(st, designTarget).label + ": " : "") + `${nOn} of ${all.length} items` + (st.corpusAdd.length ? ` · ${st.corpusAdd.length} added` : "");
+  const ctn = $("corpus-target-note"), anyOwn = writersOf(st).some(w => st.perWriter[w]);
+  ctn.hidden = !designTarget && !anyOwn;
+  ctn.textContent = designTarget ? `Showing the corpus for ${mdl(st, designTarget).label}${ownDesign() ? "" : ", which follows the shared corpus"}. Choose whose design to edit under Design.`
+    : "Showing the shared corpus. Writers with their own design keep their own selection; choose one under Design to edit it.";
 
   renderShortlist();
+  renderCompare();
   renderHeader();
   persist();
 }
+
+/* ---------- compare options ---------- */
+let cmpSel = null, cmpDiffOnly = true, cmpKey = ""; // cmpSel: ids of the ticked options; null = all of them
+function renderCompare() {
+  const ids = est.options.map(o => o.id);
+  const sel = cmpSel ? ids.filter(id => cmpSel.has(id)) : ids;
+  // rebuild the checkboxes only when the shortlist changes, so ticking one keeps keyboard focus
+  const key = est.options.map(o => o.id + "=" + o.label).join("|");
+  if (key !== cmpKey) { cmpKey = key; $("cmp-chips").innerHTML = est.options.map((op, i) => `<label class="chip"><input type="checkbox" data-cmp="${esc(op.id)}"> <b>${letter(i)}</b> ${esc(op.label)}</label>`).join(""); }
+  document.querySelectorAll("[data-cmp]").forEach(cb => { cb.checked = sel.includes(cb.dataset.cmp); });
+  if (!$("compare-panel").open) return;
+  if (!sel.length) { $("t-cmp").innerHTML = `<tr><td class="muted">Tick at least one option.</td></tr>`; return; }
+  const cols = sel.map(id => { const i = ids.indexOf(id), op = est.options[i]; const { o, r } = evalOption(op); return { i, op, s: withBudget(op.settings), o, r }; });
+  const rows = []; let group = "";
+  const add = (label, f) => rows.push({ group, label, vals: cols.map(f) });
+  const share = (c, k) => (c.o.base ? 100 * c.o.trust[k] / c.o.base : 0).toFixed(0) + "% " + k;
+  const usedW = c => writersOf(c.s).filter(w => mdl(c.s, w).use);
+  const nm = (s, w) => SHORT[w] || mdl(s, w).label;
+  // one value when every used writer has the same, else one per writer
+  const perW = (c, f) => { const ws = usedW(c); if (!ws.length) return "no writer"; const v = ws.map(f); return new Set(v).size === 1 ? v[0] : ws.map((w, k) => `${nm(c.s, w)}: ${v[k]}`).join(" · "); };
+
+  group = "Cost";
+  add("Likely, with contingency", c => usd(c.r.likely, 0));
+  add("Range", c => `${usd(c.r.low, 0)} – ${usd(c.r.high, 0)}`);
+  add("Against the budget", c => fitOf(c.r, est.budget)[1]);
+  add("Basis", c => TRUST.map(k => share(c, k)).join(" · "));
+  add("Runs", c => fmt(c.o.runs));
+  add("Writer time", c => `${fmt(c.o.hours)} h at ${c.s.concurrency} parallel`);
+
+  group = "Design: samples × policy settings, per item and writer";
+  for (const k of SETUPS) add(LABEL[k], c => {
+    const d = perW(c, w => { const x = setupsFor(c.s, w)[k]; return x.on ? `${x.samples} × ${x.policies}` : "off"; });
+    const runs = usedW(c).reduce((a, w) => a + (c.o.bySetup[w + "|" + k]?.runs || 0), 0);
+    return runs ? `${d} · ${fmt(runs)} runs` : d;
+  });
+  add("Corpus items", c => perW(c, w => `${itemsFor(c.s, w).length} of ${itemsOf(c.s).length}`));
+  add("Added items", c => c.s.corpusAdd.length ? c.s.corpusAdd.map(a => a.title).join(", ") : "none");
+
+  group = "Models";
+  const allM = [...new Set(cols.flatMap(c => modelsOf(c.s)))];
+  const lab = m => { for (const c of cols) if (modelsOf(c.s).includes(m)) return mdl(c.s, m).label; return m; };
+  for (const m of allM) add(lab(m), c => {
+    if (!modelsOf(c.s).includes(m)) return "—";
+    const M = mdl(c.s, m);
+    if (!M.use) return "not used";
+    return `${M.role}${M.copy ? ` (copy of ${SHORT[M.like]})` : ""} · reasoning ${M.effort}${M.share !== null ? `, share ${M.share}%` : ""}`;
+  });
+  for (const m of allM) add(`${lab(m)}: $ per M in / out`, c => modelsOf(c.s).includes(m) ? mdl(c.s, m).price.join(" / ") : "—");
+
+  group = "Evaluation";
+  add("PSALM lower anchor", c => c.s.extras.psalmAnchor ? `on · ${c.s.extras.anchorShare} of a run's judge tokens per pair` : "off");
+  add("Alignment lower anchor", c => c.s.extras.alignAnchor ? "on" : "off");
+  add("G2 pairwise quality", c => c.s.extras.g2 ? (c.o.g2Comparisons ? `on · ${fmt(c.o.g2Comparisons)} comparisons in ${c.s.extras.orders} orders` : "on, but needs the single call") : "off");
+
+  group = "Assumptions";
+  add("Contingency", c => c.s.contingency + "%");
+  add("Effort factors (none / low / high)", c => [c.s.effortFactor.none, c.s.effortFactor.low, c.s.effortFactor.high].join(" / "));
+  add("Setup factors", c => JSON.stringify(c.s.mult) === JSON.stringify(defaults().mult) ? "the defaults" : "custom");
+
+  let html = `<tr><th></th>${cols.map(c => `<th><b>${letter(c.i)}</b> ${esc(c.op.label)}${c.op.id === est.proposed ? ' <span class="tag">Proposed</span>' : ""}</th>`).join("")}</tr>`;
+  let lastGroup = null, shown = 0;
+  for (const r of rows) {
+    const diff = new Set(r.vals).size > 1;
+    if (cmpDiffOnly && cols.length > 1 && !diff) continue;
+    if (r.group !== lastGroup) { html += `<tr class="grp"><td colspan="${cols.length + 1}">${esc(r.group)}</td></tr>`; lastGroup = r.group; }
+    html += `<tr class="${diff ? "diff" : ""}"><td>${esc(r.label)}</td>${r.vals.map(v => `<td>${esc(v)}</td>`).join("")}</tr>`;
+    shown++;
+  }
+  if (!shown) html += `<tr><td colspan="${cols.length + 1}" class="muted">The ticked options have the same settings.</td></tr>`;
+  $("t-cmp").innerHTML = html;
+}
+$("compare-panel").addEventListener("toggle", renderCompare);
+$("btn-compare").addEventListener("click", () => { const p = $("compare-panel"); p.open = true; renderCompare(); p.scrollIntoView({ behavior: "smooth", block: "start" }); });
 
 /* ---------- events ---------- */
 function markShare(m) {
@@ -1070,9 +1217,10 @@ document.addEventListener("click", e => {
   const o = t.closest("[data-open]");
   if (o) { openOption(o.dataset.open); return; }
   const mr = t.closest("[data-model-remove]");
-  if (mr) { st.models = st.models.filter(c => c.id !== mr.dataset.modelRemove); buildInputs(); render(); return; }
+  if (mr) { st.models = st.models.filter(c => c.id !== mr.dataset.modelRemove); delete st.perWriter[mr.dataset.modelRemove]; buildInputs(); render(); return; }
   const ir = t.closest("[data-item-remove]");
-  if (ir) { const id = ir.dataset.itemRemove; st.corpusAdd = st.corpusAdd.filter(a => a.id !== id); st.corpusOff = st.corpusOff.filter(x => x !== id); render(); return; }
+  if (ir) { const id = ir.dataset.itemRemove; st.corpusAdd = st.corpusAdd.filter(a => a.id !== id); st.corpusOff = st.corpusOff.filter(x => x !== id);
+    for (const w in st.perWriter) st.perWriter[w].corpusOff = st.perWriter[w].corpusOff.filter(x => x !== id); render(); return; }
   const rm = t.closest("[data-remove]");
   if (rm && est.options.length > 1) {
     const id = rm.dataset.remove;
@@ -1095,15 +1243,24 @@ $("btn-update-opt").addEventListener("click", () => {
 });
 $("btn-revert").addEventListener("click", () => openOption(activeOpt));
 $("edit-mode").addEventListener("change", e => { editMode = e.target.checked; renderShortlist(); });
+$("design-target").addEventListener("change", e => { designTarget = e.target.value; buildInputs(); render(); });
+$("btn-own-design").addEventListener("click", () => {
+  if (!designTarget) return;
+  if (ownDesign()) delete st.perWriter[designTarget];
+  else st.perWriter[designTarget] = { setups: clone(st.setups), corpusOff: [...st.corpusOff] };
+  buildInputs(); render();
+});
 
 document.addEventListener("input", e => {
   const t = e.target;
   const v = parseFloat(t.value); const val = isNaN(v) ? 0 : v;
+  // the comparison: which options to show, and whether to show only differences
+  if (t.dataset.cmp) { const s = new Set(cmpSel || est.options.map(o => o.id)); if (t.checked) s.add(t.dataset.cmp); else s.delete(t.dataset.cmp); cmpSel = s; renderCompare(); return; }
+  if (t.id === "cmp-diff") { cmpDiffOnly = t.checked; renderCompare(); return; }
   // estimate-level fields: these change the shortlist, not the explored settings
   if (t.dataset.rename) { const o = opt(t.dataset.rename); if (o) { o.label = t.value; touch(); renderHeader(); render0(); } return; }
   if (t.dataset.propose) { est.proposed = t.dataset.propose; touch(); render(); return; }
   if (t.dataset.band) { const [k, i] = t.dataset.band.split(":"); est.bands[k][+i] = Math.max(0, val); touch(); render(); return; }
-  if (t.id === "reason-edit") { est.reason = t.value; touch(); renderHeader(); persist(); return; }
   if (t.id === "est-name") { est.name = t.value; touch(); renderHeader(); persist(); return; }
   if (t.id === "est-note-in") { est.note = t.value; touch(); renderHeader(); persist(); return; }
   if (t.id === "budget") { est.budget = val; st.budget = val; touch(); render(); return; }
@@ -1116,7 +1273,7 @@ document.addEventListener("input", e => {
   } else if (t.dataset.bind) {
     const p = t.dataset.bind.split(":");
     if (p[0] === "price") setModel(st, p[1], "price", [+p[2], val]);
-    if (p[0] === "setup") st.setups[p[1]][p[2]] = Math.round(val);
+    if (p[0] === "setup") curSetups()[p[1]][p[2]] = Math.round(val);
     if (p[0] === "mult") st.mult[p[1]][p[2]][+p[3]] = val;
     if (p[0] === "extra") st.extras[p[1]] = val;
     if (p[0] === "effortFactor") st.effortFactor[p[1]] = val;
@@ -1124,9 +1281,9 @@ document.addEventListener("input", e => {
   else if (t.id === "concurrency") st.concurrency = Math.max(1, Math.round(val));
   else if (t.dataset.use) setModel(st, t.dataset.use, "use", t.checked);
   else if (t.dataset.effort) setModel(st, t.dataset.effort, "effort", t.value);
-  else if (t.dataset.setup) { st.setups[t.dataset.setup].on = t.checked; t.closest("tr").classList.toggle("off", !t.checked); }
+  else if (t.dataset.setup) { curSetups()[t.dataset.setup].on = t.checked; t.closest("tr").classList.toggle("off", !t.checked); }
   else if (t.dataset.extra) st.extras[t.dataset.extra] = t.checked;
-  else if (t.dataset.item) { st.corpusOff = t.checked ? st.corpusOff.filter(x => x !== t.dataset.item) : [...st.corpusOff, t.dataset.item]; }
+  else if (t.dataset.item) { setOff(t.checked ? curOff().filter(x => x !== t.dataset.item) : [...curOff(), t.dataset.item]); }
   else return;
   render();
 });
@@ -1135,8 +1292,6 @@ function render0() {
   const ai = est.options.findIndex(x => x.id === activeOpt);
   document.querySelectorAll("[data-open]").forEach(b => { const o = opt(b.dataset.open); if (o) b.textContent = o.label; });
   if (ai >= 0) $("v-opt").innerHTML = `<b>${letter(ai)}</b> ${esc(est.options[ai].label)}${isModified() ? ' <span class="tag model">changed</span>' : ""}`;
-  const pi = est.options.findIndex(o => o.id === est.proposed);
-  $("reason-head").textContent = `Why ${letter(pi)}, ${est.options[pi].label}, is proposed`;
   persist();
 }
 
@@ -1313,8 +1468,14 @@ $("btn-copy").addEventListener("click", () => {
   const fallback = () => { const ta = $("copy-out"); ta.hidden = false; ta.value = text; ta.focus(); ta.select(); status("Copying is blocked here. The JSON is selected below; copy it with Ctrl+C.", "err"); };
   try { navigator.clipboard.writeText(text).then(() => status("JSON copied. Paste it into a .json file to share.", "ok"), fallback); } catch (e) { fallback(); }
 });
+$("btn-new-defaults").addEventListener("click", () => {
+  adopt({ est: defaultEstimate() });
+  $("upd-banner").hidden = true;
+  status("Loaded the new default shortlist.", "ok");
+});
 $("btn-reset").addEventListener("click", () => {
   adopt({ est: defaultEstimate() });
+  $("upd-banner").hidden = true;
   status("Reset to the default shortlist.", "ok");
 });
 
@@ -1324,7 +1485,12 @@ $("btn-reset").addEventListener("click", () => {
   const embedded = readEmbedded();
   const local = embedded ? null : loadLocal();
   if (embedded) adopt(embedded);
-  else if (local) { est = local.est; st = local.st; activeOpt = opt(local.activeOpt) ? local.activeOpt : null; dirty = local.dirty; buildInputs(); render(); }
+  else if (local) {
+    const outdated = typeof local.est.base_version === "number" && local.est.base_version < SHORTLIST_VERSION;
+    if (outdated && !local.dirty) adopt({ est: defaultEstimate() });
+    else { est = local.est; st = local.st; activeOpt = opt(local.activeOpt) ? local.activeOpt : null; dirty = local.dirty; buildInputs(); render(); }
+    $("upd-banner").hidden = !(outdated && local.dirty);
+  }
   else adopt({ est: defaultEstimate() });
   const url = new URLSearchParams(location.search).get("estimate");
   if (url && !embedded) {
